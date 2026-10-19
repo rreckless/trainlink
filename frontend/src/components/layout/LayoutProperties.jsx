@@ -13,7 +13,7 @@ export default function LayoutProperties({ item, track, placed, piece, busy, onR
         <p className="font-semibold">
           {piece.part_number} {piece.name}
         </p>
-        <p className="text-slate-400">{piece.system}</p>
+        <p className="text-slate-400">{piece.series} ({piece.system})</p>
         <p className="text-slate-400">
           Position: ({Math.round(placed.x)}, {Math.round(placed.y)}), rotation {Math.round(placed.rotation)}°
           {placed.flip ? ', mirrored' : ''}

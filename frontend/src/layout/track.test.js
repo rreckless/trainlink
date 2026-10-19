@@ -14,10 +14,10 @@ import {
 const SETRACK = 'Setrack (Code 80)'
 const STREAMLINE = 'Streamline (Code 55)'
 
-const straight = { id: 'st1', system: SETRACK, type: 'straight', length: 87 }
-const curve = { id: 'st3', system: SETRACK, type: 'curve', radius: 228, angle: 22.5 }
-const rightTurnout = { id: 'st5', system: SETRACK, type: 'turnout', hand: 'right', length: 87, radius: 228, angle: 22.5 }
-const leftTurnout = { id: 'st6', system: SETRACK, type: 'turnout', hand: 'left', length: 87, radius: 228, angle: 22.5 }
+const straight = { id: 'st1', system: SETRACK, type: 'straight', length: 87, placeable: true }
+const curve = { id: 'st3', system: SETRACK, type: 'curve', radius: 228, angle: 22.5, placeable: true }
+const rightTurnout = { id: 'st5', system: SETRACK, type: 'turnout', hand: 'right', length: 87, radius: 228, angle: 22.5, placeable: true }
+const leftTurnout = { id: 'st6', system: SETRACK, type: 'turnout', hand: 'left', length: 87, radius: 228, angle: 22.5, placeable: true }
 
 const library = {
   'peco-n-st-1': { ...straight, part_number: 'ST-1' },
@@ -45,6 +45,12 @@ test('straight piece ends at its length, pointing back and forward', () => {
   assertPoint(shape.endpoints[1], { x: 87, y: 0 })
 })
 
+test('flex track is placed as a straight of its length', () => {
+  const shape = pieceShape({ system: 'Code 55', type: 'flex', length: 914, placeable: true })
+  assert.deepEqual(shape.endpoints.map((e) => e.heading), [180, 0])
+  assertPoint(shape.endpoints[1], { x: 914, y: 0 })
+})
+
 test('curve end matches radius and angle', () => {
   const shape = pieceShape(curve)
   // R sin(22.5) and R (1 - cos(22.5)) for R = 228
@@ -66,9 +72,11 @@ test('left-hand turnout diverges to the other side', () => {
   assert.equal(shape.endpoints[2].heading, -22.5)
 })
 
-test('Streamline pieces and unknown types have no shape unless flagged placeable', () => {
+test('pieces without the placeable flag, and unknown types, have no shape', () => {
+  // Unflagged pieces are listed but cannot be placed, whatever their system
+  assert.equal(pieceShape({ system: SETRACK, type: 'straight', length: 87 }), null)
   assert.equal(pieceShape({ system: STREAMLINE, type: 'turnout', hand: 'right' }), null)
-  assert.equal(pieceShape({ system: SETRACK, type: 'crossing' }), null)
+  assert.equal(pieceShape({ system: SETRACK, type: 'crossing', placeable: true }), null)
   assert.equal(pieceShape(undefined), null)
 })
 
@@ -108,6 +116,88 @@ test('SL-U396F diverges to the other side from SL-U395F', () => {
   assert.ok(left.endpoints[2].y < 0)
   assert.ok(Math.abs(left.endpoints[2].x - right.endpoints[2].x) < 1e-9)
   assert.ok(Math.abs(left.endpoints[2].heading + right.endpoints[2].heading) < 1e-9)
+})
+
+// SL-380F single slip, from the PECO plan sheet
+const slip = {
+  id: 'sl380f',
+  system: STREAMLINE,
+  type: 'slip',
+  length: 154,
+  angle: 10,
+  placeable: true,
+  slip_geometry: {
+    track_a_top: [-6.97, -76.84],
+    track_a_bottom: [6.88, 76.84],
+    track_b_top: [6.47, -76.84],
+    track_b_bottom: [-6.38, 76.84],
+  },
+}
+
+test('single slip has four ends, each pointing along its own track', () => {
+  const shape = pieceShape(slip)
+  assert.equal(shape.endpoints.length, 4)
+  assert.equal(shape.paths.length, 2)
+  // Track A runs from the top-left end to the bottom-right end, so its ends face opposite ways
+  const [topA, topB, bottomA, bottomB] = shape.endpoints
+  close(normalizeDegrees(topA.heading), normalizeDegrees(bottomA.heading + 180))
+  close(normalizeDegrees(topB.heading), normalizeDegrees(bottomB.heading + 180))
+})
+
+test('single slip tracks are about 154mm long and cross at about 10 degrees', () => {
+  const shape = pieceShape(slip)
+  const [a, b] = shape.paths
+  const lengthA = Math.hypot(a[1].x - a[0].x, a[1].y - a[0].y)
+  assert.ok(Math.abs(lengthA - 154) < 0.5)
+  const angleA = Math.atan2(a[1].x - a[0].x, a[1].y - a[0].y)
+  const angleB = Math.atan2(b[1].x - b[0].x, b[1].y - b[0].y)
+  assert.ok(Math.abs(((angleA - angleB) * 180) / Math.PI - 10) < 0.5)
+})
+
+test('single slip can be joined to an open end', () => {
+  const shape = pieceShape(slip)
+  const openEnd = { x: 0, y: 0, heading: 0 }
+  const placement = alignToEnd(shape, 0, openEnd, false)
+  assertPoint(worldEndpoints(shape, placement)[0], openEnd)
+})
+
+// SL-386 curved double radius turnout, from the PECO plan sheet
+const curved = {
+  id: 'sl386',
+  system: STREAMLINE,
+  type: 'curved_turnout',
+  hand: 'right',
+  length: 158.04,
+  angle: 8,
+  placeable: true,
+  curve_geometry: { toe_straight: 8.5, length: 158.04, inner_radius: 457, outer_radius: 914 },
+}
+
+test('curved turnout ends are at its listed length, with the inner route curving harder', () => {
+  const shape = pieceShape(curved)
+  assert.equal(shape.endpoints.length, 3)
+  const [, inner, outer] = shape.endpoints
+  // Both arcs end at the listed length along the toe direction
+  assert.ok(Math.abs(inner.x - 158.04) < 0.01)
+  assert.ok(Math.abs(outer.x - 158.04) < 0.01)
+  // The 457mm route turns through about 19.1 degrees, the 914mm route through about 9.4
+  assert.ok(Math.abs(inner.heading - 19.1) < 0.1)
+  assert.ok(Math.abs(outer.heading - 9.4) < 0.1)
+  // Right-hand turnout: both routes diverge toward +y
+  assert.ok(inner.y > 0 && outer.y > 0 && inner.y > outer.y)
+})
+
+test('left-hand curved turnout is the mirror of the right-hand one', () => {
+  const right = pieceShape(curved).endpoints
+  const left = pieceShape({ ...curved, hand: 'left' }).endpoints
+  assert.ok(Math.abs(left[1].y + right[1].y) < 1e-9)
+  assert.ok(Math.abs(left[2].heading + right[2].heading) < 1e-9)
+})
+
+test('curved turnout can be joined to an open end', () => {
+  const shape = pieceShape(curved)
+  const openEnd = { x: 0, y: 0, heading: 0 }
+  assertPoint(worldEndpoints(shape, alignToEnd(shape, 0, openEnd, false))[0], openEnd)
 })
 
 test('a frog-angle turnout with a length longer than its radius has no shape', () => {

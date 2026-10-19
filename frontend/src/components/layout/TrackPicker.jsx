@@ -31,8 +31,8 @@ export default function TrackPicker({ library, trackSystem, pieceId, onPick }) {
     )
     const bySystem = new Map()
     for (const piece of matches) {
-      if (!bySystem.has(piece.system)) bySystem.set(piece.system, [])
-      bySystem.get(piece.system).push(piece)
+      if (!bySystem.has(piece.series)) bySystem.set(piece.series, [])
+      bySystem.get(piece.series).push(piece)
     }
     return [...bySystem.entries()]
   }, [library, query])

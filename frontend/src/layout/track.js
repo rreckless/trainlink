@@ -10,7 +10,6 @@
 
 import { distance, distanceToSegment } from './model.js'
 
-export const PLACEABLE_SYSTEMS = ['Setrack (Code 80)']
 export const JOIN_TOLERANCE = 0.5
 export const SNAP_DISTANCE = 40
 const CURVE_STEP_DEGREES = 2
@@ -18,11 +17,10 @@ const CURVE_STEP_DEGREES = 2
 const rad = (deg) => (deg * Math.PI) / 180
 const deg = (radians) => (radians * 180) / Math.PI
 
-// Pieces are placeable when their system is fully modelled, or when the piece is flagged
-// placeable in the library (used for single pieces whose geometry has been worked out)
+// A piece is placeable when the library flags it so. The flag is set only where the geometry
+// needed to draw and join the piece is present (see backend/app/data/track_library)
 export function isPlaceable(piece) {
-  if (!piece) return false
-  return PLACEABLE_SYSTEMS.includes(piece.system) || piece.placeable === true
+  return Boolean(piece) && piece.placeable === true
 }
 
 // Diverging exit angle for a turnout whose listed angle is the frog angle. With the exit at
@@ -58,7 +56,8 @@ function arcPoints(radius, sweep, side) {
 export function pieceShape(piece) {
   if (!isPlaceable(piece)) return null
 
-  if (piece.type === 'straight') {
+  // Flex track is placed as a straight of its length
+  if (piece.type === 'straight' || piece.type === 'flex') {
     const length = piece.length
     return {
       endpoints: [
@@ -78,6 +77,46 @@ export function pieceShape(piece) {
         { x: end.x, y: end.y, heading: piece.angle },
       ],
       paths: [arc],
+    }
+  }
+
+  // Single slip: two straight diagonal tracks that cross. Ends point along their own track
+  if (piece.type === 'slip' && piece.slip_geometry) {
+    const g = piece.slip_geometry
+    const outward = (from, to) => normalizeDegrees(deg(Math.atan2(from[1] - to[1], from[0] - to[0])))
+    const ends = [
+      { p: g.track_a_top, other: g.track_a_bottom },
+      { p: g.track_b_top, other: g.track_b_bottom },
+      { p: g.track_a_bottom, other: g.track_a_top },
+      { p: g.track_b_bottom, other: g.track_b_top },
+    ]
+    return {
+      endpoints: ends.map((e) => ({ x: e.p[0], y: e.p[1], heading: outward(e.p, e.other) })),
+      paths: [
+        [{ x: g.track_a_top[0], y: g.track_a_top[1] }, { x: g.track_a_bottom[0], y: g.track_a_bottom[1] }],
+        [{ x: g.track_b_top[0], y: g.track_b_top[1] }, { x: g.track_b_bottom[0], y: g.track_b_bottom[1] }],
+      ],
+    }
+  }
+
+  // Curved double radius turnout: a straight toe, then two arcs that both end at the listed length
+  if (piece.type === 'curved_turnout' && piece.curve_geometry && (piece.hand === 'right' || piece.hand === 'left')) {
+    const { toe_straight: toe, length, inner_radius: rIn, outer_radius: rOut } = piece.curve_geometry
+    const side = piece.hand === 'right' ? 1 : -1
+    const sweepIn = deg(Math.asin((length - toe) / rIn))
+    const sweepOut = deg(Math.asin((length - toe) / rOut))
+    const arcIn = arcPoints(rIn, sweepIn, side).map((pt) => ({ x: pt.x + toe, y: pt.y }))
+    const arcOut = arcPoints(rOut, sweepOut, side).map((pt) => ({ x: pt.x + toe, y: pt.y }))
+    const endIn = arcIn[arcIn.length - 1]
+    const endOut = arcOut[arcOut.length - 1]
+    const toePath = [{ x: 0, y: 0 }, { x: toe, y: 0 }]
+    return {
+      endpoints: [
+        { x: 0, y: 0, heading: 180 },
+        { x: endIn.x, y: endIn.y, heading: side * sweepIn },
+        { x: endOut.x, y: endOut.y, heading: side * sweepOut },
+      ],
+      paths: [[...toePath, ...arcIn.slice(1)], [...toePath, ...arcOut.slice(1)]],
     }
   }
 

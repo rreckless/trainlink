@@ -119,10 +119,12 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 4. **Layout Drawing** 🧪
    - ✅ Layout REST routes (track segments stored in layout elements)
    - 🧪 Draw straight track segments (free drawing, kept alongside track pieces)
-   - 🧪 Track library: PECO N gauge catalogue entries (46, unverified until checked against the catalogue)
-   - 🧪 Place Setrack (Code 80) straights, curves, and left- and right-hand turnouts. Ends snap to open ends and a layout uses one track system
-   - ⬜ Streamline (Code 55) pieces: listed but not placeable. Turnout geometry in the catalogue doesn't reconcile yet
-   - ⬜ Crossings, curved turnouts, Y turnouts, slips, and flex track: listed, placement not built
+   - 🧪 Track library: 52 PECO N gauge entries, taken from PECO product pages. Each piece records its source page and whether its figures are confirmed there
+   - 🧪 Place Code 80 straights, curves, and turnouts (Setrack and Streamline Code 80 share one system). Ends snap to open ends and a layout uses one track system
+   - 🧪 Flex track (Code 80 and Code 55) is placed as a straight of its catalogue length. Streamline Code 55 medium, large, and small-radius turnouts are placeable. Their diverging exit is derived from length and radius, with the listed angle taken as the frog angle. Not checked on a real part
+   - 🧪 Single slips SL-380F and SL-E380F: geometry measured from the PECO plan sheet (tracks 154.3mm and 154.2mm, crossing angle 9.9°, matching the listed 154mm and 10°)
+   - 🧪 Curved double radius turnouts SL-386/387 (Code 80): traced from the PECO plan sheet. Arcs of 457mm and 914mm after an 8.5mm toe, both ending at 158.04mm
+   - ⬜ Crossings, Y turnouts, and 3-way turnouts, and Code 55 curved turnouts: listed, placement not built
    - 🧪 Place blocks, signals, feedbacks
    - 🧪 Save and load layouts
    - 🧪 Drag-and-drop editing

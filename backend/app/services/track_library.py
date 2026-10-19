@@ -13,6 +13,7 @@ LIBRARY_DIR = Path(__file__).resolve().parent.parent / "data" / "track_library"
 # Fields copied from the file into each piece. Geometry fields are present only where they apply
 PIECE_FIELDS = (
     "part_number",
+    "series",
     "system",
     "name",
     "type",
@@ -22,8 +23,12 @@ PIECE_FIELDS = (
     "hand",
     "inner_radius",
     "outer_radius",
+    "slip_geometry",
+    "curve_geometry",
     "placeable",
     "angle_meaning",
+    "verified",
+    "source",
     "note",
 )
 
@@ -43,13 +48,9 @@ def load_library() -> dict:
             if piece_id in library:
                 raise ValueError(f"Duplicate track library piece: {piece_id}")
             piece = {key: raw[key] for key in PIECE_FIELDS if key in raw}
-            piece.update(
-                id=piece_id,
-                manufacturer=data["manufacturer"],
-                gauge=data["gauge"],
-                verified=data.get("verified", False),
-                source=data.get("source", ""),
-            )
+            piece.update(id=piece_id, manufacturer=data["manufacturer"], gauge=data["gauge"])
+            piece.setdefault("verified", False)
+            piece.setdefault("source", data.get("source", ""))
             library[piece_id] = piece
     return library
 
