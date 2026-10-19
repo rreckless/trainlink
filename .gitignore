@@ -76,3 +76,8 @@ Thumbs.db
 # Misc
 .vscode/extensions/
 *.code-workspace
+
+# Claude Flow session and insight data
+.claude-flow/
+backend/.claude-flow/
+frontend/.claude-flow/
