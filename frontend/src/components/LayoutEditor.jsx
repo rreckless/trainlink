@@ -70,7 +70,7 @@ export default function LayoutEditor() {
 
       {editor.layout ? (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-3 bg-slate-800 rounded-lg p-2 overflow-auto">
+          <div className="lg:col-span-3 bg-slate-800 rounded-lg p-2">
             <LayoutCanvas
               layout={editor.layout}
               tracks={editor.tracks}
