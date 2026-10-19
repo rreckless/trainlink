@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useStore } from './store'
 import { useWebSocket } from './hooks/useWebSocket'
+import { useZ21StatusPolling } from './hooks/useZ21Status'
 import Switchboard from './components/Switchboard'
-import LocomotivePanel from './components/LocomotivePanel'
+import LocomotiveControl from './components/LocomotiveControl'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
 import SystemSettings from './components/SystemSettings'
@@ -11,7 +12,18 @@ function App() {
   const activeTab = useStore((state) => state.activeTab)
   const setActiveTab = useStore((state) => state.setActiveTab)
   const connected = useStore((state) => state.connected)
+  const z21 = useStore((state) => state.z21)
   const { send } = useWebSocket()
+  useZ21StatusPolling()
+
+  // Sidebar label and colour for the Z21 track state
+  const z21Indicator = {
+    disconnected: { text: 'Z21 disconnected', color: 'bg-red-500' },
+    unknown: { text: 'Z21 checking track', color: 'bg-amber-500' },
+    short_circuit: { text: '⚡ Z21 short circuit', color: 'bg-red-500' },
+    track_power_off: { text: 'Z21 track power off', color: 'bg-amber-500' },
+    ready: { text: 'Z21 connected', color: 'bg-green-500' },
+  }[z21.state] ?? { text: 'Z21 disconnected', color: 'bg-red-500' }
 
   const tabs = [
     { id: 'switchboard', label: 'Switchboard', icon: '🚂' },
@@ -26,7 +38,7 @@ function App() {
       case 'switchboard':
         return <Switchboard />
       case 'locomotive':
-        return <LocomotivePanel />
+        return <LocomotiveControl />
       case 'routes':
         return <RouteManager />
       case 'editor':
@@ -49,10 +61,14 @@ function App() {
         </div>
 
         {/* Connection status */}
-        <div className="p-4 border-b border-slate-700">
+        <div className="p-4 border-b border-slate-700 space-y-2">
           <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${z21Indicator.color}`}></div>
+            <span className="text-sm">{z21Indicator.text}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="text-sm">{connected ? 'Connected' : 'Disconnected'}</span>
+            <span>Server {connected ? 'connected' : 'disconnected'}</span>
           </div>
         </div>
 

@@ -8,9 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
-from config import settings
-from database import init_db, get_db
-from ws.connection_manager import ConnectionManager
+from .config import settings
+from .database import init_db, get_db
+from .ws.connection_manager import ConnectionManager
+from .api import z21
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,12 +44,13 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=settings.get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+# Include Z21 API routes
+app.include_router(z21.router)
 
 # Health check endpoint
 @app.get("/health")

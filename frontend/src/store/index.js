@@ -23,9 +23,13 @@ export const useStore = create((set) => ({
   editMode: false,
   selectedTool: null,
 
-  // Connection
+  // Connection (browser to TrainLink server)
   connected: false,
   clientId: null,
+
+  // Z21 track state, polled from /api/z21/status
+  // state: disconnected | unknown | short_circuit | track_power_off | ready
+  z21: { connected: false, state: 'disconnected', lastHeartbeat: null },
 
   // Actions
   setLayout: (layout) => set({ layout }),
@@ -38,6 +42,7 @@ export const useStore = create((set) => ({
   setEditMode: (mode) => set({ editMode: mode }),
   setConnected: (connected) => set({ connected }),
   setClientId: (id) => set({ clientId: id }),
+  setZ21Status: (z21) => set({ z21 }),
   updateLocomotiveSpeed: (locId, speed) => set((state) => ({
     locomotives: state.locomotives.map(loc =>
       loc.id === locId ? { ...loc, speed } : loc
