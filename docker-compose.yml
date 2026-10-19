@@ -3,24 +3,24 @@ version: '3.8'
 services:
   postgresql:
     image: postgres:16-alpine
-    container_name: itrain-db
+    container_name: trainlink-db
     environment:
-      POSTGRES_USER: itrain
-      POSTGRES_PASSWORD: itrain
-      POSTGRES_DB: itrain
+      POSTGRES_USER: trainlink
+      POSTGRES_PASSWORD: trainlink
+      POSTGRES_DB: trainlink
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U itrain -d itrain"]
+      test: ["CMD-SHELL", "pg_isready -U trainlink -d trainlink"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: itrain-cache
+    container_name: trainlink-cache
     ports:
       - "6379:6379"
     volumes:

@@ -1,10 +1,10 @@
-# iTrain - Digital Model Railroad Control System
+# TrainLink - Digital Model Railroad Control System
 
-A fully functional replica of iTrain, a comprehensive software solution for controlling model railroads with computer-based automation.
+A fully functional replica of TrainLink, a comprehensive software solution for controlling model railroads with computer-based automation.
 
 ## Overview
 
-iTrain is a modern, multi-platform application for managing digital model railroad layouts. It supports:
+TrainLink is a modern, multi-platform application for managing digital model railroad layouts. It supports:
 
 - **Locomotive Control**: Manual and automatic control with speed/direction management
 - **Block System**: Automatic collision avoidance through block-based control
@@ -26,7 +26,7 @@ iTrain is a modern, multi-platform application for managing digital model railro
 ### Project Structure
 
 ```
-itrain-replica/
+trainlink/
 ├── backend/              # FastAPI application
 │   ├── app/
 │   │   ├── models/      # SQLAlchemy database models
@@ -70,7 +70,7 @@ itrain-replica/
 ### 1. Clone the Repository
 
 ```bash
-cd itrain-replica
+cd trainlink
 ```
 
 ### 2. Start Database Services
@@ -359,7 +359,7 @@ For production deployments:
 
 ## License
 
-iTrain is licensed under the GNU General Public License v3.0
+TrainLink is licensed under the GNU General Public License v3.0
 
 ## Support
 

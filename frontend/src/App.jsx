@@ -44,7 +44,7 @@ function App() {
       <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-slate-700">
-          <h1 className="text-2xl font-bold">iTrain</h1>
+          <h1 className="text-2xl font-bold">TrainLink</h1>
           <p className="text-sm text-slate-400">Model Railroad Control</p>
         </div>
 

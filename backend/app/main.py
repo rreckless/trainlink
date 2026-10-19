@@ -1,5 +1,5 @@
 """
-iTrain - Main FastAPI application
+TrainLink - Main FastAPI application
 """
 import asyncio
 import logging
@@ -24,17 +24,17 @@ manager = ConnectionManager()
 async def lifespan(app: FastAPI):
     """Application lifecycle management"""
     # Startup
-    logger.info("Starting iTrain server...")
+    logger.info("Starting TrainLink server...")
     init_db()
     logger.info("Database initialized")
     yield
     # Shutdown
-    logger.info("Shutting down iTrain server...")
+    logger.info("Shutting down TrainLink server...")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="iTrain",
+    title="TrainLink",
     description="Digital Model Railroad Control System",
     version="0.1.0",
     lifespan=lifespan,
@@ -98,7 +98,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 async def root():
     """Root endpoint"""
     return {
-        "name": "iTrain",
+        "name": "TrainLink",
         "version": "0.1.0",
         "description": "Digital Model Railroad Control System",
         "endpoints": {

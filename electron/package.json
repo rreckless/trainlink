@@ -1,5 +1,5 @@
 {
-  "name": "itrain",
+  "name": "trainlink",
   "version": "0.1.0",
   "description": "Digital Model Railroad Control System",
   "main": "main.js",
@@ -21,8 +21,8 @@
     "concurrently": "^8.2.2"
   },
   "build": {
-    "appId": "com.berros.itrain",
-    "productName": "iTrain",
+    "appId": "com.trainlink.app",
+    "productName": "TrainLink",
     "files": [
       "main.js",
       "preload.js",

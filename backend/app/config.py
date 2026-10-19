@@ -1,5 +1,5 @@
 """
-iTrain Configuration
+TrainLink Configuration
 """
 import os
 from pydantic_settings import BaseSettings
