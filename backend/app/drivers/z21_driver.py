@@ -26,8 +26,20 @@ logger = logging.getLogger(__name__)
 
 # LAN frame headers (2 bytes, little-endian on the wire)
 LAN_X_HEADER = 0x0040
+LAN_SET_BROADCASTFLAGS = 0x0050
 LAN_RMBUS_DATACHANGED = 0x0080
+LAN_RMBUS_GETDATA = 0x0081
 LAN_SYSTEMSTATE_DATACHANGED = 0x0084
+
+# Broadcast flags (LAN_SET_BROADCASTFLAGS, spec 2.16)
+BROADCAST_DRIVING_SWITCHING = 0x00000001
+BROADCAST_RBUS_FEEDBACK = 0x00000002
+BROADCAST_SYSTEMSTATE = 0x00000100
+
+# R-BUS feedback: group 0 = modules 1-10, group 1 = modules 11-20. 8 inputs per module
+RBUS_GROUPS = (0, 1)
+RBUS_MODULES_PER_GROUP = 10
+RBUS_INPUTS_PER_MODULE = 8
 
 # X-Bus command bytes
 XBUS_LOCO_DRIVE = 0xE4
@@ -135,6 +147,35 @@ def parse_central_state(state: int) -> dict:
     }
 
 
+def build_set_broadcast_flags(flags: int) -> bytes:
+    """Build a LAN_SET_BROADCASTFLAGS frame"""
+    return build_frame(LAN_SET_BROADCASTFLAGS, struct.pack('<I', flags))
+
+
+def build_rbus_getdata(group: int) -> bytes:
+    """Build a LAN_RMBUS_GETDATA frame to poll one R-BUS feedback group"""
+    if group not in RBUS_GROUPS:
+        raise ValueError(f"R-BUS group must be one of {RBUS_GROUPS}")
+    return build_frame(LAN_RMBUS_GETDATA, bytes([group]))
+
+
+def parse_rbus_feedback(group: int, status: bytes) -> dict:
+    """Decode the 10 status bytes of an R-BUS group.
+
+    Each byte is one module (in ascending address order), with one bit per input.
+    Returns {(module_address, input_number): occupied} with inputs numbered 1-8.
+    """
+    if len(status) != RBUS_MODULES_PER_GROUP:
+        raise ValueError(f"R-BUS status must be {RBUS_MODULES_PER_GROUP} bytes")
+
+    states = {}
+    for index, byte in enumerate(status):
+        module = group * RBUS_MODULES_PER_GROUP + index + 1
+        for bit in range(RBUS_INPUTS_PER_MODULE):
+            states[(module, bit + 1)] = bool(byte & (1 << bit))
+    return states
+
+
 class Z21UDPProtocol(asyncio.DatagramProtocol):
     """UDP Protocol handler for Z21"""
 
@@ -176,6 +217,8 @@ class Z21Driver:
         self.on_status_changed: Optional[Callable] = None
         # None until the Z21 reports its central state
         self.central_state: Optional[dict] = None
+        # R-BUS feedback: {(module_address, input_number): occupied}
+        self.feedback: dict = {}
 
     @property
     def track_state(self) -> str:
@@ -217,6 +260,12 @@ class Z21Driver:
             logger.info("Connected to Z21 via UDP")
 
             await self.get_status()
+            # Broadcast flags are per client and must be set after every connect
+            await self._send_message(build_set_broadcast_flags(
+                BROADCAST_DRIVING_SWITCHING | BROADCAST_RBUS_FEEDBACK | BROADCAST_SYSTEMSTATE
+            ))
+            for group in RBUS_GROUPS:
+                await self._send_message(build_rbus_getdata(group))
 
             return True
         except Exception as e:
@@ -230,6 +279,7 @@ class Z21Driver:
             self.transport.close()
         self.connected = False
         self.central_state = None
+        self.feedback = {}
         logger.info("Disconnected from Z21")
 
     async def get_status(self):
@@ -237,6 +287,12 @@ class Z21Driver:
         if not self.connected:
             return
         await self._send_message(build_status_request())
+
+    async def request_feedback(self, group: int):
+        """Poll one R-BUS feedback group. The reply arrives asynchronously"""
+        if not self.connected:
+            return
+        await self._send_message(build_rbus_getdata(group))
 
     async def set_loco_speed(self, address: int, speed: int, direction: bool = True) -> bool:
         """Set locomotive speed
@@ -349,6 +405,8 @@ class Z21Driver:
 
             elif header == LAN_RMBUS_DATACHANGED:
                 logger.debug("Z21 feedback data received")
+                if len(message) >= 15:
+                    await self._apply_feedback(message[4], message[5:15])
                 if self.on_status_changed:
                     await self.on_status_changed({"status": "feedback_received"})
 
@@ -370,6 +428,21 @@ class Z21Driver:
             await self.on_status_changed({
                 "status": "central_state_changed",
                 "track_state": self.track_state,
+            })
+
+    async def _apply_feedback(self, group: int, status: bytes):
+        """Store R-BUS feedback for one group and notify listeners of changed inputs"""
+        new_states = parse_rbus_feedback(group, status)
+        changes = {
+            key: occupied
+            for key, occupied in new_states.items()
+            if self.feedback.get(key) != occupied
+        }
+        self.feedback.update(new_states)
+        if changes and self.on_status_changed:
+            await self.on_status_changed({
+                "status": "feedback_changed",
+                "changes": changes,
             })
 
     def get_connection_status(self) -> dict:

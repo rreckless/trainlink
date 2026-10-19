@@ -61,9 +61,11 @@ async def test_set_speed_reverse(mock_z21):
 async def test_set_speed_invalid_address_returns_false_and_sends_nothing(mock_z21):
     driver = await _connected_driver(mock_z21)
     try:
+        await asyncio.sleep(0.05)
+        before = len(mock_z21.sent_frames())
         assert await driver.set_loco_speed(0, 10, True) is False
         await asyncio.sleep(0.05)
-        assert len(mock_z21.sent_frames()) == 1  # only the connect status request
+        assert len(mock_z21.sent_frames()) == before  # invalid command sends nothing
     finally:
         await driver.disconnect()
 

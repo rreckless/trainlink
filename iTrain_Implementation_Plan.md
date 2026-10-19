@@ -87,7 +87,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Backend unit test setup (`backend/tests/`, 30 passing)
    - 🟡 Integration test framework (driver tests run against the mock)
    - ✅ Mock Z21 UDP responder for testing (`backend/tests/conftest.py`)
-   - 🟡 Z21 frame encoding fixed and tested by hand-computed bytes. Not yet verified against the official Z21 LAN Protocol spec or real hardware
+   - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13. Real hardware test still pending
 
 ### Phase 2: Core Features (3-4 weeks)
 **Goal**: Fundamental train control on real hardware
@@ -279,11 +279,11 @@ Entry criteria:
 
 ## Immediate Priorities
 
-1. **Test locomotive control against a real Z21.** Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. First check the frame bytes against the official Z21 LAN Protocol spec.
+1. **Test locomotive control against a real Z21.** Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. Frame bytes have been checked against the Z21 LAN Protocol Specification v1.13.
 2. ✅ Mock Z21 UDP responder (done)
 3. ✅ Backend unit tests for the Z21 packet builder and the speed and direction logic (done, 30 passing)
 4. ✅ REST routes for locomotives, blocks, signals, and routes (done, 79 passing). Layouts and command stations still need routes so blocks can be linked to signals and feedback.
-5. **Add Z21 feedback parsing** as the foundation for block occupancy.
+5. 🟡 Z21 R-BUS feedback parsing and `GET /api/z21/feedback` done (spec section 7, 92 tests passing). Still to do: link feedback inputs to blocks, and verify on hardware.
 
 ---
 

@@ -4,7 +4,7 @@ Z21 Command Station API Endpoints
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from app.drivers.z21_driver import get_z21_driver, Z21Driver
+from app.drivers.z21_driver import RBUS_GROUPS, get_z21_driver, Z21Driver
 
 router = APIRouter(prefix="/api/z21", tags=["z21"])
 
@@ -68,6 +68,23 @@ async def get_z21_status(z21: Z21Driver = Depends(get_z21)):
     """
     await z21.get_status()
     return z21.get_connection_status()
+
+
+@router.get("/feedback")
+async def get_z21_feedback(z21: Z21Driver = Depends(get_z21)):
+    """Get the last known R-BUS feedback inputs.
+
+    Polls both feedback groups first. Replies update the list on a later call.
+    """
+    for group in RBUS_GROUPS:
+        await z21.request_feedback(group)
+    return {
+        "connected": z21.connected,
+        "inputs": [
+            {"module": module, "input": number, "occupied": occupied}
+            for (module, number), occupied in sorted(z21.feedback.items())
+        ],
+    }
 
 
 @router.post("/track-power/on")
