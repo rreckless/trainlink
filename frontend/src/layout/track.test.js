@@ -9,6 +9,8 @@ import {
   hitPlacedPiece,
   normalizeDegrees,
   placedPiece,
+  divergingOutput,
+  turnoutTarget,
   toWorld,
 } from './track.js'
 
@@ -347,4 +349,20 @@ test('a placed straight with its own length ends that far along its heading', ()
 
 test('placedPiece is null for an unknown library piece', () => {
   assert.equal(placedPiece({ id: 'p', piece_id: 'nope' }, {}), null)
+})
+
+test('a turnout throws to the diverging output when straight, and back to straight when diverging', () => {
+  const placed = { id: 't', piece_id: 'peco-n-sl-u395f', dcc_address: 25, dcc_output_straight: 0 }
+  assert.equal(divergingOutput(placed), 1)
+  assert.equal(turnoutTarget(placed, 0), 1)
+  assert.equal(turnoutTarget(placed, 1), 0)
+  // Unknown state: the first click throws the turnout straight
+  assert.equal(turnoutTarget(placed, null), 0)
+})
+
+test('the straight output can be set per turnout', () => {
+  const placed = { id: 't', piece_id: 'peco-n-sl-u395f', dcc_address: 25, dcc_output_straight: 1 }
+  assert.equal(divergingOutput(placed), 0)
+  assert.equal(turnoutTarget(placed, null), 1)
+  assert.equal(turnoutTarget(placed, 1), 0)
 })

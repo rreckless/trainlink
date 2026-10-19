@@ -230,3 +230,40 @@ def test_three_way_branches_are_measured_from_the_layout():
     assert "AnyRail" in geometry["measured_from"]
     assert geometry["right"]["sweep"] == 19.17
     assert geometry["left"]["sweep"] == 18.74
+
+
+def test_dcc_address_is_accepted_on_a_turnout(client, layout_id):
+    elements = {"track_system": CODE_55, "track_pieces": [_placed("peco-n-sl-u395f", dcc_address=25, dcc_output_straight=1)]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 200
+    placed = response.json()["elements"]["track_pieces"][0]
+    assert placed["dcc_address"] == 25
+    assert placed["dcc_output_straight"] == 1
+
+
+@pytest.mark.parametrize(
+    "piece_id, dcc",
+    [
+        ("peco-n-sl-300f", {"dcc_address": 25}),
+        ("peco-n-sl-u395f", {"dcc_address": 0}),
+        ("peco-n-sl-u395f", {"dcc_address": 2049}),
+        ("peco-n-sl-u395f", {"dcc_address": "25"}),
+        ("peco-n-sl-u395f", {"dcc_output_straight": 2}),
+    ],
+)
+def test_dcc_fields_must_suit_the_piece(client, layout_id, piece_id, dcc):
+    elements = {"track_system": CODE_55, "track_pieces": [_placed(piece_id, **dcc)]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 400
+
+
+def test_two_turnouts_cannot_share_an_address(client, layout_id):
+    elements = {
+        "track_system": CODE_55,
+        "track_pieces": [
+            _placed("peco-n-sl-u395f", "p1", dcc_address=25),
+            _placed("peco-n-sl-u396f", "p2", dcc_address=25),
+        ],
+    }
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 400

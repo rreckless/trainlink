@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Stage, Layer, Group, Rect, Line, Circle, Text } from 'react-konva'
 import { GRID_SIZE, hitItem, hitTrack, signalColor, snapPoint } from '../../layout/model'
 import {
+  divergingOutput,
   hitPlacedPiece,
   openEnds,
   pieceShape,
@@ -49,6 +50,9 @@ export default function LayoutCanvas({
   selectedKey,
   pendingStart,
   cursor,
+  operating,
+  turnoutStates,
+  onThrow,
   onCanvasClick,
   onCursor,
   onSelect,
@@ -56,6 +60,10 @@ export default function LayoutCanvas({
 }) {
   const editing = tool === 'select'
   const placing = tool === 'piece'
+
+  // True when a turnout's diverging route is the one the Z21 last reported
+  const isDiverging = (placed) =>
+    placed.dcc_address !== undefined && turnoutStates[String(placed.dcc_address)] === divergingOutput(placed)
   const [zoom, setZoom] = useState(1)
   const scroller = useRef(null)
   const zoomRef = useRef(1)
@@ -129,6 +137,11 @@ export default function LayoutCanvas({
   const handleStageClick = (event) => {
     const raw = pointerOf(event)
     if (!raw) return
+    if (operating) {
+      const placed = hitPlacedPiece(pieces, libraryById, raw)
+      if (placed && placed.dcc_address !== undefined) onThrow(placed)
+      return
+    }
     if (editing) {
       // Track, then track piece, then element. Empty space clears the selection
       const track = hitTrack(tracks, raw)
@@ -180,7 +193,7 @@ export default function LayoutCanvas({
           onMouseMove={handleMove}
           onClick={handleStageClick}
           onTap={handleStageClick}
-          style={{ cursor: editing ? 'default' : 'crosshair' }}
+          style={{ cursor: operating ? 'pointer' : editing ? 'default' : 'crosshair' }}
         >
       <Layer listening={false}>
         <Rect width={layout.width} height={layout.height} fill="#0f172a" />
@@ -192,11 +205,12 @@ export default function LayoutCanvas({
           const shape = pieceShape(placedPiece(placed, libraryById))
           if (!shape) return null
           const selected = selectedKey === `piece:${placed.id}`
+          // Turnout paths are [straight, diverging]. The diverging route is orange when it is set
           return worldPaths(shape, placed).map((path, index) => (
             <Line
               key={`${placed.id}-${index}`}
               points={flat(path)}
-              stroke={selected ? '#38bdf8' : '#e2e8f0'}
+              stroke={selected ? '#38bdf8' : index === 1 && isDiverging(placed) ? '#f97316' : '#e2e8f0'}
               strokeWidth={selected ? 5 : 3}
               hitStrokeWidth={12}
               listening={editing}

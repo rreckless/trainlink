@@ -65,6 +65,20 @@ def _valid_dimensions(placed: dict, piece: dict) -> bool:
     return not (piece["type"] == "curve" and "radius" not in placed and "radius" not in piece)
 
 
+def _valid_dcc(placed: dict, piece: dict) -> bool:
+    """DCC address (1-2048) and straight output (0 or 1), which only turnouts may carry"""
+    if "dcc_address" not in placed and "dcc_output_straight" not in placed:
+        return True
+    if piece["type"] != "turnout":
+        return False
+    address = placed.get("dcc_address")
+    if "dcc_address" in placed and (isinstance(address, bool) or not isinstance(address, int)
+                                    or not 1 <= address <= 2048):
+        return False
+    straight = placed.get("dcc_output_straight", 0)
+    return isinstance(straight, int) and not isinstance(straight, bool) and straight in (0, 1)
+
+
 def _check_track_pieces(elements: dict):
     """Placed library pieces must exist, share one track system, and match elements.track_system"""
     pieces = elements.get("track_pieces", [])
@@ -91,7 +105,16 @@ def _check_track_pieces(elements: dict):
                 status_code=400,
                 detail="A placed length, radius, or angle must be a positive number that suits the piece",
             )
+        if not _valid_dcc(placed, library[placed["piece_id"]]):
+            raise HTTPException(
+                status_code=400,
+                detail="A DCC address (1-2048) or straight output (0 or 1) must suit the piece. Only turnouts take them",
+            )
         systems.add(library[placed["piece_id"]]["system"])
+
+    addresses = [placed["dcc_address"] for placed in pieces if "dcc_address" in placed]
+    if len(addresses) != len(set(addresses)):
+        raise HTTPException(status_code=400, detail="A DCC turnout address can only be used once in a layout")
 
     if len(systems) > 1:
         raise HTTPException(status_code=400, detail="A layout cannot mix track systems")

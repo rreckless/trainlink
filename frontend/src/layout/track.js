@@ -255,6 +255,17 @@ export function alignToEnd(shape, index, openEnd, flip) {
   }
 }
 
+// The output that sets a turnout's diverging route. Output 0 is straight unless the layout says otherwise
+export function divergingOutput(placed) {
+  return 1 - (placed.dcc_output_straight ?? 0)
+}
+
+// The output to switch a turnout to, so that a click toggles it. An unknown state throws it straight
+export function turnoutTarget(placed, state) {
+  const straight = placed.dcc_output_straight ?? 0
+  return state === straight ? divergingOutput(placed) : straight
+}
+
 // Per-placement dimensions that override the library piece (custom lengths and radii)
 const PLACEMENT_DIMENSIONS = ['length', 'radius', 'angle']
 
