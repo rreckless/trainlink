@@ -1,69 +1,22 @@
-import { useState } from 'react'
 import { useStore } from '../store'
-import { refreshZ21Status } from '../hooks/useZ21Status'
+import { useZ21Connection } from '../hooks/useZ21Connection'
 
 export default function SystemSettings() {
-  const [z21Host, setZ21Host] = useState('10.0.0.111')
-  const [z21Port, setZ21Port] = useState(21105)
-  const [z21Loading, setZ21Loading] = useState(false)
-  const [z21Error, setZ21Error] = useState(null)
+  const {
+    host: z21Host,
+    port: z21Port,
+    setZ21Address,
+    loading: z21Loading,
+    error: z21Error,
+    connect: handleConnect,
+    disconnect: handleDisconnect,
+  } = useZ21Connection()
 
   // Z21 state is polled once in App and shared through the store
   const z21 = useStore((state) => state.z21)
   const z21Connected = z21.connected
   const z21State = z21.state
   const z21LastHeartbeat = z21.lastHeartbeat
-
-  const handleConnect = async () => {
-    setZ21Loading(true)
-    setZ21Error(null)
-    try {
-      const response = await fetch('http://localhost:8000/api/z21/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          host: z21Host,
-          port: z21Port,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setZ21Error(null)
-      } else {
-        setZ21Error(data.detail || 'Failed to connect')
-      }
-    } catch (error) {
-      setZ21Error(error.message)
-    } finally {
-      setZ21Loading(false)
-      refreshZ21Status()
-    }
-  }
-
-  const handleDisconnect = async () => {
-    setZ21Loading(true)
-    try {
-      const response = await fetch('http://localhost:8000/api/z21/disconnect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        setZ21Error(null)
-      }
-    } catch (error) {
-      setZ21Error(error.message)
-    } finally {
-      setZ21Loading(false)
-      refreshZ21Status()
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -126,7 +79,7 @@ export default function SystemSettings() {
             <input
               type="text"
               value={z21Host}
-              onChange={(e) => setZ21Host(e.target.value)}
+              onChange={(e) => setZ21Address(e.target.value, z21Port)}
               disabled={z21Connected}
               className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white disabled:opacity-50"
               placeholder="10.0.0.111"
@@ -140,7 +93,7 @@ export default function SystemSettings() {
             <input
               type="number"
               value={z21Port}
-              onChange={(e) => setZ21Port(parseInt(e.target.value))}
+              onChange={(e) => setZ21Address(z21Host, parseInt(e.target.value))}
               disabled={z21Connected}
               className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white disabled:opacity-50"
               placeholder="21105"

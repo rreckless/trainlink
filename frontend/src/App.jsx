@@ -3,7 +3,7 @@ import { useStore } from './store'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useZ21StatusPolling } from './hooks/useZ21Status'
 import Switchboard from './components/Switchboard'
-import LocomotiveControl from './components/LocomotiveControl'
+import ControlView from './components/control/ControlView'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
 import SystemSettings from './components/SystemSettings'
@@ -27,7 +27,7 @@ function App() {
 
   const tabs = [
     { id: 'switchboard', label: 'Switchboard', icon: '🚂' },
-    { id: 'locomotive', label: 'Locomotives', icon: '🚃' },
+    { id: 'control', label: 'Control', icon: '🚃' },
     { id: 'routes', label: 'Routes', icon: '🛤️' },
     { id: 'editor', label: 'Layout Editor', icon: '✏️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -37,8 +37,8 @@ function App() {
     switch (activeTab) {
       case 'switchboard':
         return <Switchboard />
-      case 'locomotive':
-        return <LocomotiveControl />
+      case 'control':
+        return <ControlView />
       case 'routes':
         return <RouteManager />
       case 'editor':
