@@ -3,7 +3,9 @@ import { pieceShape } from '../../layout/track'
 
 function describe(piece) {
   if (piece.type === 'straight') return `${piece.length} mm straight`
-  if (piece.type === 'curve') return `${piece.radius} mm radius, ${piece.angle}°`
+  if (piece.type === 'curve') {
+    return piece.radius ? `${piece.radius} mm radius, ${piece.angle}°` : 'Radius set per placement'
+  }
   if (piece.type === 'turnout') {
     const angle = piece.angle_meaning === 'frog' ? `${piece.angle}° frog` : `${piece.angle}°`
     return `${piece.hand}-hand turnout, ${piece.length} mm, ${piece.radius} mm radius, ${angle}`

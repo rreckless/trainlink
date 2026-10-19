@@ -42,6 +42,28 @@ def _check_elements(elements: dict):
     _check_track_pieces(elements)
 
 
+# Per-placement dimensions and the piece types that accept each one, with the largest value allowed (mm or degrees)
+PLACEMENT_DIMENSIONS = {
+    "length": (("straight", "flex"), 100_000),
+    "radius": (("curve",), 10_000),
+    "angle": (("curve",), 360),
+}
+
+
+def _valid_dimensions(placed: dict, piece: dict) -> bool:
+    """Optional length, radius, and angle on a placement, which must suit the piece's type"""
+    for key, (types, largest) in PLACEMENT_DIMENSIONS.items():
+        if key not in placed:
+            continue
+        value = placed[key]
+        if piece["type"] not in types or isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        if not 0 < value <= largest:
+            return False
+    # A curve without a radius from the library needs one on the placement
+    return not (piece["type"] == "curve" and "radius" not in placed and "radius" not in piece)
+
+
 def _check_track_pieces(elements: dict):
     """Placed library pieces must exist, share one track system, and match elements.track_system"""
     pieces = elements.get("track_pieces", [])
@@ -62,6 +84,11 @@ def _check_track_pieces(elements: dict):
             raise HTTPException(
                 status_code=400,
                 detail="Each track piece needs an id, a known piece_id, x, y, rotation, and a flip flag",
+            )
+        if not _valid_dimensions(placed, library[placed["piece_id"]]):
+            raise HTTPException(
+                status_code=400,
+                detail="A placed length, radius, or angle must be a positive number that suits the piece",
             )
         systems.add(library[placed["piece_id"]]["system"])
 

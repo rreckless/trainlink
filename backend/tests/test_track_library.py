@@ -27,7 +27,7 @@ def _placed(piece_id, placed_id="p1", **overrides):
 
 def test_library_loads_peco_pieces():
     library = load_library()
-    assert len(library) == 53
+    assert len(library) == 53 + 1  # PECO pieces plus the custom curve
     assert library["peco-n-st-1"]["name"] == "Standard Straight"
     assert library["peco-n-st-1"]["system"] == CODE_80
     assert library["peco-n-st-1"]["series"] == "Setrack"
@@ -108,12 +108,12 @@ def test_list_pieces_filters_by_system():
     code_55 = list_pieces(system=CODE_55)
     assert code_80 and code_55
     assert all(piece["system"] == CODE_80 for piece in code_80)
-    assert len(code_80) + len(code_55) == 53
+    assert len(code_80) + len(code_55) == 54
 
 
 def test_library_endpoint_lists_and_filters(client):
     everything = client.get("/api/track-library").json()
-    assert len(everything) == 53
+    assert len(everything) == 54
 
     code_80 = client.get("/api/track-library", params={"system": CODE_80}).json()
     assert all(piece["system"] == CODE_80 for piece in code_80)
@@ -185,3 +185,48 @@ def test_placed_piece_fields_are_checked(client, layout_id, bad):
     elements = {"track_system": CODE_80, "track_pieces": [_placed("peco-n-st-1", **bad)]}
     response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
     assert response.status_code == 400
+
+
+def test_custom_curve_needs_a_radius_on_the_placement(client, layout_id):
+    elements = {"track_system": CODE_55, "track_pieces": [_placed("custom-n-custom-curve")]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 400
+
+    elements["track_pieces"] = [_placed("custom-n-custom-curve", radius=263.5, angle=90)]
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 200
+    assert response.json()["elements"]["track_pieces"][0]["radius"] == 263.5
+
+
+def test_flex_track_takes_a_custom_length(client, layout_id):
+    elements = {"track_system": CODE_55, "track_pieces": [_placed("peco-n-sl-300f", length=123.4)]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 200
+    assert response.json()["elements"]["track_pieces"][0]["length"] == 123.4
+
+
+@pytest.mark.parametrize(
+    "piece_id, dimensions",
+    [
+        ("peco-n-sl-300f", {"radius": 100}),
+        ("peco-n-sl-300f", {"length": 0}),
+        ("peco-n-sl-300f", {"length": -5}),
+        ("peco-n-sl-300f", {"length": "100"}),
+        ("custom-n-custom-curve", {"radius": 0, "angle": 90}),
+        ("custom-n-custom-curve", {"radius": 263.5, "angle": 400}),
+        ("peco-n-sl-u395f", {"length": 100}),
+    ],
+)
+def test_placed_dimensions_must_suit_the_piece(client, layout_id, piece_id, dimensions):
+    elements = {"track_system": CODE_55, "track_pieces": [_placed(piece_id, **dimensions)]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 400
+
+
+def test_three_way_branches_are_measured_from_the_layout():
+    piece = load_library()["peco-n-sl-e399f"]
+    geometry = piece["three_way_geometry"]
+    assert geometry["provisional"] is False
+    assert "AnyRail" in geometry["measured_from"]
+    assert geometry["right"]["sweep"] == 19.17
+    assert geometry["left"]["sweep"] == 18.74

@@ -4,6 +4,7 @@ import {
   hitPlacedPiece,
   openEnds,
   pieceShape,
+  placedPiece,
   worldPaths,
 } from '../../layout/track'
 
@@ -95,7 +96,7 @@ export default function LayoutCanvas({
 
       <Layer>
         {pieces.map((placed) => {
-          const shape = pieceShape(libraryById[placed.piece_id])
+          const shape = pieceShape(placedPiece(placed, libraryById))
           if (!shape) return null
           const selected = selectedKey === `piece:${placed.id}`
           return worldPaths(shape, placed).map((path, index) => (

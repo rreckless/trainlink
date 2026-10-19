@@ -68,7 +68,8 @@ export function pieceShape(piece) {
     }
   }
 
-  if (piece.type === 'curve') {
+  // A curve with no radius (the custom curve before a radius is set) has no shape yet
+  if (piece.type === 'curve' && piece.radius > 0 && piece.angle > 0) {
     const arc = arcPoints(piece.radius, piece.angle, 1)
     const end = arc[arc.length - 1]
     return {
@@ -147,7 +148,8 @@ export function pieceShape(piece) {
     const g = piece.three_way_geometry
     const L = g.length
     const branch = (b, side) => {
-      const sweep = deg(Math.asin((L - b.depart) / b.radius))
+      // A measured branch gives its sweep. Otherwise the branch ends on the straight's length
+      const sweep = b.sweep ?? deg(Math.asin((L - b.depart) / b.radius))
       const arc = arcPoints(b.radius, sweep, side).map((pt) => ({ x: pt.x + b.depart, y: pt.y }))
       return { sweep, arc, end: arc[arc.length - 1] }
     }
@@ -253,11 +255,25 @@ export function alignToEnd(shape, index, openEnd, flip) {
   }
 }
 
+// Per-placement dimensions that override the library piece (custom lengths and radii)
+const PLACEMENT_DIMENSIONS = ['length', 'radius', 'angle']
+
+// The library piece with this placement's own length, radius, or angle applied. Null if the piece is unknown
+export function placedPiece(placed, library) {
+  const base = library[placed.piece_id]
+  if (!base) return null
+  const overrides = {}
+  for (const key of PLACEMENT_DIMENSIONS) {
+    if (placed[key] !== undefined) overrides[key] = placed[key]
+  }
+  return { ...base, ...overrides }
+}
+
 // Open ends are endpoints of placed pieces that are not joined to another piece
 export function openEnds(placedPieces, library) {
   const all = []
   for (const placed of placedPieces) {
-    const shape = pieceShape(library[placed.piece_id])
+    const shape = pieceShape(placedPiece(placed, library))
     if (!shape) continue
     worldEndpoints(shape, placed).forEach((endpoint, index) => {
       all.push({ ...endpoint, pieceId: placed.id, index })
@@ -314,7 +330,7 @@ export function hitPlacedPiece(placedPieces, library, point, tolerance = 8) {
   let hit = null
   let hitDistance = tolerance
   for (const placed of placedPieces) {
-    const shape = pieceShape(library[placed.piece_id])
+    const shape = pieceShape(placedPiece(placed, library))
     if (!shape) continue
     for (const path of worldPaths(shape, placed)) {
       for (let i = 0; i < path.length - 1; i += 1) {
