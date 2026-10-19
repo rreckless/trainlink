@@ -239,10 +239,12 @@
       "system": "Code 80",
       "name": "Diamond Crossing",
       "type": "crossing",
-      "length": 104,
+      "length": 87,
       "angle": 11.25,
       "source": "PECO catalogue screenshot supplied by user (no PECO page found)",
-      "verified": false
+      "verified": false,
+      "placeable": true,
+      "note": "Crossing: ST50/51 plan sheet (87mm); screenshot angle 11.25 degrees. Sheet and screenshot length disagree. Geometry from the crossing model, not traced from the drawing"
     },
     {
       "part_number": "SL-300",
@@ -391,7 +393,7 @@
         "outer_radius": 914
       },
       "placeable": true,
-      "note": "Curved double radius turnout. Length and radii from the PECO plan sheet (158.04mm). The listed 8 degrees does not match the drawn arcs (19.2 and 9.4 degrees to the ends)"
+      "note": "Curved double radius turnout. Length 158.04mm from the PECO plan sheet (sheet also prints 138.04mm, which does not match its inches value). Radii and geometry from the plan sheet"
     },
     {
       "part_number": "SL-387",
@@ -413,7 +415,7 @@
         "outer_radius": 914
       },
       "placeable": true,
-      "note": "Curved double radius turnout. Length and radii from the PECO plan sheet (158.04mm). The listed 8 degrees does not match the drawn arcs (19.2 and 9.4 degrees to the ends)"
+      "note": "Curved double radius turnout. Length 158.04mm from the PECO plan sheet (sheet also prints 138.04mm, which does not match its inches value). Radii and geometry from the plan sheet"
     },
     {
       "part_number": "SL-E386",
@@ -435,7 +437,7 @@
         "outer_radius": 914
       },
       "placeable": true,
-      "note": "Curved double radius turnout. Length and radii from the PECO plan sheet (158.04mm). The listed 8 degrees does not match the drawn arcs (19.2 and 9.4 degrees to the ends)"
+      "note": "Curved double radius turnout. Length 158.04mm from the PECO plan sheet (sheet also prints 138.04mm, which does not match its inches value). Radii and geometry from the plan sheet"
     },
     {
       "part_number": "SL-E387",
@@ -457,7 +459,7 @@
         "outer_radius": 914
       },
       "placeable": true,
-      "note": "Curved double radius turnout. Length and radii from the PECO plan sheet (158.04mm). The listed 8 degrees does not match the drawn arcs (19.2 and 9.4 degrees to the ends)"
+      "note": "Curved double radius turnout. Length 158.04mm from the PECO plan sheet (sheet also prints 138.04mm, which does not match its inches value). Radii and geometry from the plan sheet"
     },
     {
       "part_number": "SL-397",
@@ -477,11 +479,12 @@
       "system": "Code 80",
       "name": "Medium Radius 'Y' Turnout (Electrofrog)",
       "type": "y_turnout",
-      "length": 127,
+      "length": 124,
       "radius": 762,
       "angle": 8,
       "source": "https://peco-uk.com/products/sle397-peco-streamline-n-turnout-c80-y-med-rad-ele",
-      "verified": true
+      "verified": true,
+      "note": "Electrofrog medium radius Y turnout. Length 124mm from the PECO plan sheet (product page says 127mm)"
     },
     {
       "part_number": "SL-393",
@@ -492,7 +495,9 @@
       "length": 91,
       "angle": 25,
       "source": "https://peco-uk.com/products/sl393-peco-streamline-n-crossing-c80-small-ins",
-      "verified": true
+      "verified": true,
+      "placeable": true,
+      "note": "Crossing: SL-393 plan sheet (91mm) and PECO page (25 degrees). Geometry from the crossing model, not traced from the drawing"
     },
     {
       "part_number": "SL-300F",
@@ -529,7 +534,13 @@
       "angle_meaning": "frog",
       "placeable": true,
       "source": "https://peco-uk.com/products/slu395f-peco-streamline-n-turnout-c55-med-rad-rh-uni",
-      "verified": true
+      "verified": true,
+      "diverge_geometry": {
+        "toe_straight": 16.4,
+        "radius": 540,
+        "length": 137
+      },
+      "note": "Unifrog medium turnout. Geometry measured from the PECO plan sheet: 16.4mm toe, about 540mm diverging radius, 137mm long. The catalogue 457mm radius and 10 degree frog angle do not match the drawing"
     },
     {
       "part_number": "SL-U396F",
@@ -544,7 +555,13 @@
       "angle_meaning": "frog",
       "placeable": true,
       "source": "https://peco-uk.com/products/slu396f-peco-streamline-n-turnout-c55-med-rad-lh-uni",
-      "verified": true
+      "verified": true,
+      "diverge_geometry": {
+        "toe_straight": 16.4,
+        "radius": 540,
+        "length": 137
+      },
+      "note": "Unifrog medium turnout. Geometry measured from the PECO plan sheet: 16.4mm toe, about 540mm diverging radius, 137mm long. The catalogue 457mm radius and 10 degree frog angle do not match the drawing"
     },
     {
       "part_number": "SL-E388F",
@@ -618,7 +635,15 @@
       "outer_radius": 914,
       "angle": 10,
       "source": "https://peco-uk.com/products/sle386f-peco-streamline-n-turnout-c55-curved-rh-ele",
-      "verified": true
+      "verified": true,
+      "curve_geometry": {
+        "toe_straight": 8.5,
+        "length": 160,
+        "inner_radius": 457,
+        "outer_radius": 914
+      },
+      "placeable": true,
+      "note": "Code 55 curved double radius turnout. Length, radii from the PECO page. Toe straight (8.5mm) assumed from the measured Code 80 turnout. Not traced from the Code 55 drawing"
     },
     {
       "part_number": "SL-E387F",
@@ -632,7 +657,15 @@
       "outer_radius": 914,
       "angle": 10,
       "source": "https://peco-uk.com/products/sle387f-peco-streamline-n-turnout-c55-curved-lh-ele",
-      "verified": true
+      "verified": true,
+      "curve_geometry": {
+        "toe_straight": 8.5,
+        "length": 160,
+        "inner_radius": 457,
+        "outer_radius": 914
+      },
+      "placeable": true,
+      "note": "Code 55 curved double radius turnout. Length, radii from the PECO page. Toe straight (8.5mm) assumed from the measured Code 80 turnout. Not traced from the Code 55 drawing"
     },
     {
       "part_number": "SL-E397F",
@@ -667,7 +700,9 @@
       "length": 104,
       "angle": 20,
       "source": "https://peco-uk.com/products/sle393f-peco-streamline-n-crossing-c55-short-ele",
-      "verified": true
+      "verified": true,
+      "placeable": true,
+      "note": "Crossing: SL-E393F plan sheet (104mm) and PECO page (20 degrees). Geometry from the crossing model, not traced from the drawing"
     },
     {
       "part_number": "SL-E394F",
@@ -678,7 +713,9 @@
       "length": 154,
       "angle": 10,
       "source": "https://peco-uk.com/products/sle394f-peco-streamline-n-crossing-c55-long-ele",
-      "verified": true
+      "verified": true,
+      "placeable": true,
+      "note": "Crossing: SL-E394F plan sheet (154mm) and PECO page (10 degrees). Geometry from the crossing model, not traced from the drawing"
     },
     {
       "part_number": "SL-380F",
@@ -751,7 +788,27 @@
       "length": 154,
       "angle": 10,
       "source": "https://peco-uk.com/products/sle390f-peco-streamline-n-double-slip-c55-ele",
-      "verified": true
+      "verified": true,
+      "slip_geometry": {
+        "track_a_top": [
+          -6.48,
+          -77.0
+        ],
+        "track_a_bottom": [
+          6.4,
+          77.0
+        ],
+        "track_b_top": [
+          7.12,
+          -77.0
+        ],
+        "track_b_bottom": [
+          -7.03,
+          77.0
+        ]
+      },
+      "placeable": true,
+      "note": "Double slip. Two straight crossing tracks traced from the PECO plan sheet: crossing angle 10.03 degrees, length 154mm"
     }
   ]
 }

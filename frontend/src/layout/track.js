@@ -120,6 +120,48 @@ export function pieceShape(piece) {
     }
   }
 
+  // Crossing: two straight tracks through the centre. Each sits half the crossing angle from the axis
+  if (piece.type === 'crossing' && piece.angle) {
+    const half = piece.length / 2
+    const lateral = half * Math.tan(rad(piece.angle / 2))
+    const a = { top: [-half, -lateral], bottom: [half, lateral] }
+    const b = { top: [-half, lateral], bottom: [half, -lateral] }
+    const outward = (from, to) => normalizeDegrees(deg(Math.atan2(from[1] - to[1], from[0] - to[0])))
+    const ends = [
+      { p: a.top, other: a.bottom },
+      { p: b.top, other: b.bottom },
+      { p: a.bottom, other: a.top },
+      { p: b.bottom, other: b.top },
+    ]
+    return {
+      endpoints: ends.map((e) => ({ x: e.p[0], y: e.p[1], heading: outward(e.p, e.other) })),
+      paths: [
+        [{ x: a.top[0], y: a.top[1] }, { x: a.bottom[0], y: a.bottom[1] }],
+        [{ x: b.top[0], y: b.top[1] }, { x: b.bottom[0], y: b.bottom[1] }],
+      ],
+    }
+  }
+
+  // Turnout measured from a plan sheet: straight toe, then one diverging arc ending at the length
+  if (piece.type === 'turnout' && piece.diverge_geometry && (piece.hand === 'right' || piece.hand === 'left')) {
+    const { toe_straight: toe, radius, length } = piece.diverge_geometry
+    const side = piece.hand === 'right' ? 1 : -1
+    const sweep = deg(Math.asin((length - toe) / radius))
+    const arc = arcPoints(radius, sweep, side).map((pt) => ({ x: pt.x + toe, y: pt.y }))
+    const end = arc[arc.length - 1]
+    return {
+      endpoints: [
+        { x: 0, y: 0, heading: 180 },
+        { x: length, y: 0, heading: 0 },
+        { x: end.x, y: end.y, heading: side * sweep },
+      ],
+      paths: [
+        [{ x: 0, y: 0 }, { x: length, y: 0 }],
+        [{ x: 0, y: 0 }, { x: toe, y: 0 }, ...arc.slice(1)],
+      ],
+    }
+  }
+
   if (piece.type === 'turnout' && (piece.hand === 'right' || piece.hand === 'left')) {
     const side = piece.hand === 'right' ? 1 : -1
     const angle =

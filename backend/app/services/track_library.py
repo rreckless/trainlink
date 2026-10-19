@@ -25,6 +25,7 @@ PIECE_FIELDS = (
     "outer_radius",
     "slip_geometry",
     "curve_geometry",
+    "diverge_geometry",
     "placeable",
     "angle_meaning",
     "verified",

@@ -110,6 +110,16 @@ test('SL-U395F can be joined to an open end', () => {
   assertPoint(worldEndpoints(shape, placement)[0], openEnd)
 })
 
+test('SL-U395F measured geometry: toe, diverging radius and end at the listed length', () => {
+  const measured = { ...slu395f, diverge_geometry: { toe_straight: 16.4, radius: 540, length: 137 } }
+  const shape = pieceShape(measured)
+  const end = shape.endpoints[2]
+  assert.ok(Math.abs(end.x - 137) < 0.01)
+  // Diverging heading: asin(120.6 / 540), about 12.9 degrees
+  assert.ok(Math.abs(end.heading - 12.9) < 0.1)
+  assert.ok(end.y > 0)
+})
+
 test('SL-U396F diverges to the other side from SL-U395F', () => {
   const left = pieceShape({ ...slu395f, part_number: 'SL-U396F', hand: 'left' })
   const right = pieceShape(slu395f)
@@ -198,6 +208,17 @@ test('curved turnout can be joined to an open end', () => {
   const shape = pieceShape(curved)
   const openEnd = { x: 0, y: 0, heading: 0 }
   assertPoint(worldEndpoints(shape, alignToEnd(shape, 0, openEnd, false))[0], openEnd)
+})
+
+test('crossing ends sit half the crossing angle from the axis', () => {
+  // 10 degree crossing over 154mm: lateral end offset (77)*tan(5 degrees), about 6.7mm
+  const shape = pieceShape({ system: 'Code 55', type: 'crossing', length: 154, angle: 10, placeable: true })
+  assert.equal(shape.endpoints.length, 4)
+  assert.ok(Math.abs(Math.abs(shape.endpoints[0].y) - 6.73) < 0.05)
+  assert.ok(Math.abs(shape.endpoints[0].x + 77) < 1e-9)
+  const [topA, topB, botA, botB] = shape.endpoints
+  close(normalizeDegrees(topA.heading), normalizeDegrees(botA.heading + 180))
+  close(normalizeDegrees(topB.heading), normalizeDegrees(botB.heading + 180))
 })
 
 test('a frog-angle turnout with a length longer than its radius has no shape', () => {

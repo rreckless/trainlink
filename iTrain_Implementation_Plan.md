@@ -121,7 +121,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Draw straight track segments (free drawing, kept alongside track pieces)
    - 🧪 Track library: 52 PECO N gauge entries, taken from PECO product pages. Each piece records its source page and whether its figures are confirmed there
    - 🧪 Place Code 80 straights, curves, and turnouts (Setrack and Streamline Code 80 share one system). Ends snap to open ends and a layout uses one track system
-   - 🧪 Flex track (Code 80 and Code 55) is placed as a straight of its catalogue length. Streamline Code 55 medium, large, and small-radius turnouts are placeable. Their diverging exit is derived from length and radius, with the listed angle taken as the frog angle. Not checked on a real part
+   - 🧪 Flex track (Code 80 and Code 55) is placed as a straight of its catalogue length.
+   - 🧪 SL-U395F/U396F: measured from the vector plan sheet (16.4mm toe, about 540mm diverging radius, 137mm long). The catalogue 457mm radius and 10 degree frog angle don't match the drawing.
+   - 🧪 Other Streamline Code 55 medium, large, and small-radius turnouts still use the frog-angle model. They need the same check against their plan sheets before they're trusted
    - 🧪 Single slips SL-380F and SL-E380F: geometry measured from the PECO plan sheet (tracks 154.3mm and 154.2mm, crossing angle 9.9°, matching the listed 154mm and 10°)
    - 🧪 Curved double radius turnouts SL-386/387 (Code 80): traced from the PECO plan sheet. Arcs of 457mm and 914mm after an 8.5mm toe, both ending at 158.04mm
    - ⬜ Crossings, Y turnouts, and 3-way turnouts, and Code 55 curved turnouts: listed, placement not built
