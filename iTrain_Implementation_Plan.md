@@ -126,7 +126,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Other Streamline Code 55 medium, large, and small-radius turnouts still use the frog-angle model. They need the same check against their plan sheets before they're trusted
    - 🧪 Single slips SL-380F and SL-E380F: geometry measured from the PECO plan sheet (tracks 154.3mm and 154.2mm, crossing angle 9.9°, matching the listed 154mm and 10°)
    - 🧪 Curved double radius turnouts SL-386/387 (Code 80): traced from the PECO plan sheet. Arcs of 457mm and 914mm after an 8.5mm toe, both ending at 158.04mm
-   - ⬜ Crossings, Y turnouts, and 3-way turnouts, and Code 55 curved turnouts: listed, placement not built
+   - 🧪 SL-E399F 3-way turnout: PROVISIONAL. Built from manual readings of the plan sheet (branch departures at about 47mm and 73mm, radii about 341mm and 597mm). The drawing's rails cross at the switch and couldn't be paired reliably. **TODO: revisit with a higher-resolution plan sheet or a physical measurement.**
+   - ⬜ Y turnouts (SL-397, SL-E397), ST-44/45 curved turnouts, and SL-E397F and ST-7 (no plan sheet): still unplaceable
+   - 🧪 Crossings, curved turnouts and Code 55 curved turnouts: placeable from the crossing and curve models. Not all checked against drawings
    - 🧪 Place blocks, signals, feedbacks
    - 🧪 Save and load layouts
    - 🧪 Drag-and-drop editing

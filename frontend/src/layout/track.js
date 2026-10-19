@@ -142,6 +142,32 @@ export function pieceShape(piece) {
     }
   }
 
+  // Asymmetric 3-way (provisional): straight route, plus a right and a left branch, each an arc from its departure point
+  if (piece.type === 'three_way' && piece.three_way_geometry) {
+    const g = piece.three_way_geometry
+    const L = g.length
+    const branch = (b, side) => {
+      const sweep = deg(Math.asin((L - b.depart) / b.radius))
+      const arc = arcPoints(b.radius, sweep, side).map((pt) => ({ x: pt.x + b.depart, y: pt.y }))
+      return { sweep, arc, end: arc[arc.length - 1] }
+    }
+    const right = branch(g.right, 1)
+    const left = branch(g.left, -1)
+    return {
+      endpoints: [
+        { x: 0, y: 0, heading: 180 },
+        { x: L, y: 0, heading: 0 },
+        { x: right.end.x, y: right.end.y, heading: right.sweep },
+        { x: left.end.x, y: left.end.y, heading: -left.sweep },
+      ],
+      paths: [
+        [{ x: 0, y: 0 }, { x: L, y: 0 }],
+        [{ x: 0, y: 0 }, { x: g.right.depart, y: 0 }, ...right.arc.slice(1)],
+        [{ x: 0, y: 0 }, { x: g.left.depart, y: 0 }, ...left.arc.slice(1)],
+      ],
+    }
+  }
+
   // Turnout measured from a plan sheet: straight toe, then one diverging arc ending at the length
   if (piece.type === 'turnout' && piece.diverge_geometry && (piece.hand === 'right' || piece.hand === 'left')) {
     const { toe_straight: toe, radius, length } = piece.diverge_geometry

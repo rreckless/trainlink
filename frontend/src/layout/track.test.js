@@ -221,6 +221,25 @@ test('crossing ends sit half the crossing angle from the axis', () => {
   close(normalizeDegrees(topB.heading), normalizeDegrees(botB.heading + 180))
 })
 
+// SL-E399F 3-way (provisional)
+const threeWay = {
+  id: 'sl399f',
+  system: 'Code 55',
+  type: 'three_way',
+  length: 153,
+  placeable: true,
+  three_way_geometry: { length: 153, right: { depart: 47, radius: 341 }, left: { depart: 73, radius: 597 } },
+}
+
+test('3-way has a straight exit and two branches on opposite sides', () => {
+  const shape = pieceShape(threeWay)
+  assert.equal(shape.endpoints.length, 4)
+  const [, straight, right, left] = shape.endpoints
+  assert.ok(Math.abs(straight.x - 153) < 1e-9)
+  assert.ok(right.y > 0 && left.y < 0)
+  assert.ok(right.x <= 153 + 1e-6 && left.x <= 153 + 1e-6)
+})
+
 test('a frog-angle turnout with a length longer than its radius has no shape', () => {
   assert.equal(pieceShape({ ...slu395f, length: 500 }), null)
 })

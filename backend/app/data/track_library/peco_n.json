@@ -689,7 +689,21 @@
       "radius": 457,
       "angle": 10,
       "source": "https://peco-uk.com/products/sle399f-peco-streamline-n-turnout-c55-assym-3-way-ele",
-      "verified": true
+      "verified": false,
+      "three_way_geometry": {
+        "length": 153,
+        "right": {
+          "depart": 47,
+          "radius": 341
+        },
+        "left": {
+          "depart": 73,
+          "radius": 597
+        },
+        "provisional": true
+      },
+      "placeable": true,
+      "note": "Asymmetric 3-way. PROVISIONAL geometry from manual readings of the plan sheet. Branch departure points and radii need re-checking against a higher-resolution drawing"
     },
     {
       "part_number": "SL-E393F",

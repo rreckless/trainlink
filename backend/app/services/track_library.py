@@ -26,6 +26,7 @@ PIECE_FIELDS = (
     "slip_geometry",
     "curve_geometry",
     "diverge_geometry",
+    "three_way_geometry",
     "placeable",
     "angle_meaning",
     "verified",
