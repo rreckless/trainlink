@@ -260,3 +260,10 @@ def test_delete_route(client, seed):
     route_id = client.post("/api/routes", json=_route(seed, [first])).json()["id"]
     assert client.delete(f"/api/routes/{route_id}").status_code == 204
     assert client.get(f"/api/routes/{route_id}").status_code == 404
+
+
+def test_locomotive_without_command_station(client, seed):
+    body = {"name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel"}
+    response = client.post("/api/locomotives", json=body)
+    assert response.status_code == 201
+    assert response.json()["name"] == "Class 37"

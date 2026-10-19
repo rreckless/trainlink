@@ -11,7 +11,8 @@ import {
   snapPoint,
   snapshotOf,
 } from '../layout/model'
-import { pieceShape, snapPlacement, turnoutTarget } from '../layout/track'
+import { pieceShape, snapPlacement } from '../layout/track'
+import { useTurnoutControl } from './useTurnoutControl'
 
 const KINDS = Object.keys(ENTITY_KINDS)
 
@@ -30,8 +31,6 @@ export function useLayoutEditor() {
   // Last state loaded from or saved to the server, used to work out what changed
   const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
   const [importReport, setImportReport] = useState(null)
-  // Last reported output of each DCC turnout, keyed by address. null is unknown
-  const [turnoutStates, setTurnoutStates] = useState({})
   const [tool, setTool] = useState('select')
   const [pieceId, setPieceId] = useState(null)
   const [selectedKey, setSelectedKey] = useState(null)
@@ -322,46 +321,8 @@ export function useLayoutEditor() {
     }
   }, [layout, items, tracks, pieces, trackSystem, saved, sizeChanged, openLayout])
 
-  // DCC turnouts in this layout, and their outputs read from the Z21 every two seconds while operating
-  const turnoutAddresses = useMemo(
-    () => pieces.filter((piece) => piece.dcc_address !== undefined).map((piece) => piece.dcc_address),
-    [pieces]
-  )
-
-  useEffect(() => {
-    if (tool !== 'operate' || turnoutAddresses.length === 0) return undefined
-    let cancelled = false
-    const read = () =>
-      layoutApi
-        .getTurnoutStates(turnoutAddresses)
-        .then((result) => {
-          if (!cancelled) setTurnoutStates(result.states)
-        })
-        .catch((err) => {
-          if (!cancelled) setError(`Could not read the turnouts: ${err.message}`)
-        })
-    read()
-    const timer = setInterval(read, 2000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [tool, turnoutAddresses])
-
-  const throwPlaced = useCallback(
-    async (placed) => {
-      const address = placed.dcc_address
-      const target = turnoutTarget(placed, turnoutStates[String(address)] ?? null)
-      setError('')
-      try {
-        await layoutApi.throwTurnout(address, target)
-        setTurnoutStates((prev) => ({ ...prev, [String(address)]: target }))
-      } catch (err) {
-        setError(`Could not switch turnout ${address}: ${err.message}`)
-      }
-    },
-    [turnoutStates]
-  )
+  // DCC turnouts: their outputs are read from the Z21 every two seconds while operating
+  const { turnoutStates, throwPlaced } = useTurnoutControl(pieces, tool === 'operate', setError)
 
   // Set or clear a placed turnout's DCC address and straight output. Save keeps the change
   const setDcc = useCallback((id, fields) => {

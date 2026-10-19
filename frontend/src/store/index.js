@@ -30,6 +30,9 @@ export const useStore = create((set) => ({
   // Z21 track state, polled from /api/z21/status
   // state: disconnected | unknown | short_circuit | track_power_off | ready
   z21: { connected: false, state: 'disconnected', lastHeartbeat: null },
+  // Z21 address used by Settings and the Control page
+  z21Host: '10.0.0.111',
+  z21Port: 21105,
 
   // Actions
   setLayout: (layout) => set({ layout }),
@@ -43,6 +46,7 @@ export const useStore = create((set) => ({
   setConnected: (connected) => set({ connected }),
   setClientId: (id) => set({ clientId: id }),
   setZ21Status: (z21) => set({ z21 }),
+  setZ21Address: (host, port) => set({ z21Host: host, z21Port: port }),
   updateLocomotiveSpeed: (locId, speed) => set((state) => ({
     locomotives: state.locomotives.map(loc =>
       loc.id === locId ? { ...loc, speed } : loc

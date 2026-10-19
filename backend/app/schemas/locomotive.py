@@ -11,7 +11,8 @@ class LocomotiveCreate(BaseModel):
     name: str
     dcc_address: int
     locomotive_type: str
-    command_station_id: int
+    # Optional: the Z21 is the only command station, so most locomotives leave this empty
+    command_station_id: Optional[int] = None
     length: Optional[float] = None
 
 

@@ -37,7 +37,8 @@ def list_locomotives(db: Session = Depends(get_db)):
 @router.post("", response_model=LocomotiveResponse, status_code=status.HTTP_201_CREATED)
 def create_locomotive(body: LocomotiveCreate, db: Session = Depends(get_db)):
     _check_dcc_address(body.dcc_address)
-    get_or_404(db, CommandStation, body.command_station_id, "Command station")
+    if body.command_station_id is not None:
+        get_or_404(db, CommandStation, body.command_station_id, "Command station")
 
     locomotive = Locomotive(
         name=body.name,
