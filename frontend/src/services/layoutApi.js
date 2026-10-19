@@ -29,6 +29,7 @@ export const layoutApi = {
   getLayout: (id) => request('GET', `/api/layouts/${id}`),
   createLayout: (body) => request('POST', '/api/layouts', body),
   updateLayout: (id, body) => request('PATCH', `/api/layouts/${id}`, body),
+  importAnyRail: (body) => request('POST', '/api/layouts/anyrail-import', body),
 
   listEntities: (kind, layoutId) =>
     request('GET', `${ENTITY_KINDS[kind].path}?layout_id=${layoutId}`),
