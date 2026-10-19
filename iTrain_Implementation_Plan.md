@@ -14,8 +14,8 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 | Area | Status | Notes |
 |------|--------|-------|
 | Project setup, Docker (PostgreSQL, Redis), Python 3.12 venv | ✅ | Renamed to TrainLink |
-| Z21 UDP driver and API routes | 🧪 | Connect, speed, direction, emergency stop, status. Not tested against a real Z21 |
-| Locomotive control UI | 🧪 | Speed slider, direction buttons, emergency stop. Not tested against a real Z21 |
+| Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status. Train run on real Z21 (user test) |
+| Locomotive control UI | ✅ | Speed slider, direction buttons, emergency stop. Train run on real Z21 (user test) |
 | System settings UI (Z21 host and port) | 🧪 | Depends on the Z21 driver being tested |
 | Database models and schemas | 🟡 | Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation defined. No REST routes for them |
 | WebSocket endpoint | 🟡 | Endpoint and connection manager exist. Messages are echoed to all clients. No auth, no typed events |
@@ -93,12 +93,12 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 **Goal**: Fundamental train control on real hardware
 
 1. **Locomotive Control** 🧪
-   - 🧪 Speed control (0–126 steps)
-   - 🧪 Direction (Forward / Reverse / Stop)
+   - ✅ Speed control (0–126 steps). Verified on hardware
+   - ✅ Direction (Forward / Reverse / Stop). Verified on hardware
    - ⬜ Function buttons (lights, sounds). Z21 function commands not implemented
    - ⬜ Travelled time and distance tracking
    - ⬜ Real-time speed feedback from Z21
-   - 🧪 Emergency stop
+   - ✅ Emergency stop. Verified on hardware (not yet confirmed separately)
    - 🧪 Track state from Z21 (short circuit, track power off), with locomotive commands blocked until ready and a Resume Track Power action. Reconnect in Settings
 
 2. **Block System** ⬜
@@ -118,7 +118,11 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 4. **Layout Drawing** 🧪
    - ✅ Layout REST routes (track segments stored in layout elements)
-   - 🧪 Draw straight track segments
+   - 🧪 Draw straight track segments (free drawing, kept alongside track pieces)
+   - 🧪 Track library: PECO N gauge catalogue entries (46, unverified until checked against the catalogue)
+   - 🧪 Place Setrack (Code 80) straights, curves, and left- and right-hand turnouts. Ends snap to open ends and a layout uses one track system
+   - ⬜ Streamline (Code 55) pieces: listed but not placeable. Turnout geometry in the catalogue doesn't reconcile yet
+   - ⬜ Crossings, curved turnouts, Y turnouts, slips, and flex track: listed, placement not built
    - 🧪 Place blocks, signals, feedbacks
    - 🧪 Save and load layouts
    - 🧪 Drag-and-drop editing
@@ -280,7 +284,7 @@ Entry criteria:
 
 ## Immediate Priorities
 
-1. **Test locomotive control against a real Z21.** Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. Frame bytes have been checked against the Z21 LAN Protocol Specification v1.13.
+1. ✅ **Test locomotive control against a real Z21.** Done: a train ran under TrainLink control (user test). Still to confirm on hardware: short-circuit detection, track power resume, and feedback. Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. Frame bytes have been checked against the Z21 LAN Protocol Specification v1.13.
 2. ✅ Mock Z21 UDP responder (done)
 3. ✅ Backend unit tests for the Z21 packet builder and the speed and direction logic (done, 30 passing)
 4. ✅ REST routes for locomotives, blocks, signals, and routes (done, 79 passing). Layouts and command stations still need routes so blocks can be linked to signals and feedback.

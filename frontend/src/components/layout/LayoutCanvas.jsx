@@ -1,5 +1,11 @@
 import { Stage, Layer, Group, Rect, Line, Circle, Text } from 'react-konva'
 import { GRID_SIZE, hitItem, hitTrack, signalColor, snapPoint } from '../../layout/model'
+import {
+  hitPlacedPiece,
+  openEnds,
+  pieceShape,
+  worldPaths,
+} from '../../layout/track'
 
 const BLOCK_WIDTH = 60
 const BLOCK_HEIGHT = 24
@@ -7,6 +13,10 @@ const FEEDBACK_SIZE = 12
 
 function pointerOf(event) {
   return event.target.getStage().getPointerPosition()
+}
+
+function flat(path) {
+  return path.flatMap((point) => [point.x, point.y])
 }
 
 function Grid({ width, height }) {
@@ -21,10 +31,13 @@ function Grid({ width, height }) {
 }
 
 // Draws the layout and turns pointer events into editor actions.
-// Positions are passed to the parent already snapped to the grid.
+// Element positions are passed to the parent already snapped to the grid.
 export default function LayoutCanvas({
   layout,
   tracks,
+  pieces,
+  libraryById,
+  ghost,
   items,
   tool,
   selectedKey,
@@ -36,20 +49,21 @@ export default function LayoutCanvas({
   onMove,
 }) {
   const editing = tool === 'select'
+  const placing = tool === 'piece'
 
   const handleMove = (event) => {
-    const point = snapPoint(pointerOf(event))
-    onCursor(point)
+    onCursor(pointerOf(event))
   }
 
   const handleStageClick = (event) => {
     const raw = pointerOf(event)
     if (!raw) return
-    const point = snapPoint(raw)
     if (editing) {
-      // Clicks on a track or element select it. Clicks on empty space clear the selection
+      // Track, then track piece, then element. Empty space clears the selection
       const track = hitTrack(tracks, raw)
       if (track) return onSelect(`track:${track.id}`)
+      const placed = hitPlacedPiece(pieces, libraryById, raw)
+      if (placed) return onSelect(`piece:${placed.id}`)
       const item = hitItem(items, raw)
       if (item) return onSelect(item.key)
       return onSelect(null)
@@ -62,6 +76,8 @@ export default function LayoutCanvas({
     onMove(key, point)
     return point
   }
+
+  const ghostPaths = ghost ? worldPaths(pieceShape(ghost.piece), ghost.placement) : []
 
   return (
     <Stage
@@ -78,6 +94,22 @@ export default function LayoutCanvas({
       </Layer>
 
       <Layer>
+        {pieces.map((placed) => {
+          const shape = pieceShape(libraryById[placed.piece_id])
+          if (!shape) return null
+          const selected = selectedKey === `piece:${placed.id}`
+          return worldPaths(shape, placed).map((path, index) => (
+            <Line
+              key={`${placed.id}-${index}`}
+              points={flat(path)}
+              stroke={selected ? '#38bdf8' : '#e2e8f0'}
+              strokeWidth={selected ? 5 : 3}
+              hitStrokeWidth={12}
+              listening={editing}
+            />
+          ))
+        })}
+
         {tracks.map((track) => {
           const key = `track:${track.id}`
           const selected = key === selectedKey
@@ -92,6 +124,30 @@ export default function LayoutCanvas({
             />
           )
         })}
+
+        {ghostPaths.map((path, index) => (
+          <Line
+            key={`ghost-${index}`}
+            points={flat(path)}
+            stroke="#38bdf8"
+            strokeWidth={3}
+            dash={[6, 4]}
+            opacity={0.7}
+            listening={false}
+          />
+        ))}
+
+        {placing &&
+          openEnds(pieces, libraryById).map((end) => (
+            <Circle
+              key={`${end.pieceId}-${end.index}`}
+              x={end.x}
+              y={end.y}
+              radius={3}
+              fill="#f97316"
+              listening={false}
+            />
+          ))}
 
         {pendingStart && cursor && (
           <Line

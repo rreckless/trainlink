@@ -11,22 +11,26 @@ import {
   snapPoint,
   snapshotOf,
 } from '../layout/model'
+import { pieceShape, snapPlacement } from '../layout/track'
 
 const KINDS = Object.keys(ENTITY_KINDS)
 
-function newTrackId() {
-  return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+function newId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-// State and actions for the layout editor. Geometry logic lives in layout/model.js
+// State and actions for the layout editor. Geometry logic lives in layout/
 export function useLayoutEditor() {
   const [layouts, setLayouts] = useState([])
+  const [library, setLibrary] = useState([])
   const [layout, setLayout] = useState(null)
   const [items, setItems] = useState([])
   const [tracks, setTracks] = useState([])
+  const [pieces, setPieces] = useState([])
   // Last state loaded from or saved to the server, used to work out what changed
-  const [saved, setSaved] = useState({ items: new Map(), tracks: '[]' })
+  const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]' })
   const [tool, setTool] = useState('select')
+  const [pieceId, setPieceId] = useState(null)
   const [selectedKey, setSelectedKey] = useState(null)
   const [pendingStart, setPendingStart] = useState(null)
   const [cursor, setCursor] = useState(null)
@@ -35,15 +39,37 @@ export function useLayoutEditor() {
   const [message, setMessage] = useState('')
   const newCount = useRef(0)
 
+  const libraryById = useMemo(() => Object.fromEntries(library.map((piece) => [piece.id, piece])), [library])
+
+  // A layout uses one track system. It is set by the first piece placed
+  const trackSystem = pieces.length > 0 ? libraryById[pieces[0].piece_id]?.system ?? null : null
+
   const dirty = useMemo(() => {
     if (JSON.stringify(tracks) !== saved.tracks) return true
+    if (JSON.stringify(pieces) !== saved.pieces) return true
     return diffItems(saved.items, items).length > 0
-  }, [items, tracks, saved])
+  }, [items, tracks, pieces, saved])
 
   const selectedItem = items.find((item) => item.key === selectedKey) || null
   const selectedTrack = selectedKey?.startsWith('track:')
     ? tracks.find((track) => `track:${track.id}` === selectedKey) || null
     : null
+  const selectedPlaced = selectedKey?.startsWith('piece:')
+    ? pieces.find((piece) => `piece:${piece.id}` === selectedKey) || null
+    : null
+
+  // Where a piece would go if clicked now. Null when there is nothing valid to show
+  const ghost = useMemo(() => {
+    if (tool !== 'piece' || !cursor || !pieceId) return null
+    const piece = libraryById[pieceId]
+    if (!piece || !pieceShape(piece)) return null
+    if (trackSystem && piece.system !== trackSystem) return null
+    if (pieces.length === 0) {
+      return { piece, placement: { ...snapPoint(cursor), rotation: 0, flip: false } }
+    }
+    const placement = snapPlacement(piece, pieces, libraryById, cursor)
+    return placement ? { piece, placement } : null
+  }, [tool, cursor, pieceId, pieces, libraryById, trackSystem])
 
   const refreshLayouts = useCallback(async () => {
     try {
@@ -68,11 +94,17 @@ export function useLayoutEditor() {
         lists[index].map((row) => ({ ...fromServer(kind, row), layoutId: id }))
       )
       const loadedTracks = found.elements?.tracks ?? []
+      const loadedPieces = found.elements?.track_pieces ?? []
 
       setLayout(found)
       setItems(loadedItems)
       setTracks(loadedTracks)
-      setSaved({ items: snapshotOf(loadedItems), tracks: JSON.stringify(loadedTracks) })
+      setPieces(loadedPieces)
+      setSaved({
+        items: snapshotOf(loadedItems),
+        tracks: JSON.stringify(loadedTracks),
+        pieces: JSON.stringify(loadedPieces),
+      })
       setSelectedKey(null)
       setPendingStart(null)
       useStore.getState().setLayout(found)
@@ -84,6 +116,10 @@ export function useLayoutEditor() {
   }, [])
 
   useEffect(() => {
+    layoutApi
+      .getTrackLibrary()
+      .then(setLibrary)
+      .catch((err) => setError(`Could not load the track library: ${err.message}`))
     refreshLayouts().then((list) => {
       if (list.length > 0) openLayout(list[0].id)
     })
@@ -118,7 +154,7 @@ export function useLayoutEditor() {
 
   const addTrack = useCallback((start, end) => {
     if (start.x === end.x && start.y === end.y) return
-    setTracks((prev) => [...prev, { id: newTrackId(), x1: start.x, y1: start.y, x2: end.x, y2: end.y }])
+    setTracks((prev) => [...prev, { id: newId('t'), x1: start.x, y1: start.y, x2: end.x, y2: end.y }])
   }, [])
 
   const addItem = useCallback(
@@ -147,14 +183,27 @@ export function useLayoutEditor() {
     [layout]
   )
 
-  // Click on the canvas, already snapped to the grid by the caller
+  // Click on the canvas. Positions are snapped to the grid for tracks and elements
   const handleCanvasClick = useCallback(
     (rawPoint) => {
-      const point = snapPoint(rawPoint)
       if (tool === 'select') {
         setSelectedKey(null)
         return
       }
+      if (tool === 'piece') {
+        if (!pieceId) return setError('Choose a track piece from the list first')
+        if (!ghost) {
+          return setError(
+            trackSystem && libraryById[pieceId]?.system !== trackSystem
+              ? `This layout uses ${trackSystem}. Pick a piece from that system`
+              : 'Move the cursor next to an open track end to place this piece'
+          )
+        }
+        setError('')
+        setPieces((prev) => [...prev, { id: newId('p'), piece_id: ghost.piece.id, ...ghost.placement }])
+        return
+      }
+      const point = snapPoint(rawPoint)
       if (tool === 'track') {
         // Each track starts where the last one ended. Escape stops the chain
         if (pendingStart) addTrack(pendingStart, point)
@@ -163,7 +212,7 @@ export function useLayoutEditor() {
       }
       addItem(tool, point)
     },
-    [tool, pendingStart, addTrack, addItem]
+    [tool, pieceId, ghost, trackSystem, libraryById, pendingStart, addTrack, addItem]
   )
 
   const moveItem = useCallback((key, rawPoint) => {
@@ -183,6 +232,9 @@ export function useLayoutEditor() {
     if (selectedKey.startsWith('track:')) {
       const id = selectedKey.slice('track:'.length)
       setTracks((prev) => prev.filter((track) => track.id !== id))
+    } else if (selectedKey.startsWith('piece:')) {
+      const id = selectedKey.slice('piece:'.length)
+      setPieces((prev) => prev.filter((piece) => piece.id !== id))
     } else {
       setItems((prev) => prev.filter((item) => item.key !== selectedKey))
     }
@@ -197,6 +249,13 @@ export function useLayoutEditor() {
     setCursor(null)
   }, [])
 
+  const choosePiece = useCallback((id) => {
+    setPieceId(id)
+    setTool('piece')
+    setPendingStart(null)
+    setError('')
+  }, [])
+
   const save = useCallback(async () => {
     if (!layout) return
     setBusy(true)
@@ -209,8 +268,10 @@ export function useLayoutEditor() {
         else if (op.op === 'update') await layoutApi.updateEntity(op.kind, op.id, op.body)
         else await layoutApi.deleteEntity(op.kind, op.id)
       }
-      if (JSON.stringify(tracks) !== saved.tracks) {
-        await layoutApi.updateLayout(layout.id, { elements: { ...layout.elements, tracks } })
+      if (JSON.stringify(tracks) !== saved.tracks || JSON.stringify(pieces) !== saved.pieces) {
+        await layoutApi.updateLayout(layout.id, {
+          elements: { ...layout.elements, tracks, track_pieces: pieces, track_system: trackSystem },
+        })
       }
       await openLayout(layout.id)
       setMessage('Layout saved')
@@ -221,17 +282,24 @@ export function useLayoutEditor() {
     } finally {
       setBusy(false)
     }
-  }, [layout, items, tracks, saved, openLayout])
+  }, [layout, items, tracks, pieces, trackSystem, saved, openLayout])
 
   return {
     layouts,
+    library,
+    libraryById,
     layout,
     items,
     tracks,
+    pieces,
+    trackSystem,
     tool,
+    pieceId,
+    ghost,
     selectedKey,
     selectedItem,
     selectedTrack,
+    selectedPlaced,
     pendingStart,
     cursor,
     dirty,
@@ -241,6 +309,7 @@ export function useLayoutEditor() {
     setSelectedKey,
     setCursor,
     chooseTool,
+    choosePiece,
     handleCanvasClick,
     moveItem,
     renameSelected,

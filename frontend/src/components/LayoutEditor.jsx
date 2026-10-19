@@ -3,6 +3,13 @@ import { useLayoutEditor } from '../hooks/useLayoutEditor'
 import LayoutCanvas from './layout/LayoutCanvas'
 import LayoutToolbar from './layout/LayoutToolbar'
 import LayoutProperties from './layout/LayoutProperties'
+import TrackPicker from './layout/TrackPicker'
+
+const HINTS = {
+  select: 'Click to select. Drag to move. Delete removes the selection.',
+  track: 'Click to start a track, click again to add a segment. Escape stops.',
+  piece: 'Pick a piece, then move the cursor near an open track end (orange). Click to place.',
+}
 
 export default function LayoutEditor() {
   const editor = useLayoutEditor()
@@ -54,6 +61,9 @@ export default function LayoutEditor() {
             <LayoutCanvas
               layout={editor.layout}
               tracks={editor.tracks}
+              pieces={editor.pieces}
+              libraryById={editor.libraryById}
+              ghost={editor.ghost}
               items={editor.items}
               tool={editor.tool}
               selectedKey={editor.selectedKey}
@@ -64,24 +74,31 @@ export default function LayoutEditor() {
               onSelect={editor.setSelectedKey}
               onMove={editor.moveItem}
             />
-            <p className="text-xs text-slate-500 mt-2">
-              {editor.tool === 'track'
-                ? 'Click to start a track, click again to add a segment. Escape stops.'
-                : editor.tool === 'select'
-                ? 'Click to select. Drag to move. Delete removes the selection.'
-                : 'Click the canvas to place the element. Choose Select to go back.'}
-            </p>
+            <p className="text-xs text-slate-500 mt-2">{HINTS[editor.tool] || HINTS.select}</p>
           </div>
 
           <div className="bg-slate-800 rounded-lg p-4">
-            <h4 className="font-semibold mb-3">Properties</h4>
-            <LayoutProperties
-              item={editor.selectedItem}
-              track={editor.selectedTrack}
-              busy={editor.busy}
-              onRename={editor.renameSelected}
-              onDelete={editor.deleteSelected}
-            />
+            {editor.tool === 'piece' ? (
+              <TrackPicker
+                library={editor.library}
+                trackSystem={editor.trackSystem}
+                pieceId={editor.pieceId}
+                onPick={editor.choosePiece}
+              />
+            ) : (
+              <>
+                <h4 className="font-semibold mb-3">Properties</h4>
+                <LayoutProperties
+                  item={editor.selectedItem}
+                  track={editor.selectedTrack}
+                  placed={editor.selectedPlaced}
+                  piece={editor.selectedPlaced ? editor.libraryById[editor.selectedPlaced.piece_id] : null}
+                  busy={editor.busy}
+                  onRename={editor.renameSelected}
+                  onDelete={editor.deleteSelected}
+                />
+              </>
+            )}
           </div>
         </div>
       ) : (

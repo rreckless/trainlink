@@ -3,6 +3,7 @@ import { useState } from 'react'
 const TOOLS = [
   { id: 'select', label: 'Select' },
   { id: 'track', label: 'Track' },
+  { id: 'piece', label: 'Track piece' },
   { id: 'block', label: 'Block' },
   { id: 'signal', label: 'Signal' },
   { id: 'feedback', label: 'Feedback' },

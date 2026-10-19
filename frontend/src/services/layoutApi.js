@@ -25,6 +25,7 @@ async function request(method, path, body) {
 
 export const layoutApi = {
   listLayouts: () => request('GET', '/api/layouts'),
+  getTrackLibrary: () => request('GET', '/api/track-library'),
   getLayout: (id) => request('GET', `/api/layouts/${id}`),
   createLayout: (body) => request('POST', '/api/layouts', body),
   updateLayout: (id, body) => request('PATCH', `/api/layouts/${id}`, body),

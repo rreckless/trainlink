@@ -1,0 +1,461 @@
+{
+  "manufacturer": "PECO",
+  "gauge": "N",
+  "source": "PECO catalogue table supplied as a screenshot by the user",
+  "verified": false,
+  "units": "mm and degrees",
+  "pieces": [
+    {
+      "part_number": "ST-1",
+      "system": "Setrack (Code 80)",
+      "name": "Standard Straight",
+      "type": "straight",
+      "length": 87,
+      "note": "Base grid block"
+    },
+    {
+      "part_number": "ST-2",
+      "system": "Setrack (Code 80)",
+      "name": "Short Straight",
+      "type": "straight",
+      "length": 58,
+      "note": "Used to match turnout lines"
+    },
+    {
+      "part_number": "ST-11",
+      "system": "Setrack (Code 80)",
+      "name": "Double Straight",
+      "type": "straight",
+      "length": 174,
+      "note": "Equivalent to two ST-1 pieces"
+    },
+    {
+      "part_number": "ST-43",
+      "system": "Setrack (Code 80)",
+      "name": "Quarter Straight",
+      "type": "straight",
+      "length": 22,
+      "note": "Fine adjustment trim piece"
+    },
+    {
+      "part_number": "ST-3",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (1st Radius)",
+      "type": "curve",
+      "radius": 228,
+      "angle": 22.5,
+      "note": "Sharpest standard curve"
+    },
+    {
+      "part_number": "ST-12",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (1st Radius)",
+      "type": "curve",
+      "radius": 228,
+      "angle": 45,
+      "note": "Formed from two ST-3 arcs"
+    },
+    {
+      "part_number": "ST-4",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (1st Radius)",
+      "type": "curve",
+      "radius": 228,
+      "angle": 11.25,
+      "note": "Trim or alignment correction"
+    },
+    {
+      "part_number": "ST-14",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (2nd Radius)",
+      "type": "curve",
+      "radius": 263.5,
+      "angle": 22.5,
+      "note": "Parallels 1st Radius tracking"
+    },
+    {
+      "part_number": "ST-15",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (2nd Radius)",
+      "type": "curve",
+      "radius": 263.5,
+      "angle": 45,
+      "note": "Formed from two ST-14 arcs"
+    },
+    {
+      "part_number": "ST-47",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (2nd Radius)",
+      "type": "curve",
+      "radius": 263.5,
+      "angle": 11.25,
+      "note": "Alignment trimming piece"
+    },
+    {
+      "part_number": "ST-16",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (3rd Radius)",
+      "type": "curve",
+      "radius": 298.5,
+      "angle": 22.5,
+      "note": "Outer loop trackage"
+    },
+    {
+      "part_number": "ST-17",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (3rd Radius)",
+      "type": "curve",
+      "radius": 298.5,
+      "angle": 45,
+      "note": "Double outer loop arc"
+    },
+    {
+      "part_number": "ST-18",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (4th Radius)",
+      "type": "curve",
+      "radius": 333.4,
+      "angle": 22.5,
+      "note": "Maximum radius sectional piece"
+    },
+    {
+      "part_number": "ST-19",
+      "system": "Setrack (Code 80)",
+      "name": "Curve (4th Radius)",
+      "type": "curve",
+      "radius": 333.4,
+      "angle": 45,
+      "note": "Outer alignment double arc"
+    },
+    {
+      "part_number": "ST-5",
+      "system": "Setrack (Code 80)",
+      "name": "Turnout Right-Hand",
+      "type": "turnout",
+      "hand": "right",
+      "length": 87,
+      "radius": 228,
+      "angle": 22.5,
+      "note": "Insulfrog construction"
+    },
+    {
+      "part_number": "ST-6",
+      "system": "Setrack (Code 80)",
+      "name": "Turnout Left-Hand",
+      "type": "turnout",
+      "hand": "left",
+      "length": 87,
+      "radius": 228,
+      "angle": 22.5,
+      "note": "Insulfrog construction"
+    },
+    {
+      "part_number": "ST-44",
+      "system": "Setrack (Code 80)",
+      "name": "Curved Turnout (R)",
+      "type": "curved_turnout",
+      "hand": "right",
+      "inner_radius": 228,
+      "outer_radius": 263.5,
+      "note": "Cross-over layout optimizer"
+    },
+    {
+      "part_number": "ST-45",
+      "system": "Setrack (Code 80)",
+      "name": "Curved Turnout (L)",
+      "type": "curved_turnout",
+      "hand": "left",
+      "inner_radius": 228,
+      "outer_radius": 263.5,
+      "note": "Cross-over layout optimizer"
+    },
+    {
+      "part_number": "ST-7",
+      "system": "Setrack (Code 80)",
+      "name": "Standard Crossing",
+      "type": "crossing",
+      "length": 87,
+      "angle": 22.5,
+      "note": "Standard intersection point"
+    },
+    {
+      "part_number": "ST-50",
+      "system": "Setrack (Code 80)",
+      "name": "Diamond Crossing",
+      "type": "crossing",
+      "length": 104,
+      "angle": 11.25,
+      "note": "Flat diamond configuration"
+    },
+    {
+      "part_number": "SL-300",
+      "system": "Streamline (Code 55)",
+      "name": "Flexible Track (Wooden)",
+      "type": "flex",
+      "length": 914,
+      "note": "Flexible structural rail profile, height 2.03mm"
+    },
+    {
+      "part_number": "SL-302",
+      "system": "Streamline (Code 55)",
+      "name": "Flexible Track (Concrete)",
+      "type": "flex",
+      "length": 914,
+      "note": "Flexible structural rail profile, height 2.03mm"
+    },
+    {
+      "part_number": "SL-300F",
+      "system": "Streamline (Code 55)",
+      "name": "Finescale Flexible Track (Wooden)",
+      "type": "flex",
+      "length": 914,
+      "note": "Double-base rail design, 1.4mm profile"
+    },
+    {
+      "part_number": "SL-302F",
+      "system": "Streamline (Code 55)",
+      "name": "Finescale Flexible Track (Concrete)",
+      "type": "flex",
+      "length": 914,
+      "note": "Double-base rail design, 1.4mm profile"
+    },
+    {
+      "part_number": "SL-395",
+      "system": "Streamline (Code 55)",
+      "name": "Medium Turnout Right-Hand",
+      "type": "turnout",
+      "hand": "right",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Insulfrog / Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-396",
+      "system": "Streamline (Code 55)",
+      "name": "Medium Turnout Left-Hand",
+      "type": "turnout",
+      "hand": "left",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Insulfrog / Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-388",
+      "system": "Streamline (Code 55)",
+      "name": "Large Turnout Right-Hand",
+      "type": "turnout",
+      "hand": "right",
+      "length": 160,
+      "radius": 914,
+      "angle": 8,
+      "note": "Insulfrog / Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-389",
+      "system": "Streamline (Code 55)",
+      "name": "Large Turnout Left-Hand",
+      "type": "turnout",
+      "hand": "left",
+      "length": 160,
+      "radius": 914,
+      "angle": 8,
+      "note": "Insulfrog / Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-397",
+      "system": "Streamline (Code 55)",
+      "name": "Medium Radius 'Y' Turnout",
+      "type": "turnout",
+      "hand": "y",
+      "length": 124,
+      "radius": 610,
+      "angle": 10,
+      "note": "Insulfrog / Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-386",
+      "system": "Streamline (Code 55)",
+      "name": "Curved Turnout Right-Hand",
+      "type": "curved_turnout",
+      "hand": "right",
+      "length": 160,
+      "outer_radius": 914,
+      "inner_radius": null,
+      "angle": 10,
+      "note": "Inner radius not legible in the screenshot"
+    },
+    {
+      "part_number": "SL-387",
+      "system": "Streamline (Code 55)",
+      "name": "Curved Turnout Left-Hand",
+      "type": "curved_turnout",
+      "hand": "left",
+      "length": 160,
+      "outer_radius": 914,
+      "inner_radius": null,
+      "angle": 10,
+      "note": "Inner radius not legible in the screenshot"
+    },
+    {
+      "part_number": "SL-393",
+      "system": "Streamline (Code 55)",
+      "name": "Short Crossing",
+      "type": "crossing",
+      "length": 91,
+      "angle": 25,
+      "note": "Intersection component"
+    },
+    {
+      "part_number": "SL-394",
+      "system": "Streamline (Code 55)",
+      "name": "Long Crossing",
+      "type": "crossing",
+      "length": 154,
+      "angle": 10,
+      "note": "Intersection component"
+    },
+    {
+      "part_number": "SL-380",
+      "system": "Streamline (Code 55)",
+      "name": "Single Slip",
+      "type": "slip",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Insulfrog configuration"
+    },
+    {
+      "part_number": "SL-390",
+      "system": "Streamline (Code 55)",
+      "name": "Double Slip Crossover",
+      "type": "slip",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Insulfrog configuration"
+    },
+    {
+      "part_number": "SL-U395F",
+      "system": "Streamline (Code 55)",
+      "name": "Medium Turnout (Right-Hand)",
+      "type": "turnout",
+      "hand": "right",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Unifrog configuration. Listed angle is the frog angle. The diverging curve is derived from the listed length (137mm) and radius (457mm). Not yet checked against a real piece",
+      "placeable": true,
+      "angle_meaning": "frog"
+    },
+    {
+      "part_number": "SL-U396F",
+      "system": "Streamline (Code 55)",
+      "name": "Medium Turnout (Left-Hand)",
+      "type": "turnout",
+      "hand": "left",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Unifrog configuration. Listed angle is the frog angle. The diverging curve is derived from the listed length (137mm) and radius (457mm). Not yet checked against a real piece",
+      "placeable": true,
+      "angle_meaning": "frog"
+    },
+    {
+      "part_number": "SL-E388F",
+      "system": "Streamline (Code 55)",
+      "name": "Large Turnout (Right-Hand)",
+      "type": "turnout",
+      "hand": "right",
+      "length": 164,
+      "radius": 914,
+      "angle": 10,
+      "note": "Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-E389F",
+      "system": "Streamline (Code 55)",
+      "name": "Large Turnout (Left-Hand)",
+      "type": "turnout",
+      "hand": "left",
+      "length": 164,
+      "radius": 914,
+      "angle": 10,
+      "note": "Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-E397F",
+      "system": "Streamline (Code 55)",
+      "name": "Medium Radius 'Y' Turnout",
+      "type": "turnout",
+      "hand": "y",
+      "length": 124,
+      "radius": 610,
+      "angle": 10,
+      "note": "Electrofrog configuration"
+    },
+    {
+      "part_number": "SL-E386F",
+      "system": "Streamline (Code 55)",
+      "name": "Curved Turnout (Right-Hand)",
+      "type": "curved_turnout",
+      "hand": "right",
+      "length": 160,
+      "outer_radius": 914,
+      "inner_radius": null,
+      "angle": 10,
+      "note": "Electrofrog configuration. Inner radius not legible in the screenshot"
+    },
+    {
+      "part_number": "SL-E387F",
+      "system": "Streamline (Code 55)",
+      "name": "Curved Turnout (Left-Hand)",
+      "type": "curved_turnout",
+      "hand": "left",
+      "length": 160,
+      "outer_radius": 914,
+      "inner_radius": null,
+      "angle": 10,
+      "note": "Electrofrog configuration. Inner radius not legible in the screenshot"
+    },
+    {
+      "part_number": "SL-E393F",
+      "system": "Streamline (Code 55)",
+      "name": "Short Crossing",
+      "type": "crossing",
+      "length": 91,
+      "angle": 25,
+      "note": "Insulfrog or Electrofrog setup"
+    },
+    {
+      "part_number": "SL-E394F",
+      "system": "Streamline (Code 55)",
+      "name": "Long Crossing",
+      "type": "crossing",
+      "length": 154,
+      "angle": 10,
+      "note": "Insulfrog or Electrofrog setup"
+    },
+    {
+      "part_number": "SL-E380F",
+      "system": "Streamline (Code 55)",
+      "name": "Single Slip",
+      "type": "slip",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Insulfrog or Electrofrog setup"
+    },
+    {
+      "part_number": "SL-E390F",
+      "system": "Streamline (Code 55)",
+      "name": "Double Slip Crossover",
+      "type": "slip",
+      "length": 137,
+      "radius": 457,
+      "angle": 10,
+      "note": "Insulfrog or Electrofrog setup"
+    }
+  ]
+}

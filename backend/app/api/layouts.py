@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Block, Feedback, Layout, Route, Signal
 from ..schemas import LayoutCreate, LayoutResponse, LayoutUpdate
+from ..services.track_library import load_library
 from .common import get_or_404, reject_nulls
 
 router = APIRouter(prefix="/api/layouts", tags=["layouts"])
@@ -38,6 +39,39 @@ def _check_elements(elements: dict):
                 status_code=400,
                 detail=f"Each track needs numeric {', '.join(TRACK_KEYS)}",
             )
+    _check_track_pieces(elements)
+
+
+def _check_track_pieces(elements: dict):
+    """Placed library pieces must exist, share one track system, and match elements.track_system"""
+    pieces = elements.get("track_pieces", [])
+    if not isinstance(pieces, list):
+        raise HTTPException(status_code=400, detail="elements.track_pieces must be a list")
+
+    library = load_library()
+    systems = set()
+    for placed in pieces:
+        valid = (
+            isinstance(placed, dict)
+            and isinstance(placed.get("id"), str)
+            and placed.get("piece_id") in library
+            and all(isinstance(placed.get(key), (int, float)) for key in ("x", "y", "rotation"))
+            and isinstance(placed.get("flip"), bool)
+        )
+        if not valid:
+            raise HTTPException(
+                status_code=400,
+                detail="Each track piece needs an id, a known piece_id, x, y, rotation, and a flip flag",
+            )
+        systems.add(library[placed["piece_id"]]["system"])
+
+    if len(systems) > 1:
+        raise HTTPException(status_code=400, detail="A layout cannot mix track systems")
+    if systems and elements.get("track_system") != next(iter(systems)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"elements.track_system must be {next(iter(systems))!r} for these pieces",
+        )
 
 
 @router.get("", response_model=List[LayoutResponse])

@@ -6,7 +6,32 @@ const KIND_NOTES = {
   feedback: 'Set by the Z21 once the feedback is linked to hardware.',
 }
 
-export default function LayoutProperties({ item, track, busy, onRename, onDelete }) {
+export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onDelete }) {
+  if (placed && piece) {
+    return (
+      <div className="space-y-3 text-sm">
+        <p className="font-semibold">
+          {piece.part_number} {piece.name}
+        </p>
+        <p className="text-slate-400">{piece.system}</p>
+        <p className="text-slate-400">
+          Position: ({Math.round(placed.x)}, {Math.round(placed.y)}), rotation {Math.round(placed.rotation)}°
+          {placed.flip ? ', mirrored' : ''}
+        </p>
+        {!piece.verified && (
+          <p className="text-xs text-amber-300">Dimensions not yet checked against the catalogue</p>
+        )}
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          className="w-full px-3 py-2 bg-red-700 rounded hover:bg-red-800 disabled:opacity-50"
+        >
+          Delete track piece
+        </button>
+      </div>
+    )
+  }
+
   if (track) {
     const length = Math.hypot(track.x2 - track.x1, track.y2 - track.y1)
     return (
