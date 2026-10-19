@@ -3,7 +3,7 @@ Route model - represents automated train routes
 """
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, JSON
 from datetime import datetime
-from database import Base
+from ..database import Base
 
 
 class Route(Base):

@@ -4,7 +4,7 @@ Feedback model - represents occupancy sensors
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from database import Base
+from ..database import Base
 
 
 class Feedback(Base):

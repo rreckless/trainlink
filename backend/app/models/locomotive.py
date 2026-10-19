@@ -4,7 +4,7 @@ Locomotive model
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from database import Base
+from ..database import Base
 
 
 class Locomotive(Base):
@@ -35,7 +35,8 @@ class Locomotive(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    decoder_profile_id = Column(Integer, ForeignKey("decoder_profiles.id"), nullable=True)
+    # Decoder profiles are Phase 5. No table yet, so no foreign key
+    decoder_profile_id = Column(Integer, nullable=True)
     command_station_id = Column(Integer, ForeignKey("command_stations.id"))
 
     def to_dict(self):

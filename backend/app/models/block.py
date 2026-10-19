@@ -4,7 +4,7 @@ Block model - represents track blocks for collision avoidance
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from database import Base
+from ..database import Base
 
 
 # Association table for block-signal relationship
@@ -61,6 +61,14 @@ class Block(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def signal_ids(self):
+        return [s.id for s in self.signals]
+
+    @property
+    def feedback_ids(self):
+        return [f.id for f in self.feedbacks]
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -72,6 +80,6 @@ class Block(Base):
             "state": self.state,
             "occupied": self.occupied,
             "occupancy_locomotive_id": self.occupancy_locomotive_id,
-            "signal_ids": [s.id for s in self.signals],
-            "feedback_ids": [f.id for f in self.feedbacks],
+            "signal_ids": self.signal_ids,
+            "feedback_ids": self.feedback_ids,
         }

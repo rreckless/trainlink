@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .database import init_db, get_db
 from .ws.connection_manager import ConnectionManager
-from .api import z21
+from .api import z21, locomotives, blocks, signals, routes
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -49,8 +49,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Include Z21 API routes
+# Include API routes
 app.include_router(z21.router)
+app.include_router(locomotives.router)
+app.include_router(blocks.router)
+app.include_router(signals.router)
+app.include_router(routes.router)
 
 # Health check endpoint
 @app.get("/health")
@@ -88,11 +92,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(client_id)
-
-
-# Import and include API routers
-# TODO: Create and import routers
-# from api import locomotives, blocks, signals, routes, layouts, command_stations
 
 
 # Root endpoint

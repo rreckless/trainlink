@@ -73,8 +73,8 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 2. **Backend Foundation** 🟡
    - ✅ FastAPI app with CORS and health check
    - 🟡 WebSocket endpoint (echo only, no authentication)
-   - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation (no REST routes yet)
-   - 🟡 Basic REST API (Z21 routes only)
+   - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation. REST routes exist for Locomotive, Block, Signal, and Route only
+   - 🟡 Basic REST API: Z21, locomotives, blocks, signals, routes. Feedback, layouts, and command stations still need routes
    - ⬜ State management in Redis
 
 3. **Frontend Foundation** 🟡
@@ -282,7 +282,7 @@ Entry criteria:
 1. **Test locomotive control against a real Z21.** Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. First check the frame bytes against the official Z21 LAN Protocol spec.
 2. ✅ Mock Z21 UDP responder (done)
 3. ✅ Backend unit tests for the Z21 packet builder and the speed and direction logic (done, 30 passing)
-4. **Add REST routes** for locomotives, blocks, signals, and routes using the existing models and schemas.
+4. ✅ REST routes for locomotives, blocks, signals, and routes (done, 79 passing). Layouts and command stations still need routes so blocks can be linked to signals and feedback.
 5. **Add Z21 feedback parsing** as the foundation for block occupancy.
 
 ---

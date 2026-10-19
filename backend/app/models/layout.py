@@ -3,7 +3,7 @@ Layout model - represents a track layout
 """
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, JSON
 from datetime import datetime
-from database import Base
+from ..database import Base
 
 
 class Layout(Base):

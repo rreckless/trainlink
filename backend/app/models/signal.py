@@ -4,7 +4,7 @@ Signal model - represents block signals
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from database import Base
+from ..database import Base
 
 
 class Signal(Base):
@@ -32,6 +32,10 @@ class Signal(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def block_ids(self):
+        return [b.id for b in self.blocks]
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -41,5 +45,5 @@ class Signal(Base):
             "y": self.y,
             "signal_type": self.signal_type,
             "aspect": self.aspect,
-            "block_ids": [b.id for b in self.blocks],
+            "block_ids": self.block_ids,
         }
