@@ -50,6 +50,7 @@ XBUS_GET_STATUS = (0x21, 0x24, 0x05)
 XBUS_TRACK_POWER_ON = (0x21, 0x81)
 XBUS_STATUS_CHANGED = 0x62
 XBUS_STATUS_DB0 = 0x22
+XBUS_TURNOUT_INFO = 0x43  # LAN_X_TURNOUT_INFO, spec 5.3
 
 # Central state bits (status byte in LAN_X status replies and LAN_SYSTEMSTATE_DATACHANGED)
 CENTRAL_EMERGENCY_STOP = 0x01
@@ -147,6 +148,12 @@ def parse_central_state(state: int) -> dict:
     }
 
 
+def parse_turnout_info(msb: int, lsb: int, zz: int) -> tuple[int, Optional[int]]:
+    """Decode a LAN_X_TURNOUT_INFO reply into (turnout, output). Output is None unless ZZ is 01 or 10"""
+    output = {1: 0, 2: 1}.get(zz & 0x03)
+    return ((msb << 8) + lsb) + 1, output
+
+
 def build_set_broadcast_flags(flags: int) -> bytes:
     """Build a LAN_SET_BROADCASTFLAGS frame"""
     return build_frame(LAN_SET_BROADCASTFLAGS, struct.pack('<I', flags))
@@ -219,6 +226,8 @@ class Z21Driver:
         self.central_state: Optional[dict] = None
         # R-BUS feedback: {(module_address, input_number): occupied}
         self.feedback: dict = {}
+        # Turnout outputs as the Z21 last reported them: {turnout: output or None}
+        self.turnouts: dict = {}
 
     @property
     def track_state(self) -> str:
@@ -280,6 +289,7 @@ class Z21Driver:
         self.connected = False
         self.central_state = None
         self.feedback = {}
+        self.turnouts = {}
         logger.info("Disconnected from Z21")
 
     async def get_status(self):
@@ -396,6 +406,9 @@ class Z21Driver:
                 # Reply to LAN_X_GET_STATUS
                 await self._apply_central_state(message[6])
 
+            elif header == LAN_X_HEADER and len(message) >= 9 and message[4] == XBUS_TURNOUT_INFO:
+                await self._apply_turnout_info(message[5], message[6], message[7])
+
             elif header == LAN_SYSTEMSTATE_DATACHANGED:
                 logger.debug("Z21 system state changed")
                 if len(message) > SYSTEMSTATE_CENTRAL_STATE_OFFSET:
@@ -444,6 +457,15 @@ class Z21Driver:
                 "status": "feedback_changed",
                 "changes": changes,
             })
+
+    async def _apply_turnout_info(self, msb: int, lsb: int, zz: int):
+        """Store one turnout's reported output and notify listeners if it changed"""
+        turnout, output = parse_turnout_info(msb, lsb, zz)
+        if self.turnouts.get(turnout, "unknown") == output:
+            return
+        self.turnouts[turnout] = output
+        if self.on_status_changed:
+            await self.on_status_changed({"status": "turnout_changed", "turnout": turnout, "output": output})
 
     def get_connection_status(self) -> dict:
         """Get Z21 connection status

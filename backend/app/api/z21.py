@@ -3,8 +3,9 @@ Z21 Command Station API Endpoints
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.drivers.z21_driver import RBUS_GROUPS, get_z21_driver, Z21Driver
+from app.drivers.z21_turnouts import MAX_TURNOUT, MIN_TURNOUT, request_turnout_info, throw_turnout
 
 router = APIRouter(prefix="/api/z21", tags=["z21"])
 
@@ -20,6 +21,11 @@ class LocomotiveCommand(BaseModel):
     address: int
     speed: int
     direction: bool = True
+
+
+class TurnoutCommand(BaseModel):
+    """Turnout output to switch: 0 or 1"""
+    output: int = Field(ge=0, le=1)
 
 
 class EmergencyStopRequest(BaseModel):
@@ -84,6 +90,47 @@ async def get_z21_feedback(z21: Z21Driver = Depends(get_z21)):
             {"module": module, "input": number, "occupied": occupied}
             for (module, number), occupied in sorted(z21.feedback.items())
         ],
+    }
+
+
+@router.post("/turnouts/{turnout}/throw")
+async def throw_turnout_output(turnout: int, command: TurnoutCommand, z21: Z21Driver = Depends(get_z21)):
+    """Switch a turnout output. The Z21 queues the command and sends it to the track"""
+    if not z21.connected:
+        raise HTTPException(status_code=503, detail="Z21 not connected")
+
+    if z21.track_state != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Track is not ready ({z21.track_state}). Turnout commands are blocked",
+        )
+
+    if not (MIN_TURNOUT <= turnout <= MAX_TURNOUT):
+        raise HTTPException(status_code=400, detail=f"Turnout must be {MIN_TURNOUT}-{MAX_TURNOUT}")
+
+    await throw_turnout(z21, turnout, command.output)
+    return {"status": "throw_sent", "turnout": turnout, "output": command.output}
+
+
+@router.get("/turnouts")
+async def get_turnout_states(addresses: str = "", z21: Z21Driver = Depends(get_z21)):
+    """Last known output of each turnout listed, as a comma-separated list. Unknown is null.
+
+    Asks the Z21 for each one first. The replies update the states on a later call.
+    """
+    try:
+        turnouts = [int(part) for part in addresses.split(",") if part.strip()]
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Turnouts must be numbers") from error
+    if any(not (MIN_TURNOUT <= turnout <= MAX_TURNOUT) for turnout in turnouts):
+        raise HTTPException(status_code=400, detail=f"Turnouts must be {MIN_TURNOUT}-{MAX_TURNOUT}")
+
+    if z21.connected:
+        for turnout in turnouts:
+            await request_turnout_info(z21, turnout)
+    return {
+        "connected": z21.connected,
+        "states": {str(turnout): z21.turnouts.get(turnout) for turnout in turnouts},
     }
 
 

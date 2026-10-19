@@ -10,6 +10,7 @@ const HINTS = {
   select: 'Click to select. Drag to move. Delete removes the selection.',
   track: 'Click to start a track, click again to add a segment. Escape stops.',
   piece: 'Pick a piece, then move the cursor near an open track end (orange). Click to place.',
+  operate: 'Click a turnout with a DCC address to switch it. Orange means diverging.',
 }
 
 export default function LayoutEditor() {
@@ -82,6 +83,9 @@ export default function LayoutEditor() {
               selectedKey={editor.selectedKey}
               pendingStart={editor.pendingStart}
               cursor={editor.cursor}
+              operating={editor.tool === 'operate'}
+              turnoutStates={editor.turnoutStates}
+              onThrow={editor.throwPlaced}
               onCanvasClick={editor.handleCanvasClick}
               onCursor={editor.setCursor}
               onSelect={editor.setSelectedKey}
@@ -108,6 +112,7 @@ export default function LayoutEditor() {
                   piece={editor.selectedPlaced ? editor.libraryById[editor.selectedPlaced.piece_id] : null}
                   busy={editor.busy}
                   onRename={editor.renameSelected}
+                  onSetDcc={(fields) => editor.setDcc(editor.selectedPlaced.id, fields)}
                   onDelete={editor.deleteSelected}
                 />
               </>

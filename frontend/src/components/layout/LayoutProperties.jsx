@@ -1,4 +1,51 @@
+import { useState } from 'react'
 import { ENTITY_KINDS } from '../../layout/model'
+
+const DCC_MAX = 2048
+
+// DCC address and straight output of a placed turnout. Each change is saved to the layout on Save
+function DccFields({ placed, busy, onChange }) {
+  const [address, setAddress] = useState(placed.dcc_address ?? '')
+  const addressValid = address === '' || (Number.isInteger(Number(address)) && Number(address) >= 1 && Number(address) <= DCC_MAX)
+
+  const changeAddress = (value) => {
+    setAddress(value)
+    if (value === '') return onChange({ dcc_address: undefined })
+    const number = Number(value)
+    if (Number.isInteger(number) && number >= 1 && number <= DCC_MAX) onChange({ dcc_address: number })
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block">
+        <span className="text-slate-300">DCC address (1-{DCC_MAX})</span>
+        <input
+          type="number"
+          min="1"
+          max={DCC_MAX}
+          value={address}
+          placeholder="None"
+          onChange={(event) => changeAddress(event.target.value)}
+          disabled={busy}
+          className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+        />
+      </label>
+      {!addressValid && <p className="text-xs text-red-300">The address must be a whole number from 1 to {DCC_MAX}</p>}
+      <label className="block">
+        <span className="text-slate-300">Straight route is</span>
+        <select
+          value={placed.dcc_output_straight ?? 0}
+          onChange={(event) => onChange({ dcc_output_straight: Number(event.target.value) })}
+          disabled={busy}
+          className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+        >
+          <option value={0}>Output 1 (P=0)</option>
+          <option value={1}>Output 2 (P=1)</option>
+        </select>
+      </label>
+    </div>
+  )
+}
 
 const KIND_NOTES = {
   block: 'Occupancy will come from linked feedbacks. The state can be set by hand for now.',
@@ -6,7 +53,7 @@ const KIND_NOTES = {
   feedback: 'Set by the Z21 once the feedback is linked to hardware.',
 }
 
-export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onDelete }) {
+export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onDelete }) {
   if (placed && piece) {
     return (
       <div className="space-y-3 text-sm">
@@ -20,6 +67,9 @@ export default function LayoutProperties({ item, track, placed, piece, busy, onR
         </p>
         {!piece.verified && (
           <p className="text-xs text-amber-300">Dimensions not yet checked against the catalogue</p>
+        )}
+        {piece.type === 'turnout' && onSetDcc && (
+          <DccFields key={placed.id} placed={placed} busy={busy} onChange={onSetDcc} />
         )}
         <button
           onClick={onDelete}
