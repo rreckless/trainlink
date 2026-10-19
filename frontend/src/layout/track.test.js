@@ -8,6 +8,7 @@ import {
   snapPlacement,
   hitPlacedPiece,
   normalizeDegrees,
+  placedPiece,
   toWorld,
 } from './track.js'
 
@@ -240,6 +241,23 @@ test('3-way has a straight exit and two branches on opposite sides', () => {
   assert.ok(right.x <= 153 + 1e-6 && left.x <= 153 + 1e-6)
 })
 
+// SL-E399F with the branches measured from the AnyRail layout
+const measuredThreeWay = {
+  ...threeWay,
+  three_way_geometry: {
+    length: 153.4,
+    right: { depart: 47, radius: 239.1, sweep: 19.17 },
+    left: { depart: 73, radius: 250.2, sweep: 18.74 },
+  },
+}
+
+test('a measured 3-way branch ends where it was measured, not on the straight length', () => {
+  const [, straight, right, left] = pieceShape(measuredThreeWay).endpoints
+  assert.ok(Math.abs(straight.x - 153.4) < 1e-9)
+  assert.ok(Math.abs(right.x - 125.5) < 0.1 && Math.abs(right.y - 13.3) < 0.1)
+  assert.ok(Math.abs(left.x - 153.4) < 0.1 && Math.abs(left.y + 13.3) < 0.1)
+})
+
 test('a frog-angle turnout with a length longer than its radius has no shape', () => {
   assert.equal(pieceShape({ ...slu395f, length: 500 }), null)
 })
@@ -308,4 +326,25 @@ test('hitPlacedPiece finds a piece by its line and misses empty space', () => {
   const first = { id: 'a', piece_id: 'peco-n-st-1', x: 0, y: 0, rotation: 0, flip: false }
   assert.equal(hitPlacedPiece([first], library, { x: 40, y: 3 }).id, 'a')
   assert.equal(hitPlacedPiece([first], library, { x: 40, y: 50 }), null)
+})
+
+test('a custom curve takes its radius from the placement', () => {
+  const customCurve = { id: 'c', system: STREAMLINE, type: 'curve', placeable: true, part_number: 'CUSTOM-CURVE' }
+  const lib = { 'custom-n-custom-curve': customCurve }
+  const placed = { id: 'p', piece_id: 'custom-n-custom-curve', x: 0, y: 0, rotation: 0, flip: false, radius: 263.5, angle: 90 }
+  assert.equal(pieceShape(customCurve), null)
+  const end = pieceShape(placedPiece(placed, lib)).endpoints[1]
+  assert.ok(Math.abs(end.x - 263.5) < 1e-6)
+  assert.ok(Math.abs(end.y - 263.5) < 1e-6)
+})
+
+test('a placed straight with its own length ends that far along its heading', () => {
+  const flex = { id: 'f', system: STREAMLINE, type: 'flex', length: 914, placeable: true }
+  const placed = { id: 'p', piece_id: 'peco-n-sl-300f', x: 10, y: 20, rotation: 90, flip: false, length: 123.4 }
+  const ends = openEnds([placed], { 'peco-n-sl-300f': flex })
+  assert.ok(ends.some((end) => Math.abs(end.x - 10) < 1e-6 && Math.abs(end.y - 143.4) < 1e-6))
+})
+
+test('placedPiece is null for an unknown library piece', () => {
+  assert.equal(placedPiece({ id: 'p', piece_id: 'nope' }, {}), null)
 })

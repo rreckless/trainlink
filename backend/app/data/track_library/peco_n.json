@@ -685,25 +685,29 @@
       "system": "Code 55",
       "name": "Assymetric 3-Way Turnout",
       "type": "three_way",
-      "length": 153,
+      "length": 153.4,
       "radius": 457,
       "angle": 10,
       "source": "https://peco-uk.com/products/sle399f-peco-streamline-n-turnout-c55-assym-3-way-ele",
       "verified": false,
       "three_way_geometry": {
-        "length": 153,
+        "length": 153.4,
         "right": {
           "depart": 47,
-          "radius": 341
+          "radius": 239.1,
+          "sweep": 19.17
         },
         "left": {
           "depart": 73,
-          "radius": 597
+          "radius": 250.2,
+          "sweep": 18.74
         },
-        "provisional": true
+        "provisional": false,
+        "measured_from": "AnyRail layout (Layout Anyrail File.xml), anchor positions at the three-way",
+        "departures_from": "PECO plan sheet (not measured; the anchors fix where each branch ends, not where it leaves the straight)"
       },
       "placeable": true,
-      "note": "Asymmetric 3-way. PROVISIONAL geometry from manual readings of the plan sheet. Branch departure points and radii need re-checking against a higher-resolution drawing"
+      "note": "Asymmetric 3-way. Branch radii and sweeps measured from the AnyRail layout anchors; the branch departure points are still from the plan sheet and need checking against a higher-resolution drawing"
     },
     {
       "part_number": "SL-E393F",
