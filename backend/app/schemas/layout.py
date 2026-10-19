@@ -1,7 +1,7 @@
 """
 Layout schemas
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -39,3 +39,9 @@ class LayoutResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AnyRailImportRequest(BaseModel):
+    """A JMRI layout-config XML export from AnyRail, and the real radius in mm of its innermost curve"""
+    xml: str = Field(min_length=1, max_length=5_000_000)
+    inner_radius_mm: float = Field(gt=0, le=10_000)

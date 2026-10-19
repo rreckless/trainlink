@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Block, Feedback, Layout, Route, Signal
-from ..schemas import LayoutCreate, LayoutResponse, LayoutUpdate
+from ..schemas import AnyRailImportRequest, LayoutCreate, LayoutResponse, LayoutUpdate
+from ..services.anyrail_import import import_jmri_layout
 from ..services.track_library import load_library
 from .common import get_or_404, reject_nulls
 
@@ -127,6 +128,17 @@ def create_layout(body: LayoutCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="A layout with this name already exists")
     db.refresh(layout)
     return layout
+
+
+@router.post("/anyrail-import")
+def preview_anyrail_import(body: AnyRailImportRequest):
+    """Convert an AnyRail export to track pieces. Nothing is saved; the editor saves the pieces with the layout"""
+    try:
+        result = import_jmri_layout(body.xml, body.inner_radius_mm)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    _check_track_pieces({"track_system": result["track_system"], "track_pieces": result["track_pieces"]})
+    return result
 
 
 @router.get("/{layout_id}", response_model=LayoutResponse)

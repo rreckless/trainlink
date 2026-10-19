@@ -28,7 +28,8 @@ export function useLayoutEditor() {
   const [tracks, setTracks] = useState([])
   const [pieces, setPieces] = useState([])
   // Last state loaded from or saved to the server, used to work out what changed
-  const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]' })
+  const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
+  const [importReport, setImportReport] = useState(null)
   const [tool, setTool] = useState('select')
   const [pieceId, setPieceId] = useState(null)
   const [selectedKey, setSelectedKey] = useState(null)
@@ -44,11 +45,16 @@ export function useLayoutEditor() {
   // A layout uses one track system. It is set by the first piece placed
   const trackSystem = pieces.length > 0 ? libraryById[pieces[0].piece_id]?.system ?? null : null
 
+  const sizeChanged = Boolean(
+    layout && saved.size && (layout.width !== saved.size.width || layout.height !== saved.size.height)
+  )
+
   const dirty = useMemo(() => {
     if (JSON.stringify(tracks) !== saved.tracks) return true
     if (JSON.stringify(pieces) !== saved.pieces) return true
+    if (sizeChanged) return true
     return diffItems(saved.items, items).length > 0
-  }, [items, tracks, pieces, saved])
+  }, [items, tracks, pieces, saved, sizeChanged])
 
   const selectedItem = items.find((item) => item.key === selectedKey) || null
   const selectedTrack = selectedKey?.startsWith('track:')
@@ -104,6 +110,7 @@ export function useLayoutEditor() {
         items: snapshotOf(loadedItems),
         tracks: JSON.stringify(loadedTracks),
         pieces: JSON.stringify(loadedPieces),
+        size: { width: found.width, height: found.height },
       })
       setSelectedKey(null)
       setPendingStart(null)
@@ -129,6 +136,7 @@ export function useLayoutEditor() {
     (id) => {
       if (dirty && !window.confirm('Discard unsaved changes?')) return
       setMessage('')
+      setImportReport(null)
       openLayout(id)
     },
     [dirty, openLayout]
@@ -256,6 +264,33 @@ export function useLayoutEditor() {
     setError('')
   }, [])
 
+  // Import converts an AnyRail export into track pieces and a layout size. Save keeps them
+  const importAnyRail = useCallback(
+    async (xml, innerRadiusMm) => {
+      if (!layout) return
+      if (pieces.length > 0 && !window.confirm(
+        `Replace the ${pieces.length} track pieces in this layout with the imported ones? Save to keep the change.`
+      )) return
+      setBusy(true)
+      setError('')
+      setMessage('')
+      try {
+        const report = await layoutApi.importAnyRail({ xml, inner_radius_mm: innerRadiusMm })
+        setPieces(report.track_pieces)
+        setLayout((prev) => ({ ...prev, width: report.width, height: report.height }))
+        setSelectedKey(null)
+        setPendingStart(null)
+        setImportReport(report)
+        setMessage(`Imported ${report.track_pieces.length} pieces. Save to keep them.`)
+      } catch (err) {
+        setError(`Import failed: ${err.message}`)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [layout, pieces.length]
+  )
+
   const save = useCallback(async () => {
     if (!layout) return
     setBusy(true)
@@ -268,8 +303,9 @@ export function useLayoutEditor() {
         else if (op.op === 'update') await layoutApi.updateEntity(op.kind, op.id, op.body)
         else await layoutApi.deleteEntity(op.kind, op.id)
       }
-      if (JSON.stringify(tracks) !== saved.tracks || JSON.stringify(pieces) !== saved.pieces) {
+      if (JSON.stringify(tracks) !== saved.tracks || JSON.stringify(pieces) !== saved.pieces || sizeChanged) {
         await layoutApi.updateLayout(layout.id, {
+          ...(sizeChanged ? { width: layout.width, height: layout.height } : {}),
           elements: { ...layout.elements, tracks, track_pieces: pieces, track_system: trackSystem },
         })
       }
@@ -282,7 +318,7 @@ export function useLayoutEditor() {
     } finally {
       setBusy(false)
     }
-  }, [layout, items, tracks, pieces, trackSystem, saved, openLayout])
+  }, [layout, items, tracks, pieces, trackSystem, saved, sizeChanged, openLayout])
 
   return {
     layouts,
@@ -315,8 +351,10 @@ export function useLayoutEditor() {
     renameSelected,
     deleteSelected,
     cancelTrack,
+    importReport,
     switchLayout,
     createLayout,
+    importAnyRail,
     save,
   }
 }

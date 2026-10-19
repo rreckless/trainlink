@@ -43,6 +43,8 @@ SLIP_KEYS = ("SLIP_A", "SLIP_B", "SLIP_C", "SLIP_D")
 STRAIGHT_PIECE = "peco-n-sl-300f"
 CURVE_PIECE = "custom-n-custom-curve"
 GAP_REPORT_MM = 1.0
+MARGIN_MM = 50.0
+MAX_RADIUS_MM = 10_000
 
 
 def _parse(xml_text):
@@ -375,7 +377,8 @@ def _place_segments(root, raw, radii_px, scale, connectors, supported, lines):
                 unplaced.append({"ident": ident, "kind": "curve", "reason": "bezier without two control points"})
                 continue
             fitted = _bezier_arc(start_jmri, _xy(controls[0], "x", "y"), _xy(controls[1], "x", "y"), end_jmri)
-            if fitted is None:
+            # A nearly straight Bezier fits an arc too large to place. Place it as a straight between its ends
+            if fitted is None or fitted[0] * scale > MAX_RADIUS_MM:
                 records.append(_record(ident, STRAIGHT_PIECE, origin, _angle(start_jmri, end_jmri), False,
                                        length=round(math.dist(start_jmri, end_jmri) * scale, 4)))
                 continue
@@ -448,8 +451,21 @@ def import_jmri_layout(xml_text, inner_radius_mm):
 
     unplaced += segment_unplaced
 
+    pieces = turnout_records + three_way_records + slip_records + segment_records
+    # Move the layout so it starts at the margin, and size the layout to fit it
+    anchors = [(point[0] * scale, point[1] * scale) for key, point in raw.items() if key[1] == "POS_POINT"]
+    xs = [point[0] for point in anchors] + [record["x"] for record in pieces]
+    ys = [point[1] for point in anchors] + [record["y"] for record in pieces]
+    dx, dy = MARGIN_MM - min(xs), MARGIN_MM - min(ys)
+    for record in pieces:
+        record["x"] = round(record["x"] + dx, 4)
+        record["y"] = round(record["y"] + dy, 4)
+
     return {
-        "track_pieces": turnout_records + three_way_records + slip_records + segment_records,
+        "track_pieces": pieces,
+        "width": math.ceil(max(xs) - min(xs) + 2 * MARGIN_MM),
+        "height": math.ceil(max(ys) - min(ys) + 2 * MARGIN_MM),
+        "track_system": "Code 55",
         "unplaced": unplaced,
         "scale_mm_per_pixel": round(scale, 4),
         "hand_mismatches": mismatches,

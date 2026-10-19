@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLayoutEditor } from '../hooks/useLayoutEditor'
+import AnyRailImport from './layout/AnyRailImport'
 import LayoutCanvas from './layout/LayoutCanvas'
 import LayoutToolbar from './layout/LayoutToolbar'
 import LayoutProperties from './layout/LayoutProperties'
@@ -13,6 +14,7 @@ const HINTS = {
 
 export default function LayoutEditor() {
   const editor = useLayoutEditor()
+  const [importing, setImporting] = useState(false)
 
   // Keyboard shortcuts: Delete removes the selection, Escape cancels track drawing
   useEffect(() => {
@@ -38,11 +40,22 @@ export default function LayoutEditor() {
         tool={editor.tool}
         dirty={editor.dirty}
         busy={editor.busy}
+        importing={importing}
         onChooseTool={editor.chooseTool}
         onSwitchLayout={editor.switchLayout}
         onCreateLayout={editor.createLayout}
+        onToggleImport={() => setImporting(!importing)}
         onSave={editor.save}
       />
+
+      {importing && (
+        <AnyRailImport
+          busy={editor.busy}
+          report={editor.importReport}
+          onImport={editor.importAnyRail}
+          onClose={() => setImporting(false)}
+        />
+      )}
 
       {editor.error && (
         <div className="bg-red-900 border border-red-700 rounded p-3">

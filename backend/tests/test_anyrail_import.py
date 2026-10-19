@@ -39,8 +39,9 @@ def test_right_hand_turnout_placed_as_sl_u395f_at_scaled_toe():
     pieces = _by_id(import_jmri_layout(LAYOUT, inner_radius_mm=263.5)["track_pieces"])
     piece = pieces["jmri-TOR1"]
     assert piece["piece_id"] == "peco-n-sl-u395f"
-    assert piece["x"] == pytest.approx(263.5)
-    assert piece["y"] == pytest.approx(263.5)
+    # The layout is moved so its top left sits at the 50 mm margin: +50 in x and -213.5 in y here
+    assert piece["x"] == pytest.approx(313.5)
+    assert piece["y"] == pytest.approx(50.0)
     assert piece["rotation"] == 0
     assert piece["flip"] is False
 
@@ -62,8 +63,8 @@ def test_straight_is_placed_as_flex_with_its_length():
     piece = pieces["jmri-F2"]
     assert piece["piece_id"] == "peco-n-sl-300f"
     assert piece["length"] == pytest.approx(527.0)
-    assert piece["x"] == 0
-    assert piece["y"] == pytest.approx(527.0)
+    assert piece["x"] == pytest.approx(50.0)
+    assert piece["y"] == pytest.approx(313.5)
     assert piece["rotation"] == 90
 
 
@@ -75,6 +76,16 @@ def test_curve_is_placed_with_its_radius_and_leaves_the_joint_upward():
     assert piece["angle"] == 90
     assert piece["flip"] is False
     assert piece["rotation"] == 270
+
+
+def test_layout_starts_at_the_margin_and_reports_its_size():
+    result = import_jmri_layout(LAYOUT, inner_radius_mm=263.5)
+    assert min(piece["x"] for piece in result["track_pieces"]) == pytest.approx(50.0)
+    assert min(piece["y"] for piece in result["track_pieces"]) == pytest.approx(50.0)
+    # The rightmost turnout's toe is at 1317.5 mm before the move, so the layout is that wide plus two margins
+    assert result["width"] == 1418
+    assert result["height"] > 0
+    assert result["track_system"] == "Code 55"
 
 
 def test_double_slips_are_reported_as_unplaced():
@@ -104,3 +115,19 @@ def test_rejects_layout_without_curves():
 def test_rejects_bad_radius(radius):
     with pytest.raises(ValueError):
         import_jmri_layout(LAYOUT, inner_radius_mm=radius)
+
+
+def test_preview_endpoint_returns_pieces_without_saving(client):
+    response = client.post("/api/layouts/anyrail-import", json={"xml": LAYOUT, "inner_radius_mm": 263.5})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["track_pieces"]) > 0
+    assert body["track_system"] == "Code 55"
+    assert client.get("/api/layouts").json() == []
+
+
+def test_preview_endpoint_rejects_bad_input(client):
+    bad_xml = client.post("/api/layouts/anyrail-import", json={"xml": "<layout-config>", "inner_radius_mm": 263.5})
+    assert bad_xml.status_code == 400
+    bad_radius = client.post("/api/layouts/anyrail-import", json={"xml": LAYOUT, "inner_radius_mm": 0})
+    assert bad_radius.status_code == 422

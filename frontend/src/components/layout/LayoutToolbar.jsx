@@ -17,9 +17,11 @@ export default function LayoutToolbar({
   tool,
   dirty,
   busy,
+  importing,
   onChooseTool,
   onSwitchLayout,
   onCreateLayout,
+  onToggleImport,
   onSave,
 }) {
   const [creating, setCreating] = useState(false)
@@ -60,6 +62,16 @@ export default function LayoutToolbar({
           className="px-3 py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50"
         >
           {creating ? 'Cancel' : 'New Layout'}
+        </button>
+
+        <button
+          onClick={onToggleImport}
+          disabled={!layout || busy}
+          className={`px-3 py-2 rounded disabled:opacity-50 ${
+            importing ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
+          }`}
+        >
+          Import AnyRail
         </button>
 
         <div className="flex flex-wrap gap-2">
