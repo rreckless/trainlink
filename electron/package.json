@@ -1,0 +1,35 @@
+{
+  "name": "itrain",
+  "version": "0.1.0",
+  "description": "Digital Model Railroad Control System",
+  "main": "main.js",
+  "homepage": "./",
+  "scripts": {
+    "react-start": "cd ../frontend && npm start",
+    "react-build": "cd ../frontend && npm run build",
+    "electron-start": "electron .",
+    "electron-dev": "concurrently \"npm run react-start\" \"npm run electron-start\"",
+    "electron-build": "npm run react-build && electron-builder",
+    "build": "npm run react-build && npm run electron-build"
+  },
+  "dependencies": {
+    "electron-is-dev": "^2.0.0"
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "concurrently": "^8.2.2"
+  },
+  "build": {
+    "appId": "com.berros.itrain",
+    "productName": "iTrain",
+    "files": [
+      "main.js",
+      "preload.js",
+      "../frontend/dist/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
+  }
+}
