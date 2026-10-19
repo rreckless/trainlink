@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Stage, Layer, Group, Rect, Line, Circle, Text } from 'react-konva'
 import { GRID_SIZE, hitItem, hitTrack, signalColor, snapPoint } from '../../layout/model'
 import {
@@ -11,9 +12,13 @@ import {
 const BLOCK_WIDTH = 60
 const BLOCK_HEIGHT = 24
 const FEEDBACK_SIZE = 12
+const ZOOM_MIN = 0.25
+const ZOOM_MAX = 4
+const ZOOM_STEP = 1.25
 
+// Pointer position in layout units, which accounts for the zoom
 function pointerOf(event) {
-  return event.target.getStage().getPointerPosition()
+  return event.target.getStage().getRelativePointerPosition()
 }
 
 function flat(path) {
@@ -51,6 +56,71 @@ export default function LayoutCanvas({
 }) {
   const editing = tool === 'select'
   const placing = tool === 'piece'
+  const [zoom, setZoom] = useState(1)
+  const scroller = useRef(null)
+  const zoomRef = useRef(1)
+  // Layout point and screen offset to keep in place after the next zoom, so zooming stays around the pointer
+  const anchor = useRef(null)
+
+  useLayoutEffect(() => {
+    const target = anchor.current
+    const element = scroller.current
+    if (!target || !element) return
+    element.scrollLeft = target.x * zoom - target.offsetX
+    element.scrollTop = target.y * zoom - target.offsetY
+    anchor.current = null
+  }, [zoom])
+
+  // Zoom to `next`, keeping the layout point `at` under the screen offset (offsetX, offsetY)
+  const applyZoom = (next, at) => {
+    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next))
+    if (clamped === zoomRef.current) return
+    anchor.current = at
+    zoomRef.current = clamped
+    setZoom(clamped)
+  }
+
+  // Zoom by a factor, about the given screen offset in the scroll area
+  const zoomAbout = (factor, offsetX, offsetY) => {
+    const element = scroller.current
+    if (!element) return
+    const current = zoomRef.current
+    applyZoom(current * factor, {
+      x: (element.scrollLeft + offsetX) / current,
+      y: (element.scrollTop + offsetY) / current,
+      offsetX,
+      offsetY,
+    })
+  }
+
+  // Zoom by a factor about the middle of what is visible
+  const zoomBy = (factor) => {
+    const element = scroller.current
+    if (element) zoomAbout(factor, element.clientWidth / 2, element.clientHeight / 2)
+  }
+
+  const fit = () => {
+    const element = scroller.current
+    if (!element) return
+    const next = Math.min(element.clientWidth / layout.width, element.clientHeight / layout.height)
+    applyZoom(next, { x: 0, y: 0, offsetX: 0, offsetY: 0 })
+  }
+
+  // Ctrl or Cmd with the wheel zooms, which is also how a trackpad pinch arrives. Plain wheel scrolls
+  useEffect(() => {
+    const element = scroller.current
+    if (!element) return undefined
+    const onWheel = (event) => {
+      if (!event.ctrlKey && !event.metaKey) return
+      event.preventDefault()
+      const rect = element.getBoundingClientRect()
+      zoomAbout(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP, event.clientX - rect.left, event.clientY - rect.top)
+    }
+    element.addEventListener('wheel', onWheel, { passive: false })
+    return () => element.removeEventListener('wheel', onWheel)
+    // zoomAbout only reads refs, so it does not need to be a dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleMove = (event) => {
     onCursor(pointerOf(event))
@@ -81,14 +151,37 @@ export default function LayoutCanvas({
   const ghostPaths = ghost ? worldPaths(pieceShape(ghost.piece), ghost.placement) : []
 
   return (
-    <Stage
-      width={layout.width}
-      height={layout.height}
-      onMouseMove={handleMove}
-      onClick={handleStageClick}
-      onTap={handleStageClick}
-      style={{ cursor: editing ? 'default' : 'crosshair' }}
-    >
+    <div>
+      <div className="flex items-center gap-2 mb-2 text-sm">
+        <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600" aria-label="Zoom out">
+          −
+        </button>
+        <span className="w-14 text-center text-slate-300">{Math.round(zoom * 100)}%</span>
+        <button onClick={() => zoomBy(ZOOM_STEP)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600" aria-label="Zoom in">
+          +
+        </button>
+        <button onClick={fit} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600">
+          Fit
+        </button>
+        <button
+          onClick={() => applyZoom(1, { x: 0, y: 0, offsetX: 0, offsetY: 0 })}
+          className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600"
+        >
+          100%
+        </button>
+      </div>
+
+      <div ref={scroller} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+        <Stage
+          width={layout.width * zoom}
+          height={layout.height * zoom}
+          scaleX={zoom}
+          scaleY={zoom}
+          onMouseMove={handleMove}
+          onClick={handleStageClick}
+          onTap={handleStageClick}
+          style={{ cursor: editing ? 'default' : 'crosshair' }}
+        >
       <Layer listening={false}>
         <Rect width={layout.width} height={layout.height} fill="#0f172a" />
         <Grid width={layout.width} height={layout.height} />
@@ -247,6 +340,8 @@ export default function LayoutCanvas({
           )
         })}
       </Layer>
-    </Stage>
+        </Stage>
+      </div>
+    </div>
   )
 }
