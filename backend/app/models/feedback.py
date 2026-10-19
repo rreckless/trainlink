@@ -30,6 +30,10 @@ class Feedback(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def block_ids(self):
+        return [b.id for b in self.blocks]
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -39,5 +43,5 @@ class Feedback(Base):
             "y": self.y,
             "feedback_number": self.feedback_number,
             "state": self.state,
-            "block_ids": [b.id for b in self.blocks],
+            "block_ids": self.block_ids,
         }

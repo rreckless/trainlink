@@ -18,6 +18,8 @@ class SignalCreate(BaseModel):
 class SignalUpdate(BaseModel):
     """Schema for updating a signal"""
     name: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
     aspect: Optional[str] = None  # stop, caution, go
 
 

@@ -116,13 +116,14 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ⬜ Automatic signal assignment from block state
    - ⬜ Signal visualization on layout
 
-4. **Layout Drawing** ⬜
-   - 🟡 Layout model exists, editor is a placeholder
-   - ⬜ Draw track segments
-   - ⬜ Place blocks, signals, feedbacks
-   - ⬜ Save and load layout files
-   - ⬜ Drag-and-drop editing
-   - ⬜ Snap-to-grid
+4. **Layout Drawing** 🧪
+   - ✅ Layout REST routes (track segments stored in layout elements)
+   - 🧪 Draw straight track segments
+   - 🧪 Place blocks, signals, feedbacks
+   - 🧪 Save and load layouts
+   - 🧪 Drag-and-drop editing
+   - 🧪 Snap-to-grid (20 unit grid)
+   - ⬜ Signals and feedbacks are placed but have no link to automation or hardware yet
 
 ### Phase 3: Automation & Routes (3-4 weeks)
 **Goal**: Route-based automation
@@ -345,7 +346,7 @@ Feedback
 8. **State Synchronizer**: Keep state consistent across clients. ⬜
 
 ### Frontend Components
-1. **Layout Editor**: Draw and configure the layout. 🟡 (placeholder)
+1. **Layout Editor**: Draw and configure the layout. 🧪 (drawing, placement, save/load; not yet tested in a browser)
 2. **Switchboard View**: Visual representation of the layout. 🟡 (placeholder)
 3. **Locomotive Control**: Control individual trains. 🧪
 4. **Route Manager**: Create and manage routes. 🟡 (placeholder)

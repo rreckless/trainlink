@@ -18,6 +18,8 @@ class FeedbackCreate(BaseModel):
 class FeedbackUpdate(BaseModel):
     """Schema for updating a feedback sensor"""
     name: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
     state: Optional[bool] = None
 
 

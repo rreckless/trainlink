@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .database import init_db, get_db
 from .ws.connection_manager import ConnectionManager
-from .api import z21, locomotives, blocks, signals, routes
+from .api import z21, locomotives, blocks, signals, routes, layouts, feedbacks
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +55,8 @@ app.include_router(locomotives.router)
 app.include_router(blocks.router)
 app.include_router(signals.router)
 app.include_router(routes.router)
+app.include_router(layouts.router)
+app.include_router(feedbacks.router)
 
 # Health check endpoint
 @app.get("/health")

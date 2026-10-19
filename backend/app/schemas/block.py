@@ -19,6 +19,8 @@ class BlockCreate(BaseModel):
 class BlockUpdate(BaseModel):
     """Schema for updating a block"""
     name: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
     max_speed: Optional[int] = None
     state: Optional[str] = None
 
