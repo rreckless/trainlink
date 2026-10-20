@@ -81,3 +81,6 @@ Thumbs.db
 .claude-flow/
 backend/.claude-flow/
 frontend/.claude-flow/
+
+# Locomotive pictures uploaded through the app
+backend/data/locomotive_images/
