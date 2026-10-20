@@ -4,6 +4,7 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useZ21StatusPolling } from './hooks/useZ21Status'
 import Switchboard from './components/Switchboard'
 import ControlView from './components/control/ControlView'
+import LocomotiveSetup from './components/locomotives/LocomotiveSetup'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
 import SystemSettings from './components/SystemSettings'
@@ -28,6 +29,7 @@ function App() {
   const tabs = [
     { id: 'switchboard', label: 'Switchboard', icon: '🚂' },
     { id: 'control', label: 'Control', icon: '🚃' },
+    { id: 'locomotives', label: 'Locomotives', icon: '🛠️' },
     { id: 'routes', label: 'Routes', icon: '🛤️' },
     { id: 'editor', label: 'Layout Editor', icon: '✏️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -39,6 +41,8 @@ function App() {
         return <Switchboard />
       case 'control':
         return <ControlView />
+      case 'locomotives':
+        return <LocomotiveSetup />
       case 'routes':
         return <RouteManager />
       case 'editor':

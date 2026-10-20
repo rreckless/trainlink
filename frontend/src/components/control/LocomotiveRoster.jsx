@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { locomotiveApi } from '../../services/locomotiveApi'
+import { locomotiveApi, pictureUrl } from '../../services/locomotiveApi'
 
-const LOCOMOTIVE_TYPES = ['diesel', 'steam', 'electric', 'other']
-const EMPTY_FORM = { name: '', dcc_address: '', locomotive_type: 'diesel', length: '' }
 
 // Moving time in hours, minutes, and seconds
 function formatDuration(seconds) {
@@ -20,8 +18,6 @@ export default function LocomotiveRoster({ roster, controlsEnabled, onError }) {
   const { locomotives, refresh, selected, setSelected, toggle, toggleAll, allSelected, selectedLocomotives, reported, busy, setBusy, message, setMessage } = roster
   // What was last sent to each locomotive this session: { id: { speed, direction } }
   const [commanded, setCommanded] = useState({})
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [adding, setAdding] = useState(false)
 
   // Send a speed and direction to every selected locomotive at once
   const sendToSelected = async (speed, direction) => {
@@ -67,25 +63,6 @@ export default function LocomotiveRoster({ roster, controlsEnabled, onError }) {
     }
   }
 
-  const addLocomotive = async (event) => {
-    event.preventDefault()
-    onError('')
-    const body = {
-      name: form.name.trim(),
-      dcc_address: Number(form.dcc_address),
-      locomotive_type: form.locomotive_type,
-    }
-    if (form.length !== '') body.length = Number(form.length)
-    try {
-      await locomotiveApi.create(body)
-      setForm(EMPTY_FORM)
-      setAdding(false)
-      await refresh()
-    } catch (err) {
-      onError(err.message)
-    }
-  }
-
   const removeLocomotive = async (loc) => {
     if (!window.confirm(`Remove ${loc.name} from the roster?`)) return
     onError('')
@@ -108,70 +85,10 @@ export default function LocomotiveRoster({ roster, controlsEnabled, onError }) {
     <div className="bg-slate-800 rounded-lg p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Locomotives</h3>
-        <button
-          onClick={() => setAdding(!adding)}
-          className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600"
-        >
-          {adding ? 'Cancel' : 'Add locomotive'}
-        </button>
       </div>
 
-      {adding && (
-        <form onSubmit={addLocomotive} className="grid grid-cols-2 gap-3 items-end">
-          <label className="text-sm text-slate-300">
-            Name
-            <input
-              required
-              value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
-              className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            DCC address (1-9999)
-            <input
-              type="number"
-              min="1"
-              max="9999"
-              required
-              value={form.dcc_address}
-              onChange={(event) => setForm({ ...form, dcc_address: event.target.value })}
-              className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Type
-            <select
-              value={form.locomotive_type}
-              onChange={(event) => setForm({ ...form, locomotive_type: event.target.value })}
-              className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-            >
-              {LOCOMOTIVE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-slate-300">
-            Length (cm, optional)
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={form.length}
-              onChange={(event) => setForm({ ...form, length: event.target.value })}
-              className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-            />
-          </label>
-          <button type="submit" className="col-span-2 px-4 py-2 bg-blue-600 rounded hover:bg-blue-700">
-            Add
-          </button>
-        </form>
-      )}
-
       {locomotives.length === 0 ? (
-        <p className="text-sm text-slate-400">No locomotives yet. Add one to start controlling trains.</p>
+        <p className="text-sm text-slate-400">No locomotives yet. Add them in the Locomotives section.</p>
       ) : (
         <>
           <div className="space-y-2 bg-slate-700 rounded p-3">
@@ -221,6 +138,7 @@ export default function LocomotiveRoster({ roster, controlsEnabled, onError }) {
                   }`}
                 >
                   <input type="checkbox" checked={selected.has(loc.id)} onChange={() => toggle(loc.id)} disabled={busy} />
+                  {pictureUrl(loc) && <img src={pictureUrl(loc)} alt="" className="w-12 h-9 object-cover rounded bg-slate-800" />}
                   <div className="flex-1">
                     <p className="font-semibold">{loc.name}</p>
                     <p className="text-xs text-slate-400">

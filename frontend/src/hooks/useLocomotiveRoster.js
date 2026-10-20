@@ -100,7 +100,56 @@ export function useLocomotiveRoster(onError) {
     [selectedLocomotives, reported, onError]
   )
 
+  // What a function button does for one locomotive. Locomotives with no labels get the defaults
+  const definitionOf = (loc, index) => loc.function_labels?.[index] ?? { label: functionLabel(index), momentary: false }
+
+  // A button's label when the selected locomotives agree on it. Otherwise the plain function number
+  const labelFor = useCallback(
+    (index) => {
+      if (selectedLocomotives.length === 0) return functionLabel(index)
+      const labels = new Set(selectedLocomotives.map((loc) => definitionOf(loc, index).label))
+      return labels.size === 1 ? [...labels][0] : functionLabel(index)
+    },
+    [selectedLocomotives]
+  )
+
+  // A momentary button is on only while it is held, and only when every selected locomotive agrees it is momentary
+  const isMomentary = useCallback(
+    (index) => selectedLocomotives.length > 0 && selectedLocomotives.every((loc) => definitionOf(loc, index).momentary),
+    [selectedLocomotives]
+  )
+
+  // Switch a momentary function on when its button is pressed, and off when it is released
+  const holdFunction = useCallback(
+    async (index, on) => {
+      const targets = selectedLocomotives
+      if (targets.length === 0) return onError('Select one or more locomotives first')
+      const results = await Promise.allSettled(targets.map((loc) => locomotiveApi.setFunction(loc.dcc_address, index, on)))
+      const failed = []
+      setReported((prev) => {
+        const next = { ...prev }
+        targets.forEach((loc, i) => {
+          if (results[i].status !== 'fulfilled') return
+          const current = next[loc.dcc_address] ?? { speed: null, direction: 'stop', functions: [] }
+          const functions = on
+            ? [...new Set([...current.functions, index])].sort((a, b) => a - b)
+            : current.functions.filter((f) => f !== index)
+          next[loc.dcc_address] = { ...current, functions }
+        })
+        return next
+      })
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') failed.push(`${targets[i].name}: ${result.reason.message}`)
+      })
+      if (failed.length > 0) onError(failed.join('. '))
+    },
+    [selectedLocomotives, onError]
+  )
+
   return {
+    labelFor,
+    isMomentary,
+    holdFunction,
     locomotives,
     refresh,
     selected,
