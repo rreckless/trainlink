@@ -5,6 +5,7 @@ import {
   divergingOutput,
   hitPlacedPiece,
   openEnds,
+  pieceEnds,
   pieceShape,
   placedPiece,
   toLocal,
@@ -55,15 +56,15 @@ export default function LayoutCanvas({
   operating,
   turnoutStates,
   onThrow,
-  onBendPoint,
+  onHandle,
   onEndDrag,
+  onPieceDrag,
   onCanvasClick,
   onCursor,
   onSelect,
   onMove,
 }) {
   const editing = tool === 'select'
-  const placing = tool === 'piece'
 
   // True when a turnout's diverging route is the one the Z21 last reported
   const isDiverging = (placed) =>
@@ -209,12 +210,14 @@ export default function LayoutCanvas({
 
   const ghostPaths = ghost ? worldPaths(pieceShape(ghost.piece), ghost.placement) : []
 
-  // The selected piece. Its open ends can be dragged, and a bent piece's two bend points too
+  // The selected piece. Its open ends can be dragged, and a curved piece's two handles too
   const selectedPiece = selectedKey?.startsWith('piece:')
     ? pieces.find((piece) => `piece:${piece.id}` === selectedKey) ?? null
     : null
-  const bendPiece = selectedPiece && Array.isArray(selectedPiece.bend) ? selectedPiece : null
+  const handlePiece = selectedPiece && Array.isArray(selectedPiece.handles) ? selectedPiece : null
   const selectedEnds = selectedPiece && editing ? openEnds(pieces, libraryById).filter((end) => end.pieceId === selectedPiece.id) : []
+  // Every piece end, shown at all times: orange where it is open, green where it is joined
+  const allEnds = pieceEnds(pieces, libraryById)
   // Where a dragged handle is, in the piece's own frame, rounded to half a millimetre
   const localPoint = (event, placed) => {
     const local = toLocal({ x: event.target.x(), y: event.target.y() }, placed)
@@ -264,17 +267,31 @@ export default function LayoutCanvas({
           const shape = pieceShape(placedPiece(placed, libraryById))
           if (!shape) return null
           const selected = selectedKey === `piece:${placed.id}`
-          // Turnout paths are [straight, diverging]. The diverging route is orange when it is set
-          return worldPaths(shape, placed).map((path, index) => (
-            <Line
-              key={`${placed.id}-${index}`}
-              points={flat(path)}
-              stroke={selected ? '#38bdf8' : index === 1 && isDiverging(placed) ? '#f97316' : '#e2e8f0'}
-              strokeWidth={selected ? 5 : 3}
-              hitStrokeWidth={12}
-              listening={editing}
-            />
-          ))
+          // Turnout paths are [straight, diverging]. The diverging route is orange when it is set.
+          // The whole piece drags. On drop it moves by the drag and joins an open end it lands on
+          return (
+            <Group
+              key={placed.id}
+              draggable={editing}
+              onDragEnd={(event) => {
+                const dx = event.target.x()
+                const dy = event.target.y()
+                event.target.position({ x: 0, y: 0 })
+                onPieceDrag(placed.id, dx, dy)
+              }}
+            >
+              {worldPaths(shape, placed).map((path, index) => (
+                <Line
+                  key={`${placed.id}-${index}`}
+                  points={flat(path)}
+                  stroke={selected ? '#38bdf8' : index === 1 && isDiverging(placed) ? '#f97316' : '#e2e8f0'}
+                  strokeWidth={selected ? 5 : 3}
+                  hitStrokeWidth={12}
+                  listening={editing}
+                />
+              ))}
+            </Group>
+          )
         })}
 
         {tracks.map((track) => {
@@ -306,12 +323,12 @@ export default function LayoutCanvas({
           />
         ))}
 
-        {bendPiece &&
-          bendPiece.bend.map((point, index) => {
-            const world = toWorld(point, bendPiece)
+        {handlePiece &&
+          handlePiece.handles.map((point, index) => {
+            const world = toWorld(point, handlePiece)
             return (
               <Circle
-                key={`bend-${index}`}
+                key={`handle-${index}`}
                 x={world.x}
                 y={world.y}
                 radius={6}
@@ -320,7 +337,7 @@ export default function LayoutCanvas({
                 strokeWidth={1}
                 draggable={editing}
                 listening={editing}
-                onDragMove={(event) => onBendPoint(bendPiece.id, index, localPoint(event, bendPiece))}
+                onDragMove={(event) => onHandle(handlePiece.id, index, localPoint(event, handlePiece))}
               />
             )
           })}
@@ -337,17 +354,16 @@ export default function LayoutCanvas({
           />
         ))}
 
-        {placing &&
-          openEnds(pieces, libraryById).map((end) => (
-            <Circle
-              key={`${end.pieceId}-${end.index}`}
-              x={end.x}
-              y={end.y}
-              radius={3}
-              fill="#f97316"
-              listening={false}
-            />
-          ))}
+        {allEnds.map((end) => (
+          <Circle
+            key={`${end.pieceId}-${end.index}`}
+            x={end.x}
+            y={end.y}
+            radius={3}
+            fill={end.open ? '#f97316' : '#22c55e'}
+            listening={false}
+          />
+        ))}
 
         {pendingStart && cursor && (
           <Line

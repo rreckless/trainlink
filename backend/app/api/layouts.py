@@ -79,16 +79,16 @@ def _valid_dcc(placed: dict, piece: dict) -> bool:
     return isinstance(straight, int) and not isinstance(straight, bool) and straight in (0, 1)
 
 
-def _valid_bend(placed: dict, piece: dict) -> bool:
-    """Two bend points (x and y in mm, in the piece's own frame), which only flex track may have"""
-    if "bend" not in placed:
+def _valid_handles(placed: dict, piece: dict) -> bool:
+    """Two curve handles (x and y in mm, in the piece's own frame), which only flex track may have"""
+    if "handles" not in placed:
         return True
     if piece["type"] != "flex":
         return False
-    bend = placed["bend"]
-    if not isinstance(bend, list) or len(bend) != 2:
+    handles = placed["handles"]
+    if not isinstance(handles, list) or len(handles) != 2:
         return False
-    for point in bend:
+    for point in handles:
         if not isinstance(point, dict):
             return False
         for key in ("x", "y"):
@@ -124,7 +124,7 @@ def _check_track_pieces(elements: dict):
                 status_code=400,
                 detail="A placed length, radius, or angle must be a positive number that suits the piece",
             )
-        if not _valid_bend(placed, library[placed["piece_id"]]):
+        if not _valid_handles(placed, library[placed["piece_id"]]):
             raise HTTPException(
                 status_code=400,
                 detail="Bend points need two x and y values in mm, and only flex track can have them",
@@ -202,6 +202,10 @@ def update_layout(layout_id: int, body: LayoutUpdate, db: Session = Depends(get_
         _check_positive(changes.get("width", layout.width), changes.get("height", layout.height))
     if "elements" in changes:
         _check_elements(changes["elements"])
+    if "name" in changes:
+        changes["name"] = changes["name"].strip()
+        if not changes["name"]:
+            raise HTTPException(status_code=400, detail="A layout needs a name")
 
     layout = get_or_404(db, Layout, layout_id, "Layout")
     for field, value in changes.items():

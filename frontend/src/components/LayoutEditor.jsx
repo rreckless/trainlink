@@ -24,6 +24,9 @@ export default function LayoutEditor() {
       if (typing) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
         editor.deleteSelected()
+      } else if ((event.key === 'r' || event.key === 'R') && editor.selectedPlaced) {
+        // R turns the selected track piece 15 degrees, Shift+R the other way
+        editor.rotatePiece(editor.selectedPlaced.id, event.shiftKey ? -15 : 15)
       } else if (event.key === 'Escape') {
         editor.cancelTrack()
         editor.setSelectedKey(null)
@@ -31,7 +34,7 @@ export default function LayoutEditor() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editor.deleteSelected, editor.cancelTrack, editor.setSelectedKey])
+  }, [editor.deleteSelected, editor.cancelTrack, editor.setSelectedKey, editor.selectedPlaced, editor.rotatePiece])
 
   return (
     <div className="space-y-4">
@@ -45,6 +48,8 @@ export default function LayoutEditor() {
         onChooseTool={editor.chooseTool}
         onSwitchLayout={editor.switchLayout}
         onCreateLayout={editor.createLayout}
+        onRenameLayout={editor.renameLayout}
+        onDeleteLayout={editor.deleteLayout}
         onToggleImport={() => setImporting(!importing)}
         onSave={editor.save}
       />
@@ -86,14 +91,18 @@ export default function LayoutEditor() {
               operating={editor.tool === 'operate'}
               turnoutStates={editor.turnoutStates}
               onThrow={editor.throwPlaced}
-              onBendPoint={editor.moveBendPoint}
+              onHandle={editor.moveHandle}
               onEndDrag={editor.dragPlacedEnd}
+              onPieceDrag={editor.dragPiece}
               onCanvasClick={editor.handleCanvasClick}
               onCursor={editor.setCursor}
               onSelect={editor.setSelectedKey}
               onMove={editor.moveItem}
             />
-            <p className="text-xs text-slate-500 mt-2">{HINTS[editor.tool] || HINTS.select}</p>
+            <p className="text-xs text-slate-500 mt-2">
+              <span className="text-orange-500">●</span> open end <span className="text-green-500 ml-2">●</span> joined
+            </p>
+            <p className="text-xs text-slate-500 mt-1">{HINTS[editor.tool] || HINTS.select}</p>
           </div>
 
           <div className="bg-slate-800 rounded-lg p-4">
@@ -121,6 +130,7 @@ export default function LayoutEditor() {
                   onStraighten={() => editor.straighten(editor.selectedPlaced.id)}
                   onSetLength={(length) => editor.setPlacedLength(editor.selectedPlaced.id, length)}
                   onSmooth={() => editor.smoothCurve(editor.selectedPlaced.id)}
+                  onRotate={(degrees) => editor.rotatePiece(editor.selectedPlaced.id, degrees)}
                   onDelete={editor.deleteSelected}
                 />
               </>

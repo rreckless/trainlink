@@ -83,7 +83,7 @@ const KIND_NOTES = {
   feedback: 'Set by the Z21 once the feedback is linked to hardware.',
 }
 
-export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onMakeCurved, onStraighten, onSetLength, onSmooth, onDelete }) {
+export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onMakeCurved, onStraighten, onSetLength, onSmooth, onRotate, onDelete }) {
   if (placed && piece) {
     return (
       <div className="space-y-3 text-sm">
@@ -98,15 +98,33 @@ export default function LayoutProperties({ item, track, placed, piece, busy, onR
         {!piece.verified && (
           <p className="text-xs text-amber-300">Dimensions not yet checked against the catalogue</p>
         )}
+        {onRotate && (
+          <div className="space-y-2">
+            <p className="text-slate-300">Turn</p>
+            <div className="grid grid-cols-4 gap-2">
+              {[-90, -15, 15, 90].map((degrees) => (
+                <button
+                  key={degrees}
+                  onClick={() => onRotate(degrees)}
+                  disabled={busy}
+                  className="py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50"
+                >
+                  {degrees > 0 ? '+' : ''}{degrees}°
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">Turns about its centre. Press R or Shift+R to turn 15°. A piece turned onto an open end joins it.</p>
+          </div>
+        )}
         {piece.type === 'flex' && onSetLength && (
           <LengthField key={placed.id} placed={placed} maxLength={piece.length} busy={busy} onChange={onSetLength} />
         )}
         {piece.type === 'flex' && onMakeCurved && (
           <div className="space-y-2">
             <p className="text-xs text-slate-400">
-              Drag the two blue points on the track to bend it. Track with bend points is curved.
+              Drag the two blue handles to shape the curve. The track passes through its two ends.
             </p>
-            {Array.isArray(placed.bend) ? (
+            {Array.isArray(placed.handles) ? (
               <div className="space-y-2">
                 <button onClick={onSmooth} disabled={busy} className="w-full px-3 py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50">
                   Smooth curve

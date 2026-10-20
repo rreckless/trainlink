@@ -15,10 +15,13 @@ import {
   toLocal,
   placeDraggedEnd,
   nearestOpenEnd,
+  pieceEnds,
+  draggedPiecePlacement,
+  rotatedPiecePlacement,
+  snapToOpenEnds,
   MIN_FLEX_MM,
-  smoothBend,
-  bendingEnergy,
 } from './track.js'
+import { smoothHandles, bendingEnergy } from './curves.js'
 
 const SETRACK = 'Setrack (Code 80)'
 const STREAMLINE = 'Streamline (Code 55)'
@@ -375,26 +378,27 @@ test('the straight output can be set per turnout', () => {
 
 const flex = { id: 'f', system: STREAMLINE, type: 'flex', length: 100, placeable: true }
 
-test('bent flex track passes through its two bend points and keeps its ends', () => {
-  const shape = pieceShape({ ...flex, bend: [{ x: 33, y: 20 }, { x: 66, y: -20 }] })
+test('curved flex track is drawn through its two ends, and its handles are off the track', () => {
+  const shape = pieceShape({ ...flex, handles: [{ x: 33, y: 20 }, { x: 66, y: -20 }] })
   const path = shape.paths[0]
   const near = (point) => path.some((p) => Math.hypot(p.x - point.x, p.y - point.y) < 0.5)
-  assert.ok(near({ x: 33, y: 20 }))
-  assert.ok(near({ x: 66, y: -20 }))
+  assert.ok(!near({ x: 33, y: 20 }))
+  assert.ok(!near({ x: 66, y: -20 }))
+  assert.ok(path.length > 2)
   assert.ok(Math.abs(path[0].x) < 1e-9 && Math.abs(path[0].y) < 1e-9)
   const last = path[path.length - 1]
   assert.ok(Math.abs(last.x - 100) < 1e-9 && Math.abs(last.y) < 1e-9)
 })
 
-test('flex track without bend points is still a straight of its length', () => {
+test('flex track without handles is still a straight of its length', () => {
   const shape = pieceShape(flex)
   assert.equal(shape.paths[0].length, 2)
   assert.equal(shape.endpoints[1].heading, 0)
 })
 
-test('a bent flex track ends heading the way the track leaves it', () => {
-  const shape = pieceShape({ ...flex, bend: [{ x: 33, y: 0 }, { x: 66, y: 20 }] })
-  // The last bend point is above the line and the end is below it, so the track leaves at about -30 degrees
+test('a curved flex track ends heading the way the track leaves it', () => {
+  const shape = pieceShape({ ...flex, handles: [{ x: 33, y: 0 }, { x: 66, y: 20 }] })
+  // The last handle is above the line and the end is below it, so the track leaves at about -30 degrees
   assert.ok(Math.abs(shape.endpoints[1].heading - 330) < 1)
 })
 
@@ -453,10 +457,10 @@ test('nearestOpenEnd picks the closest end within the snap distance', () => {
 })
 
 test('smoothing keeps both connecting end angles and the length, and does not make the curve less fair', () => {
-  const bent = { ...flexBase, length: 300, bend: [{ x: 60, y: 90 }, { x: 200, y: -40 }] }
-  const before = pieceShape(bent)
-  const smoothed = smoothBend(before, 300)
-  const after = pieceShape({ ...bent, bend: smoothed })
+  const curved = { ...flexBase, length: 300, handles: [{ x: 60, y: 90 }, { x: 200, y: -40 }] }
+  const before = pieceShape(curved)
+  const smoothed = smoothHandles(before, 300)
+  const after = pieceShape({ ...curved, handles: smoothed })
   assert.ok(Math.abs(after.endpoints[0].heading - before.endpoints[0].heading) < 0.5)
   assert.ok(Math.abs(after.endpoints[1].heading - before.endpoints[1].heading) < 0.5)
   const last = after.paths[0][after.paths[0].length - 1]
@@ -464,8 +468,81 @@ test('smoothing keeps both connecting end angles and the length, and does not ma
   assert.ok(bendingEnergy(after.paths[0]) <= bendingEnergy(before.paths[0]) + 1e-9)
 })
 
-test('a bent flex track leaves its start at the angle of the drawn curve', () => {
-  const shape = pieceShape({ ...flexBase, bend: [{ x: 30, y: 30 }, { x: 60, y: 0 }] })
-  // The first bend point is at 45 degrees, so the track leaves the origin heading 45 degrees and joins as 225
+test('a curved flex track leaves its start at the angle of the drawn curve', () => {
+  const shape = pieceShape({ ...flexBase, handles: [{ x: 30, y: 30 }, { x: 60, y: 0 }] })
+  // The first handle is at 45 degrees, so the track leaves the origin heading 45 degrees and joins as 225
   assert.ok(Math.abs(shape.endpoints[0].heading - 225) < 1e-6)
+})
+
+test('pieceEnds marks a joined end as joined and a free end as open', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const first = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  const joined = { id: 'b', piece_id: 'peco-n-sl-300f', x: 100, y: 0, rotation: 0, flip: false, length: 100 }
+  const ends = pieceEnds([first, joined], library)
+  assert.equal(ends.length, 4)
+  const open = ends.filter((end) => end.open).map((end) => `${end.pieceId}${end.index}`).sort()
+  assert.deepEqual(open, ['a0', 'b1'])
+})
+
+test('dragging a piece with no neighbour moves it by the drag', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const piece = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  const moved = draggedPiecePlacement(piece, library, [], 25, -10)
+  assert.equal(moved.x, 25)
+  assert.equal(moved.y, -10)
+  assert.equal(moved.rotation, 0)
+})
+
+test('dragging a piece so its end lands near an open end joins it there', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const other = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  const loose = { id: 'b', piece_id: 'peco-n-sl-300f', x: 100, y: 0, rotation: 0, flip: false, length: 100 }
+  // Drag the loose piece 5 mm right and 30 mm down, so its start sits 30 mm from the open end at (100, 0)
+  const moved = draggedPiecePlacement(loose, library, [other], 5, 30)
+  const start = worldEndpoints(pieceShape(placedPiece(moved, library)), moved)[0]
+  assert.ok(Math.hypot(start.x - 100, start.y) < 1e-6)
+})
+
+test('turning a piece keeps its centre and turns it by the amount given', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const piece = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  const turned = rotatedPiecePlacement(piece, library, [], 90)
+  assert.equal(turned.rotation, 90)
+  const ends = worldEndpoints(pieceShape(placedPiece(turned, library)), turned)
+  assert.ok(Math.abs((ends[0].x + ends[1].x) / 2 - 50) < 1e-6)
+  assert.ok(Math.abs((ends[0].y + ends[1].y) / 2) < 1e-6)
+})
+
+test('turning a piece so an end comes near an open end joins it there', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const other = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  // Turned 90 degrees about its centre (100, 45), its ends would sit at (100, -5) and (100, 95).
+  // The first is 5 mm from the open end at (100, 0), so it should join there
+  const loose = { id: 'b', piece_id: 'peco-n-sl-300f', x: 50, y: 45, rotation: 0, flip: false, length: 100 }
+  const turned = rotatedPiecePlacement(loose, library, [other], 90)
+  const ends = worldEndpoints(pieceShape(placedPiece(turned, library)), turned)
+  assert.ok(ends.some((end) => Math.hypot(end.x - 100, end.y) < 1e-6))
+})
+
+test('a piece that fits exactly between two open ends joins both of them', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const left = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  const right = { id: 'c', piece_id: 'peco-n-sl-300f', x: 200, y: 0, rotation: 0, flip: false, length: 100 }
+  // A 100 mm piece placed a few mm off the gap between (100, 0) and (200, 0)
+  const loose = { id: 'b', piece_id: 'peco-n-sl-300f', x: 100, y: 4, rotation: 0, flip: false, length: 100 }
+  const joined = snapToOpenEnds(loose, library, [left, right])
+  const ends = worldEndpoints(pieceShape(placedPiece(joined, library)), joined)
+  assert.ok(Math.hypot(ends[0].x - 100, ends[0].y) < 1e-6)
+  assert.ok(Math.hypot(ends[1].x - 200, ends[1].y) < 1e-6)
+})
+
+test('a piece of the wrong length for the gap joins the one end nearest instead', () => {
+  const library = { 'peco-n-sl-300f': flexBase }
+  const left = { id: 'a', piece_id: 'peco-n-sl-300f', x: 0, y: 0, rotation: 0, flip: false, length: 100 }
+  const right = { id: 'c', piece_id: 'peco-n-sl-300f', x: 200, y: 0, rotation: 0, flip: false, length: 100 }
+  const loose = { id: 'b', piece_id: 'peco-n-sl-300f', x: 100, y: 4, rotation: 0, flip: false, length: 80 }
+  const joined = snapToOpenEnds(loose, library, [left, right])
+  const ends = worldEndpoints(pieceShape(placedPiece(joined, library)), joined)
+  assert.ok(ends.some((end) => Math.hypot(end.x - 100, end.y) < 1e-6 || Math.hypot(end.x - 200, end.y) < 1e-6))
+  assert.ok(!ends.every((end) => Math.hypot(end.x - 100, end.y) < 1e-6 || Math.hypot(end.x - 200, end.y) < 1e-6))
 })
