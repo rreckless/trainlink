@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { locomotiveApi } from '../../services/locomotiveApi'
 
 const LOCOMOTIVE_TYPES = ['diesel', 'steam', 'electric', 'other']
+const EMPTY_FORM = { name: '', dcc_address: '', locomotive_type: 'diesel', length: '' }
+
 // Moving time in hours, minutes, and seconds
 function formatDuration(seconds) {
   const total = Math.floor(seconds ?? 0)
@@ -13,78 +15,17 @@ function formatDuration(seconds) {
   return `${secs}s`
 }
 
-// F0 is the light. The others are the functions the decoder maps
-const FUNCTION_BUTTONS = [
-  { index: 0, label: 'Light' },
-  { index: 1, label: 'F1' },
-  { index: 2, label: 'F2' },
-  { index: 3, label: 'F3' },
-  { index: 4, label: 'F4' },
-]
-const EMPTY_FORM = { name: '', dcc_address: '', locomotive_type: 'diesel', length: '' }
-
 // Locomotives on the server. Tick several to send one speed or direction to all of them
-export default function LocomotiveRoster({ controlsEnabled, onError }) {
-  const [locomotives, setLocomotives] = useState([])
-  const [selected, setSelected] = useState(new Set())
+export default function LocomotiveRoster({ roster, controlsEnabled, onError }) {
+  const { locomotives, refresh, selected, setSelected, toggle, toggleAll, allSelected, selectedLocomotives, reported, busy, setBusy, message, setMessage } = roster
   // What was last sent to each locomotive this session: { id: { speed, direction } }
   const [commanded, setCommanded] = useState({})
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
   const [adding, setAdding] = useState(false)
-  // What the Z21 last reported for each locomotive, by address. Read every two seconds
-  const [reported, setReported] = useState({})
-
-  const refresh = () =>
-    locomotiveApi
-      .list()
-      .then(setLocomotives)
-      .catch((err) => onError(`Could not load locomotives: ${err.message}`))
-
-  useEffect(() => {
-    refresh()
-    // refresh only once, on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const addressKey = locomotives.map((loc) => loc.dcc_address).join(',')
-  useEffect(() => {
-    if (addressKey === '') return undefined
-    let cancelled = false
-    // Errors are not shown here: the Z21 may be offline, and this would repeat every two seconds
-    const read = () => {
-      // The roster list carries each locomotive's moving time, so it is refreshed on the same tick
-      refresh()
-      return locomotiveApi
-        .getStates(addressKey.split(',').map(Number))
-        .then((result) => {
-          if (!cancelled) setReported(result.states)
-        })
-        .catch(() => {})
-    }
-    read()
-    const timer = setInterval(read, 2000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [addressKey])
-
-  const toggle = (id) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-
-  const allSelected = locomotives.length > 0 && selected.size === locomotives.length
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(locomotives.map((loc) => loc.id)))
 
   // Send a speed and direction to every selected locomotive at once
   const sendToSelected = async (speed, direction) => {
-    const targets = locomotives.filter((loc) => selected.has(loc.id))
+    const targets = selectedLocomotives
     if (targets.length === 0) return onError('Select one or more locomotives first')
     setBusy(true)
     onError('')
@@ -107,40 +48,9 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
   }
 
   // The speed the selected locomotives were last sent, for the group controls
-  const selectedStates = locomotives.filter((loc) => selected.has(loc.id)).map((loc) => commanded[loc.id])
+  const selectedStates = selectedLocomotives.map((loc) => commanded[loc.id])
   const groupSpeed = selectedStates.length > 0 ? selectedStates[0]?.speed ?? 0 : 0
   const groupDirection = selectedStates.length > 0 ? selectedStates[0]?.direction ?? 'stop' : 'stop'
-
-  // Switch a function on every selected locomotive. If they all have it on, switch it off
-  const sendFunction = async (index) => {
-    const targets = locomotives.filter((loc) => selected.has(loc.id))
-    if (targets.length === 0) return onError('Select one or more locomotives first')
-    const hasIt = (loc) => reported[loc.dcc_address]?.functions?.includes(index) ?? false
-    const on = !targets.every(hasIt)
-    setBusy(true)
-    onError('')
-    setMessage('')
-    const results = await Promise.allSettled(targets.map((loc) => locomotiveApi.setFunction(loc.dcc_address, index, on)))
-    const failed = []
-    setReported((prev) => {
-      const next = { ...prev }
-      targets.forEach((loc, i) => {
-        if (results[i].status !== 'fulfilled') return
-        const current = next[loc.dcc_address] ?? { speed: null, direction: 'stop', functions: [] }
-        const functions = on
-          ? [...new Set([...current.functions, index])].sort((a, b) => a - b)
-          : current.functions.filter((f) => f !== index)
-        next[loc.dcc_address] = { ...current, functions }
-      })
-      return next
-    })
-    results.forEach((result, i) => {
-      if (result.status === 'rejected') failed.push(`${targets[i].name}: ${result.reason.message}`)
-    })
-    if (failed.length > 0) onError(failed.join('. '))
-    else setMessage(`${FUNCTION_BUTTONS.find((f) => f.index === index).label} ${on ? 'on' : 'off'} for ${targets.length} locomotive${targets.length === 1 ? '' : 's'}`)
-    setBusy(false)
-  }
 
   const emergencyStop = async () => {
     setBusy(true)
@@ -297,19 +207,6 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="grid grid-cols-5 gap-2">
-            {FUNCTION_BUTTONS.map((fn) => (
-              <button
-                key={fn.index}
-                onClick={() => sendFunction(fn.index)}
-                disabled={disabled || selected.size === 0}
-                className="py-2 rounded text-sm font-semibold bg-slate-600 hover:bg-slate-500 disabled:opacity-50"
-              >
-                {fn.label}
-              </button>
-            ))}
           </div>
 
           <div className="space-y-2">

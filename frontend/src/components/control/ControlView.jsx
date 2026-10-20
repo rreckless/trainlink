@@ -3,7 +3,9 @@ import { useStore } from '../../store'
 import { refreshZ21Status } from '../../hooks/useZ21Status'
 import { locomotiveApi } from '../../services/locomotiveApi'
 import { useZ21Connection } from '../../hooks/useZ21Connection'
+import { useLocomotiveRoster } from '../../hooks/useLocomotiveRoster'
 import LocomotiveRoster from './LocomotiveRoster'
+import FunctionPanel from './FunctionPanel'
 import OperatePanel from './OperatePanel'
 
 const TRACK_MESSAGES = {
@@ -21,6 +23,7 @@ export default function ControlView() {
   const [busy, setBusy] = useState(false)
   const controlsEnabled = z21.state === 'ready'
   const connection = useZ21Connection()
+  const roster = useLocomotiveRoster(setError)
 
   const resumeTrackPower = async () => {
     setBusy(true)
@@ -97,7 +100,10 @@ export default function ControlView() {
         </div>
       )}
 
-      <LocomotiveRoster controlsEnabled={controlsEnabled} onError={setError} />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <LocomotiveRoster roster={roster} controlsEnabled={controlsEnabled} onError={setError} />
+        <FunctionPanel roster={roster} controlsEnabled={controlsEnabled} />
+      </div>
       <OperatePanel />
     </div>
   )
