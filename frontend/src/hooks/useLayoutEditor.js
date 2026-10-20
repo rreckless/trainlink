@@ -11,7 +11,15 @@ import {
   snapPoint,
   snapshotOf,
 } from '../layout/model'
-import { pieceShape, snapPlacement } from '../layout/track'
+import {
+  nearestOpenEnd,
+  openEnds,
+  pieceShape,
+  placedPiece,
+  placeDraggedEnd,
+  smoothBend,
+  snapPlacement,
+} from '../layout/track'
 import { useTurnoutControl } from './useTurnoutControl'
 
 const KINDS = Object.keys(ENTITY_KINDS)
@@ -33,6 +41,8 @@ export function useLayoutEditor() {
   const [importReport, setImportReport] = useState(null)
   const [tool, setTool] = useState('select')
   const [pieceId, setPieceId] = useState(null)
+  // When on, a piece is placed where it is dropped, without joining to open ends
+  const [freePlace, setFreePlace] = useState(false)
   const [selectedKey, setSelectedKey] = useState(null)
   const [pendingStart, setPendingStart] = useState(null)
   const [cursor, setCursor] = useState(null)
@@ -71,12 +81,11 @@ export function useLayoutEditor() {
     const piece = libraryById[pieceId]
     if (!piece || !pieceShape(piece)) return null
     if (trackSystem && piece.system !== trackSystem) return null
-    if (pieces.length === 0) {
-      return { piece, placement: { ...snapPoint(cursor), rotation: 0, flip: false } }
-    }
-    const placement = snapPlacement(piece, pieces, libraryById, cursor)
-    return placement ? { piece, placement } : null
-  }, [tool, cursor, pieceId, pieces, libraryById, trackSystem])
+    // Join to a nearby open end, unless placing without connecting. Anywhere else the piece goes where it is dropped
+    const joined = freePlace || pieces.length === 0 ? null : snapPlacement(piece, pieces, libraryById, cursor)
+    const placement = joined ?? { ...snapPoint(cursor), rotation: 0, flip: false }
+    return { piece, placement }
+  }, [tool, cursor, pieceId, pieces, libraryById, trackSystem, freePlace])
 
   const refreshLayouts = useCallback(async () => {
     try {
@@ -324,6 +333,83 @@ export function useLayoutEditor() {
   // DCC turnouts: their outputs are read from the Z21 every two seconds while operating
   const { turnoutStates, throwPlaced } = useTurnoutControl(pieces, tool === 'operate', setError)
 
+  // Flex track bends through two points. Making it curved puts them a third and two thirds along the track
+  const makeCurved = useCallback(
+    (id) => {
+      setPieces((prev) =>
+        prev.map((piece) => {
+          if (piece.id !== id) return piece
+          const length = piece.length ?? libraryById[piece.piece_id]?.length ?? 0
+          return { ...piece, bend: [{ x: length / 3, y: 0 }, { x: (2 * length) / 3, y: 0 }] }
+        })
+      )
+    },
+    [libraryById]
+  )
+
+  const straighten = useCallback((id) => {
+    setPieces((prev) =>
+      prev.map((piece) => {
+        if (piece.id !== id) return piece
+        const { bend: _removed, ...rest } = piece
+        return rest
+      })
+    )
+  }, [])
+
+  // Drag an open end of a placed piece. It snaps to a nearby open end of another piece, if there is one
+  const dragPlacedEnd = useCallback(
+    (id, index, cursor) => {
+      setPieces((prev) => {
+        const placed = prev.find((piece) => piece.id === id)
+        if (!placed) return prev
+        const base = libraryById[placed.piece_id]
+        const shape = pieceShape(placedPiece(placed, libraryById))
+        if (!base || !shape) return prev
+        const target = nearestOpenEnd(openEnds(prev.filter((piece) => piece.id !== id), libraryById), cursor)
+        const point = target ? { x: target.x, y: target.y } : cursor
+        const update = placeDraggedEnd(placed, base, shape, index, point, target)
+        return prev.map((piece) => (piece.id === id ? { ...piece, ...update } : piece))
+      })
+    },
+    [libraryById]
+  )
+
+  // Cut a flex track to a new length, in mm. Its ends move, so pieces joined to it may need dragging
+  const setPlacedLength = useCallback((id, length) => {
+    setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, length } : piece)))
+  }, [])
+
+  // Smooth a bent flex track: the bend points that make the curve fairest, keeping both ends' angles and length
+  const smoothCurve = useCallback(
+    (id) => {
+      setPieces((prev) =>
+        prev.map((piece) => {
+          if (piece.id !== id || !Array.isArray(piece.bend)) return piece
+          const shape = pieceShape(placedPiece(piece, libraryById))
+          const length = piece.length ?? libraryById[piece.piece_id]?.length
+          if (!shape || !length) return piece
+          const bend = smoothBend(shape, length).map((point) => ({
+            x: Math.round(point.x * 100) / 100,
+            y: Math.round(point.y * 100) / 100,
+          }))
+          return { ...piece, bend }
+        })
+      )
+    },
+    [libraryById]
+  )
+
+  // Move one bend point. The point is in the piece's own frame, in mm
+  const moveBendPoint = useCallback((id, index, point) => {
+    setPieces((prev) =>
+      prev.map((piece) => {
+        if (piece.id !== id || !Array.isArray(piece.bend)) return piece
+        return { ...piece, bend: piece.bend.map((existing, i) => (i === index ? point : existing)) }
+      })
+    )
+  }, [])
+
   // Set or clear a placed turnout's DCC address and straight output. Save keeps the change
   const setDcc = useCallback((id, fields) => {
     setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, ...fields } : piece)))
@@ -364,6 +450,14 @@ export function useLayoutEditor() {
     turnoutStates,
     throwPlaced,
     setDcc,
+    makeCurved,
+    straighten,
+    moveBendPoint,
+    dragPlacedEnd,
+    setPlacedLength,
+    smoothCurve,
+    freePlace,
+    setFreePlace,
     switchLayout,
     createLayout,
     importAnyRail,

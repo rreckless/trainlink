@@ -79,6 +79,25 @@ def _valid_dcc(placed: dict, piece: dict) -> bool:
     return isinstance(straight, int) and not isinstance(straight, bool) and straight in (0, 1)
 
 
+def _valid_bend(placed: dict, piece: dict) -> bool:
+    """Two bend points (x and y in mm, in the piece's own frame), which only flex track may have"""
+    if "bend" not in placed:
+        return True
+    if piece["type"] != "flex":
+        return False
+    bend = placed["bend"]
+    if not isinstance(bend, list) or len(bend) != 2:
+        return False
+    for point in bend:
+        if not isinstance(point, dict):
+            return False
+        for key in ("x", "y"):
+            value = point.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or abs(value) > 10_000:
+                return False
+    return True
+
+
 def _check_track_pieces(elements: dict):
     """Placed library pieces must exist, share one track system, and match elements.track_system"""
     pieces = elements.get("track_pieces", [])
@@ -104,6 +123,11 @@ def _check_track_pieces(elements: dict):
             raise HTTPException(
                 status_code=400,
                 detail="A placed length, radius, or angle must be a positive number that suits the piece",
+            )
+        if not _valid_bend(placed, library[placed["piece_id"]]):
+            raise HTTPException(
+                status_code=400,
+                detail="Bend points need two x and y values in mm, and only flex track can have them",
             )
         if not _valid_dcc(placed, library[placed["piece_id"]]):
             raise HTTPException(

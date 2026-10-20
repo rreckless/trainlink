@@ -20,7 +20,7 @@ function blockedReason(piece, trackSystem) {
   return null
 }
 
-export default function TrackPicker({ library, trackSystem, pieceId, onPick }) {
+export default function TrackPicker({ library, trackSystem, pieceId, onPick, freePlace, onToggleFree }) {
   const [query, setQuery] = useState('')
 
   const groups = useMemo(() => {
@@ -47,6 +47,13 @@ export default function TrackPicker({ library, trackSystem, pieceId, onPick }) {
           ? 'Loading the track library...'
           : `${library[0].manufacturer} ${library[0].gauge} gauge. Dimensions are unverified until you check them against the catalogue.`}
       </p>
+
+      {onToggleFree && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={freePlace} onChange={(event) => onToggleFree(event.target.checked)} />
+          Place without connecting
+        </label>
+      )}
 
       <input
         value={query}

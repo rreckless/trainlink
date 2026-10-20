@@ -9,7 +9,7 @@ import TrackPicker from './layout/TrackPicker'
 const HINTS = {
   select: 'Click to select. Drag to move. Delete removes the selection.',
   track: 'Click to start a track, click again to add a segment. Escape stops.',
-  piece: 'Pick a piece, then move the cursor near an open track end (orange). Click to place.',
+  piece: 'Pick a piece, then click to place it. Near an open end (orange) it joins, unless "Place without connecting" is ticked.',
   operate: 'Click a turnout with a DCC address to switch it. Orange means diverging.',
 }
 
@@ -86,6 +86,8 @@ export default function LayoutEditor() {
               operating={editor.tool === 'operate'}
               turnoutStates={editor.turnoutStates}
               onThrow={editor.throwPlaced}
+              onBendPoint={editor.moveBendPoint}
+              onEndDrag={editor.dragPlacedEnd}
               onCanvasClick={editor.handleCanvasClick}
               onCursor={editor.setCursor}
               onSelect={editor.setSelectedKey}
@@ -101,6 +103,8 @@ export default function LayoutEditor() {
                 trackSystem={editor.trackSystem}
                 pieceId={editor.pieceId}
                 onPick={editor.choosePiece}
+                freePlace={editor.freePlace}
+                onToggleFree={editor.setFreePlace}
               />
             ) : (
               <>
@@ -113,6 +117,10 @@ export default function LayoutEditor() {
                   busy={editor.busy}
                   onRename={editor.renameSelected}
                   onSetDcc={(fields) => editor.setDcc(editor.selectedPlaced.id, fields)}
+                  onMakeCurved={() => editor.makeCurved(editor.selectedPlaced.id)}
+                  onStraighten={() => editor.straighten(editor.selectedPlaced.id)}
+                  onSetLength={(length) => editor.setPlacedLength(editor.selectedPlaced.id, length)}
+                  onSmooth={() => editor.smoothCurve(editor.selectedPlaced.id)}
                   onDelete={editor.deleteSelected}
                 />
               </>
