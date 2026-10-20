@@ -267,3 +267,26 @@ def test_two_turnouts_cannot_share_an_address(client, layout_id):
     }
     response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
     assert response.status_code == 400
+
+
+def test_flex_track_takes_bend_points(client, layout_id):
+    bend = [{"x": 30, "y": 15}, {"x": 60, "y": -15}]
+    elements = {"track_system": CODE_55, "track_pieces": [_placed("peco-n-sl-300f", length=100, bend=bend)]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 200
+    assert response.json()["elements"]["track_pieces"][0]["bend"] == bend
+
+
+@pytest.mark.parametrize(
+    "piece_id, bend",
+    [
+        ("peco-n-sl-300f", [{"x": 1, "y": 1}]),
+        ("peco-n-sl-300f", [{"x": 1, "y": 1}, {"x": "2", "y": 1}]),
+        ("peco-n-sl-300f", [{"x": 1, "y": 1}, {"x": 2, "y": 20000}]),
+        ("peco-n-sl-u395f", [{"x": 1, "y": 1}, {"x": 2, "y": 2}]),
+    ],
+)
+def test_bend_points_must_suit_the_piece(client, layout_id, piece_id, bend):
+    elements = {"track_system": CODE_55, "track_pieces": [_placed(piece_id, bend=bend)]}
+    response = client.patch(f"/api/layouts/{layout_id}", json={"elements": elements})
+    assert response.status_code == 400

@@ -51,10 +51,116 @@ function arcPoints(radius, sweep, side) {
   return points
 }
 
+// Flex track bent through two points, as AnyRail's flexible track is. The track runs from the origin to
+// (length, 0) and passes through both points. Points are in the piece's own frame, in mm
+const BEND_STEPS = 16
+
+// Point on a cubic Hermite segment from p0 to p1, with end tangents m0 and m1, at t from 0 to 1
+function hermite(p0, m0, p1, m1, t) {
+  const t2 = t * t
+  const t3 = t2 * t
+  const h00 = 2 * t3 - 3 * t2 + 1
+  const h10 = t3 - 2 * t2 + t
+  const h01 = -2 * t3 + 3 * t2
+  const h11 = t3 - t2
+  return {
+    x: h00 * p0.x + h10 * m0.x + h01 * p1.x + h11 * m1.x,
+    y: h00 * p0.y + h10 * m0.y + h01 * p1.y + h11 * m1.y,
+  }
+}
+
+function bentShape(length, bend) {
+  const points = [{ x: 0, y: 0 }, { x: bend[0].x, y: bend[0].y }, { x: bend[1].x, y: bend[1].y }, { x: length, y: 0 }]
+  // Catmull-Rom tangents through the points. The ends use the direction of their first and last segment
+  const tangents = [
+    { x: points[1].x - points[0].x, y: points[1].y - points[0].y },
+    { x: (points[2].x - points[0].x) / 2, y: (points[2].y - points[0].y) / 2 },
+    { x: (points[3].x - points[1].x) / 2, y: (points[3].y - points[1].y) / 2 },
+    { x: points[3].x - points[2].x, y: points[3].y - points[2].y },
+  ]
+  const path = [points[0]]
+  for (let i = 0; i < 3; i += 1) {
+    for (let step = 1; step <= BEND_STEPS; step += 1) {
+      path.push(hermite(points[i], tangents[i], points[i + 1], tangents[i + 1], step / BEND_STEPS))
+    }
+  }
+  // The ends head the way the drawn track leaves them, so a joined piece lines up with the curve
+  const leaving = tangents[3]
+  const entering = tangents[0]
+  return {
+    endpoints: [
+      { x: 0, y: 0, heading: normalizeDegrees(deg(Math.atan2(entering.y, entering.x)) + 180) },
+      { x: length, y: 0, heading: normalizeDegrees(deg(Math.atan2(leaving.y, leaving.x))) },
+    ],
+    paths: [path],
+  }
+}
+
+// Sum of turning squared over length along a sampled path. Lower is a fairer, more even curve
+export function bendingEnergy(path) {
+  let energy = 0
+  for (let i = 1; i < path.length - 1; i += 1) {
+    const a = path[i - 1]
+    const b = path[i]
+    const c = path[i + 1]
+    const v1 = { x: b.x - a.x, y: b.y - a.y }
+    const v2 = { x: c.x - b.x, y: c.y - b.y }
+    const l1 = Math.hypot(v1.x, v1.y)
+    const l2 = Math.hypot(v2.x, v2.y)
+    if (l1 === 0 || l2 === 0) continue
+    let turn = Math.atan2(v1.x * v2.y - v1.y * v2.x, v1.x * v2.x + v1.y * v2.y)
+    energy += (turn * turn) / ((l1 + l2) / 2)
+  }
+  return energy
+}
+
+// The two bend points that make the flex track fairest, keeping both ends' angles and the piece length.
+// Each bend point stays on its end's line, so only how far along that line it sits changes
+export function smoothBend(shape, length) {
+  const startAngle = rad(normalizeDegrees(shape.endpoints[0].heading - 180))
+  const endAngle = rad(shape.endpoints[1].heading)
+  const build = (r1, r2) => [
+    { x: r1 * Math.cos(startAngle), y: r1 * Math.sin(startAngle) },
+    { x: length - r2 * Math.cos(endAngle), y: -r2 * Math.sin(endAngle) },
+  ]
+  const cost = (r1, r2) => bendingEnergy(bentShape(length, build(r1, r2)).paths[0])
+
+  // Coarse search over how far each bend point sits along its end's line, then refine around the best
+  let best = { r1: length / 3, r2: length / 3, value: Infinity }
+  const steps = 24
+  for (let i = 1; i <= steps; i += 1) {
+    for (let j = 1; j <= steps; j += 1) {
+      const r1 = (i / steps) * length
+      const r2 = (j / steps) * length
+      const value = cost(r1, r2)
+      if (value < best.value) best = { r1, r2, value }
+    }
+  }
+  let spread = length / steps
+  for (let round = 0; round < 6; round += 1) {
+    const centre = best
+    for (let i = -4; i <= 4; i += 1) {
+      for (let j = -4; j <= 4; j += 1) {
+        const r1 = Math.max(0.01 * length, centre.r1 + (i * spread) / 4)
+        const r2 = Math.max(0.01 * length, centre.r2 + (j * spread) / 4)
+        const value = cost(r1, r2)
+        if (value < best.value) best = { r1, r2, value }
+      }
+    }
+    spread /= 4
+  }
+  return build(best.r1, best.r2)
+}
+
 // Geometry for a library piece, or null if this release can't place it.
 // Returns { endpoints: [{x, y, heading}], paths: [[{x, y}, ...], ...] }
 export function pieceShape(piece) {
   if (!isPlaceable(piece)) return null
+
+  // Flex track with bend points is drawn through them
+  if (piece.type === 'flex' && Array.isArray(piece.bend) && piece.bend.length === 2) {
+    return bentShape(piece.length, piece.bend)
+  }
 
   // Flex track is placed as a straight of its length
   if (piece.type === 'straight' || piece.type === 'flex') {
@@ -226,6 +332,12 @@ export function toWorld(point, placement) {
   return { x: rotated.x + placement.x, y: rotated.y + placement.y }
 }
 
+// Point in a placed piece's own frame for a point on the layout. The inverse of toWorld
+export function toLocal(point, placement) {
+  const offset = rotatePoint({ x: point.x - placement.x, y: point.y - placement.y }, -placement.rotation)
+  return placement.flip ? { x: offset.x, y: -offset.y } : offset
+}
+
 export function worldEndpoints(shape, placement) {
   return shape.endpoints.map((endpoint) => ({
     x: toWorld(endpoint, placement).x,
@@ -266,6 +378,52 @@ export function turnoutTarget(placed, state) {
   return state === straight ? divergingOutput(placed) : straight
 }
 
+// Shortest flex track that can be cut to
+export const MIN_FLEX_MM = 10
+
+// The open end closest to a point, if it is within the snap distance
+export function nearestOpenEnd(ends, point) {
+  let nearest = null
+  let nearestDistance = SNAP_DISTANCE
+  for (const end of ends) {
+    const d = distance(point, end)
+    if (d <= nearestDistance) {
+      nearest = end
+      nearestDistance = d
+    }
+  }
+  return nearest
+}
+
+// The placement for a piece whose open end `index` is dragged to `point`. A straight flex track stretches from
+// its other end, so its length follows the drag. Any other piece moves so the end lands on `target` with its heading,
+// or moves with the cursor when there is no target. `base` is the library piece
+export function placeDraggedEnd(placed, base, shape, index, point, target) {
+  const ends = worldEndpoints(shape, placed)
+  if (base.type === 'flex' && !Array.isArray(placed.bend)) {
+    const far = ends[1 - index]
+    const from = index === 0 ? point : far
+    const to = index === 0 ? far : point
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.min(base.length, Math.max(MIN_FLEX_MM, Math.hypot(dx, dy)))
+    return {
+      x: from.x,
+      y: from.y,
+      rotation: normalizeDegrees(deg(Math.atan2(dy, dx))),
+      length: Math.round(length * 10) / 10,
+    }
+  }
+  if (target) return alignToEnd(shape, index, target, placed.flip)
+  const current = ends[index]
+  return {
+    x: placed.x + (point.x - current.x),
+    y: placed.y + (point.y - current.y),
+    rotation: placed.rotation,
+    flip: placed.flip,
+  }
+}
+
 // Per-placement dimensions that override the library piece (custom lengths and radii)
 const PLACEMENT_DIMENSIONS = ['length', 'radius', 'angle']
 
@@ -277,6 +435,7 @@ export function placedPiece(placed, library) {
   for (const key of PLACEMENT_DIMENSIONS) {
     if (placed[key] !== undefined) overrides[key] = placed[key]
   }
+  if (placed.bend !== undefined) overrides.bend = placed.bend
   return { ...base, ...overrides }
 }
 

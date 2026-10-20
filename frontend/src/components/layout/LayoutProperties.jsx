@@ -3,6 +3,36 @@ import { ENTITY_KINDS } from '../../layout/model'
 
 const DCC_MAX = 2048
 
+// Length of a flex track. Type freely: the value is applied once it is between 10 mm and the full length
+function LengthField({ placed, maxLength, busy, onChange }) {
+  const current = String(placed.length ?? maxLength)
+  const [draft, setDraft] = useState(current)
+  const value = Number(draft)
+  const valid = draft.trim() !== '' && Number.isFinite(value) && value >= 10 && value <= maxLength
+
+  const change = (text) => {
+    setDraft(text)
+    const number = Number(text)
+    if (text.trim() !== '' && Number.isFinite(number) && number >= 10 && number <= maxLength) onChange(number)
+  }
+
+  return (
+    <label className="block">
+      <span className="text-slate-300">Length (mm, 10 to {maxLength})</span>
+      <input
+        type="number"
+        step="0.1"
+        value={draft}
+        onChange={(event) => change(event.target.value)}
+        onBlur={() => !valid && setDraft(current)}
+        disabled={busy}
+        className="mt-1 w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+      />
+      <span className="text-xs text-slate-500">Drag an open end to stretch the track and join it to another piece</span>
+    </label>
+  )
+}
+
 // DCC address and straight output of a placed turnout. Each change is saved to the layout on Save
 function DccFields({ placed, busy, onChange }) {
   const [address, setAddress] = useState(placed.dcc_address ?? '')
@@ -53,7 +83,7 @@ const KIND_NOTES = {
   feedback: 'Set by the Z21 once the feedback is linked to hardware.',
 }
 
-export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onDelete }) {
+export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onMakeCurved, onStraighten, onSetLength, onSmooth, onDelete }) {
   if (placed && piece) {
     return (
       <div className="space-y-3 text-sm">
@@ -67,6 +97,31 @@ export default function LayoutProperties({ item, track, placed, piece, busy, onR
         </p>
         {!piece.verified && (
           <p className="text-xs text-amber-300">Dimensions not yet checked against the catalogue</p>
+        )}
+        {piece.type === 'flex' && onSetLength && (
+          <LengthField key={placed.id} placed={placed} maxLength={piece.length} busy={busy} onChange={onSetLength} />
+        )}
+        {piece.type === 'flex' && onMakeCurved && (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-400">
+              Drag the two blue points on the track to bend it. Track with bend points is curved.
+            </p>
+            {Array.isArray(placed.bend) ? (
+              <div className="space-y-2">
+                <button onClick={onSmooth} disabled={busy} className="w-full px-3 py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50">
+                  Smooth curve
+                </button>
+                <p className="text-xs text-slate-500">Finds the fairest curve. The angles where it joins other track stay the same.</p>
+                <button onClick={onStraighten} disabled={busy} className="w-full px-3 py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50">
+                  Straighten track
+                </button>
+              </div>
+            ) : (
+              <button onClick={onMakeCurved} disabled={busy} className="w-full px-3 py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50">
+                Make curved
+              </button>
+            )}
+          </div>
         )}
         {piece.type === 'turnout' && onSetDcc && (
           <DccFields key={placed.id} placed={placed} busy={busy} onChange={onSetDcc} />

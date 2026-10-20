@@ -7,6 +7,8 @@ import {
   openEnds,
   pieceShape,
   placedPiece,
+  toLocal,
+  toWorld,
   worldPaths,
 } from '../../layout/track'
 
@@ -53,6 +55,8 @@ export default function LayoutCanvas({
   operating,
   turnoutStates,
   onThrow,
+  onBendPoint,
+  onEndDrag,
   onCanvasClick,
   onCursor,
   onSelect,
@@ -163,6 +167,18 @@ export default function LayoutCanvas({
 
   const ghostPaths = ghost ? worldPaths(pieceShape(ghost.piece), ghost.placement) : []
 
+  // The selected piece. Its open ends can be dragged, and a bent piece's two bend points too
+  const selectedPiece = selectedKey?.startsWith('piece:')
+    ? pieces.find((piece) => `piece:${piece.id}` === selectedKey) ?? null
+    : null
+  const bendPiece = selectedPiece && Array.isArray(selectedPiece.bend) ? selectedPiece : null
+  const selectedEnds = selectedPiece && editing ? openEnds(pieces, libraryById).filter((end) => end.pieceId === selectedPiece.id) : []
+  // Where a dragged handle is, in the piece's own frame, rounded to half a millimetre
+  const localPoint = (event, placed) => {
+    const local = toLocal({ x: event.target.x(), y: event.target.y() }, placed)
+    return { x: Math.round(local.x * 2) / 2, y: Math.round(local.y * 2) / 2 }
+  }
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-2 text-sm">
@@ -232,6 +248,39 @@ export default function LayoutCanvas({
             />
           )
         })}
+
+        {selectedEnds.map((end) => (
+          <Circle
+            key={`end-${end.index}`}
+            x={end.x}
+            y={end.y}
+            radius={6}
+            fill="#f97316"
+            stroke="#0f172a"
+            strokeWidth={1}
+            draggable
+            onDragMove={(event) => onEndDrag(selectedPiece.id, end.index, { x: event.target.x(), y: event.target.y() })}
+          />
+        ))}
+
+        {bendPiece &&
+          bendPiece.bend.map((point, index) => {
+            const world = toWorld(point, bendPiece)
+            return (
+              <Circle
+                key={`bend-${index}`}
+                x={world.x}
+                y={world.y}
+                radius={6}
+                fill="#38bdf8"
+                stroke="#0f172a"
+                strokeWidth={1}
+                draggable={editing}
+                listening={editing}
+                onDragMove={(event) => onBendPoint(bendPiece.id, index, localPoint(event, bendPiece))}
+              />
+            )
+          })}
 
         {ghostPaths.map((path, index) => (
           <Line

@@ -12,6 +12,12 @@ import {
   divergingOutput,
   turnoutTarget,
   toWorld,
+  toLocal,
+  placeDraggedEnd,
+  nearestOpenEnd,
+  MIN_FLEX_MM,
+  smoothBend,
+  bendingEnergy,
 } from './track.js'
 
 const SETRACK = 'Setrack (Code 80)'
@@ -365,4 +371,101 @@ test('the straight output can be set per turnout', () => {
   assert.equal(divergingOutput(placed), 0)
   assert.equal(turnoutTarget(placed, null), 1)
   assert.equal(turnoutTarget(placed, 1), 0)
+})
+
+const flex = { id: 'f', system: STREAMLINE, type: 'flex', length: 100, placeable: true }
+
+test('bent flex track passes through its two bend points and keeps its ends', () => {
+  const shape = pieceShape({ ...flex, bend: [{ x: 33, y: 20 }, { x: 66, y: -20 }] })
+  const path = shape.paths[0]
+  const near = (point) => path.some((p) => Math.hypot(p.x - point.x, p.y - point.y) < 0.5)
+  assert.ok(near({ x: 33, y: 20 }))
+  assert.ok(near({ x: 66, y: -20 }))
+  assert.ok(Math.abs(path[0].x) < 1e-9 && Math.abs(path[0].y) < 1e-9)
+  const last = path[path.length - 1]
+  assert.ok(Math.abs(last.x - 100) < 1e-9 && Math.abs(last.y) < 1e-9)
+})
+
+test('flex track without bend points is still a straight of its length', () => {
+  const shape = pieceShape(flex)
+  assert.equal(shape.paths[0].length, 2)
+  assert.equal(shape.endpoints[1].heading, 0)
+})
+
+test('a bent flex track ends heading the way the track leaves it', () => {
+  const shape = pieceShape({ ...flex, bend: [{ x: 33, y: 0 }, { x: 66, y: 20 }] })
+  // The last bend point is above the line and the end is below it, so the track leaves at about -30 degrees
+  assert.ok(Math.abs(shape.endpoints[1].heading - 330) < 1)
+})
+
+test('toLocal reverses toWorld, including a mirrored piece', () => {
+  for (const placement of [
+    { x: 10, y: 20, rotation: 37, flip: false },
+    { x: -5, y: 40, rotation: 250, flip: true },
+  ]) {
+    const local = { x: 12.5, y: -7.25 }
+    const back = toLocal(toWorld(local, placement), placement)
+    assert.ok(Math.abs(back.x - local.x) < 1e-9 && Math.abs(back.y - local.y) < 1e-9)
+  }
+})
+
+const flexBase = { id: 'f', system: STREAMLINE, type: 'flex', length: 914, placeable: true }
+
+test('dragging the end of a straight flex track stretches it from its other end', () => {
+  const placed = { id: 'p', piece_id: 'peco-n-sl-302f', x: 0, y: 0, rotation: 0, flip: false, length: 300 }
+  const shape = pieceShape(placedPiece(placed, { 'peco-n-sl-302f': flexBase }))
+  const moved = placeDraggedEnd(placed, flexBase, shape, 1, { x: 0, y: 150 }, null)
+  assert.equal(moved.x, 0)
+  assert.equal(moved.y, 0)
+  assert.ok(Math.abs(moved.length - 150) < 0.1)
+  assert.ok(Math.abs(moved.rotation - 90) < 1e-6)
+})
+
+test('a flex track cannot be cut below its minimum or stretched past its catalogue length', () => {
+  const placed = { id: 'p', piece_id: 'peco-n-sl-302f', x: 0, y: 0, rotation: 0, flip: false, length: 300 }
+  const shape = pieceShape(placedPiece(placed, { 'peco-n-sl-302f': flexBase }))
+  assert.equal(placeDraggedEnd(placed, flexBase, shape, 1, { x: 2, y: 0 }, null).length, MIN_FLEX_MM)
+  assert.equal(placeDraggedEnd(placed, flexBase, shape, 1, { x: 2000, y: 0 }, null).length, 914)
+})
+
+test('dragging a rigid piece end onto an open end joins it there', () => {
+  const placed = { id: 't', piece_id: 'peco-n-sl-u395f', x: 0, y: 0, rotation: 0, flip: false }
+  const turnout = { ...flexBase, type: 'turnout', hand: 'right', length: 137, diverge_geometry: { toe_straight: 16.4, radius: 540, length: 137 } }
+  const shape = pieceShape(placedPiece(placed, { 'peco-n-sl-u395f': turnout }))
+  const target = { x: 500, y: 200, heading: 90 }
+  const moved = placeDraggedEnd(placed, turnout, shape, 1, { x: 480, y: 190 }, target)
+  const end = worldEndpoints(shape, { ...placed, ...moved })[1]
+  assert.ok(Math.hypot(end.x - 500, end.y - 200) < 1e-6)
+})
+
+test('dragging a rigid piece without a target moves it with the cursor', () => {
+  const placed = { id: 't', piece_id: 'peco-n-sl-u395f', x: 0, y: 0, rotation: 0, flip: false }
+  const turnout = { ...flexBase, type: 'turnout', hand: 'right', length: 137, diverge_geometry: { toe_straight: 16.4, radius: 540, length: 137 } }
+  const shape = pieceShape(placedPiece(placed, { 'peco-n-sl-u395f': turnout }))
+  const moved = placeDraggedEnd(placed, turnout, shape, 0, { x: 10, y: 20 }, null)
+  assert.deepEqual([moved.x, moved.y, moved.rotation], [10, 20, 0])
+})
+
+test('nearestOpenEnd picks the closest end within the snap distance', () => {
+  const ends = [{ x: 0, y: 0 }, { x: 100, y: 0 }]
+  assert.equal(nearestOpenEnd(ends, { x: 95, y: 3 }).x, 100)
+  assert.equal(nearestOpenEnd(ends, { x: 50, y: 500 }), null)
+})
+
+test('smoothing keeps both connecting end angles and the length, and does not make the curve less fair', () => {
+  const bent = { ...flexBase, length: 300, bend: [{ x: 60, y: 90 }, { x: 200, y: -40 }] }
+  const before = pieceShape(bent)
+  const smoothed = smoothBend(before, 300)
+  const after = pieceShape({ ...bent, bend: smoothed })
+  assert.ok(Math.abs(after.endpoints[0].heading - before.endpoints[0].heading) < 0.5)
+  assert.ok(Math.abs(after.endpoints[1].heading - before.endpoints[1].heading) < 0.5)
+  const last = after.paths[0][after.paths[0].length - 1]
+  assert.ok(Math.abs(last.x - 300) < 1e-6 && Math.abs(last.y) < 1e-6)
+  assert.ok(bendingEnergy(after.paths[0]) <= bendingEnergy(before.paths[0]) + 1e-9)
+})
+
+test('a bent flex track leaves its start at the angle of the drawn curve', () => {
+  const shape = pieceShape({ ...flexBase, bend: [{ x: 30, y: 30 }, { x: 60, y: 0 }] })
+  // The first bend point is at 45 degrees, so the track leaves the origin heading 45 degrees and joins as 225
+  assert.ok(Math.abs(shape.endpoints[0].heading - 225) < 1e-6)
 })
