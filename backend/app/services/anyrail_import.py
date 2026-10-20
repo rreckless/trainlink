@@ -24,7 +24,6 @@ import xml.etree.ElementTree as ET
 from .anyrail_geometry import (
     _align,
     _angle,
-    _bezier_arc,
     _fit_four,
     _line_difference,
     _normalize,
@@ -32,6 +31,9 @@ from .anyrail_geometry import (
     _three_way_ends,
     _turnout_ends,
     _world,
+    arc_bend_samples,
+    bezier_bend_samples,
+    fit_handles,
 )
 from .track_library import load_library
 
@@ -41,10 +43,9 @@ SLIP_PIECE = "peco-n-sl-e390f"
 THREE_WAY_PIECE = "peco-n-sl-e399f"
 SLIP_KEYS = ("SLIP_A", "SLIP_B", "SLIP_C", "SLIP_D")
 STRAIGHT_PIECE = "peco-n-sl-300f"
-CURVE_PIECE = "custom-n-custom-curve"
+MIN_CURVE_MM = 1.0
 GAP_REPORT_MM = 1.0
 MARGIN_MM = 50.0
-MAX_RADIUS_MM = 10_000
 
 
 def _parse(xml_text):
@@ -309,8 +310,11 @@ def _three_way_groups(root, links):
 
 
 def _place_three_ways(groups, raw, scale, library, links):
-    """Records for the three-way pieces, the gaps at their ends, and the turnouts they replace"""
-    records, gaps, replaced = [], [], set()
+    """
+    Records for the three-way pieces, the gaps at their ends, the turnouts they replace, and the exact
+    point of each outer leg, keyed by the anchor its track joins
+    """
+    records, gaps, replaced, leg_points = [], [], set(), {}
     local = _three_way_ends(library[THREE_WAY_PIECE])
     for idents, outer in groups:
         world = [(raw[links[key]][0] * scale, raw[links[key]][1] * scale) for key in outer]
@@ -320,15 +324,19 @@ def _place_three_ways(groups, raw, scale, library, links):
         replaced |= set(idents)
         for index, key in enumerate(outer):
             end = _world(local[local_of_world[index]], origin, rotation, flip)
+            leg_points[links[key]] = tuple(end)
             gap = math.dist(end, world[index])
             if gap > GAP_REPORT_MM:
                 gaps.append({"ident": ident, "joint": f"{key[0]} {key[1]}", "gap_mm": round(gap, 2)})
-    return records, gaps, replaced
+    return records, gaps, replaced, leg_points
 
 
 def _place_slips(root, raw, scale, library, links):
-    """Slip records, the gaps at each slip end, and the slips that could not be placed"""
-    records, gaps, unplaced, placed = [], [], [], set()
+    """
+    Slip records, the gaps at each slip end, the slips that could not be placed, and the exact point of
+    each slip end, keyed by the anchor its track joins
+    """
+    records, gaps, unplaced, placed, leg_points = [], [], [], set(), {}
     geometry = library[SLIP_PIECE]["slip_geometry"]
     local = [tuple(geometry[name]) for name in ("track_a_top", "track_b_top", "track_a_bottom", "track_b_bottom")]
     for slip in root.iter("layoutSlip"):
@@ -344,14 +352,19 @@ def _place_slips(root, raw, scale, library, links):
         placed.add(ident)
         for index, key in enumerate(keys):
             end = _world(local[local_of_world[index]], origin, rotation, flip)
+            leg_points[anchors[index]] = tuple(end)
             gap = math.dist(end, world[index])
             if gap > GAP_REPORT_MM:
                 gaps.append({"ident": ident, "joint": f"{ident} {key[1]}", "gap_mm": round(gap, 2)})
-    return records, gaps, unplaced, placed
+    return records, gaps, unplaced, placed, leg_points
 
 
-def _place_segments(root, raw, radii_px, scale, connectors, supported, lines):
-    """Records for the straights and curves, the ambiguous curves, and the unplaced segments"""
+def _place_segments(root, raw, radii_px, scale, connectors, supported, lines, joined_points):
+    """
+    Records for the straights and curves, the ambiguous curves, and the unplaced segments.
+    joined_points holds, in mm, the exact point of each track end that joins a turnout leg. Those ends use it,
+    so the track meets the turnout exactly rather than at its anchor, which can be a fraction of a mm away
+    """
     records, ambiguous, unplaced = [], [], []
     for segment in root.iter("tracksegment"):
         ident = segment.get("ident")
@@ -370,39 +383,45 @@ def _place_segments(root, raw, radii_px, scale, connectors, supported, lines):
             continue
 
         start_jmri, end_jmri = raw[keys[0]], raw[keys[1]]
-        origin = (start_jmri[0] * scale, start_jmri[1] * scale)
+        start = joined_points.get(keys[0]) or tuple(value * scale for value in start_jmri)
+        end = joined_points.get(keys[1]) or tuple(value * scale for value in end_jmri)
         if bezier:
             controls = sorted(segment.iter("controlpoint"), key=lambda point: int(point.get("index")))
             if len(controls) != 2:
                 unplaced.append({"ident": ident, "kind": "curve", "reason": "bezier without two control points"})
                 continue
-            fitted = _bezier_arc(start_jmri, _xy(controls[0], "x", "y"), _xy(controls[1], "x", "y"), end_jmri)
-            # A nearly straight Bezier fits an arc too large to place. Place it as a straight between its ends
-            if fitted is None or fitted[0] * scale > MAX_RADIUS_MM:
-                records.append(_record(ident, STRAIGHT_PIECE, origin, _angle(start_jmri, end_jmri), False,
-                                       length=round(math.dist(start_jmri, end_jmri) * scale, 4)))
+            control_points = [tuple(value * scale for value in _xy(point, "x", "y")) for point in controls]
+            samples, chord, angle, start_angle, end_angle = bezier_bend_samples(
+                start, control_points[0], control_points[1], end)
+            if chord < MIN_CURVE_MM:
+                unplaced.append({"ident": ident, "kind": "curve", "reason": "bezier shorter than 1 mm"})
                 continue
-            radius_px, angle, flip, start_heading = fitted
-            if angle >= 359:
-                unplaced.append({"ident": ident, "kind": "curve", "reason": "bezier too tight to fit an arc"})
-                continue
-            records.append(_record(ident, CURVE_PIECE, origin, start_heading, flip,
-                                   radius=round(radius_px * scale, 4), angle=round(angle, 4)))
+            records.append(_curve_as_flex(ident, start, math.degrees(angle), chord, samples, start_angle, end_angle))
         elif arc:
             if float(segment.get("angle")) != 90:
                 unplaced.append({"ident": ident, "kind": "curve", "reason": "only 90 degree curves are supported"})
                 continue
             flip, is_ambiguous = _choose_curve_flip(start_jmri, end_jmri, keys[0], keys[1], lines)
-            chord = _angle(start_jmri, end_jmri)
-            heading = chord + 45 if flip else chord - 45
-            records.append(_record(ident, CURVE_PIECE, origin, heading, flip,
-                                   radius=round(radii_px[ident] * scale, 4), angle=90))
+            samples, arc_chord, _, start_angle, end_angle = arc_bend_samples(
+                radii_px[ident] * scale, math.radians(90), flip)
+            # The ends may have moved onto turnout legs, a fraction of a mm from the arc's own chord. Fit the shape to them
+            chord = math.dist(start, end)
+            factor = chord / arc_chord
+            samples = [(x * factor, y * factor) for x, y in samples]
+            records.append(_curve_as_flex(ident, start, _angle(start, end), chord, samples, start_angle, end_angle))
             if is_ambiguous:
                 ambiguous.append(ident)
         else:
-            records.append(_record(ident, STRAIGHT_PIECE, origin, _angle(start_jmri, end_jmri), False,
-                                   length=round(math.dist(start_jmri, end_jmri) * scale, 4)))
+            records.append(_record(ident, STRAIGHT_PIECE, start, _angle(start, end), False,
+                                   length=round(math.dist(start, end), 4)))
     return records, ambiguous, unplaced
+
+
+def _curve_as_flex(ident, origin, rotation, chord, samples, start_angle, end_angle):
+    """A curve as flex track of its chord length, curved by two handles that follow it"""
+    handles = fit_handles(samples, chord, start_angle, end_angle)
+    return _record(ident, STRAIGHT_PIECE, origin, rotation, False, length=round(chord, 4),
+                   handles=[{"x": round(x, 4), "y": round(y, 4)} for x, y in handles])
 
 
 def import_jmri_layout(xml_text, inner_radius_mm):
@@ -436,8 +455,10 @@ def import_jmri_layout(xml_text, inner_radius_mm):
     turnout_records, ends, heading_out, mismatches, unplaced, unanchored, gaps, supported = _place_turnouts(
         root, raw, scale, library, links, group_members
     )
-    three_way_records, three_way_gaps, three_way_members = _place_three_ways(groups, raw, scale, library, links)
-    slip_records, slip_gaps, slip_unplaced, slips = _place_slips(root, raw, scale, library, links)
+    three_way_records, three_way_gaps, three_way_members, three_way_points = _place_three_ways(
+        groups, raw, scale, library, links
+    )
+    slip_records, slip_gaps, slip_unplaced, slips, slip_points = _place_slips(root, raw, scale, library, links)
     gaps += slip_gaps + three_way_gaps
     unplaced += slip_unplaced
     supported = supported | slips | three_way_members
@@ -445,8 +466,17 @@ def import_jmri_layout(xml_text, inner_radius_mm):
     for anchor, headings in _joint_lines(links, heading_out).items():
         lines.setdefault(anchor, []).extend(headings)
 
+    # Track ends that join a turnout, slip, or three-way leg take that leg's own point. The leg is where the
+    # piece actually is, and the anchor can be a fraction of a mm away
+    joined_points = {
+        anchor: tuple(ends[leg])
+        for leg, anchor in links.items()
+        if leg in ends and anchor[1] == "POS_POINT"
+    }
+    joined_points.update(slip_points)
+    joined_points.update(three_way_points)
     segment_records, ambiguous, segment_unplaced = _place_segments(
-        root, raw, radii_px, scale, connectors, supported, lines
+        root, raw, radii_px, scale, connectors, supported, lines, joined_points
     )
 
     unplaced += segment_unplaced

@@ -17,10 +17,12 @@ import {
   pieceShape,
   placedPiece,
   placeDraggedEnd,
-  smoothBend,
   snapPlacement,
+  draggedPiecePlacement,
+  rotatedPiecePlacement,
 } from '../layout/track'
 import { useTurnoutControl } from './useTurnoutControl'
+import { smoothHandles } from '../layout/curves'
 
 const KINDS = Object.keys(ENTITY_KINDS)
 
@@ -169,6 +171,58 @@ export function useLayoutEditor() {
     },
     [openLayout, refreshLayouts]
   )
+
+  // Give the open layout a new name
+  const renameLayout = useCallback(
+    async (name) => {
+      if (!layout) return
+      setBusy(true)
+      setError('')
+      setMessage('')
+      try {
+        const updated = await layoutApi.updateLayout(layout.id, { name })
+        await refreshLayouts()
+        setLayout((current) => (current && current.id === updated.id ? { ...current, name: updated.name } : current))
+        useStore.getState().setLayout({ ...layout, name: updated.name })
+        setMessage(`Renamed layout to "${updated.name}"`)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [layout, refreshLayouts]
+  )
+
+  // Delete the open layout. Afterwards the first remaining layout opens, or the editor is left empty
+  const deleteLayout = useCallback(async () => {
+    if (!layout) return
+    if (!window.confirm(`Delete layout "${layout.name}"? Its track and items are removed. This cannot be undone.`)) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await layoutApi.deleteLayout(layout.id)
+      const list = await refreshLayouts()
+      setMessage(`Deleted layout "${layout.name}"`)
+      if (list.length > 0) {
+        await openLayout(list[0].id)
+      } else {
+        setLayout(null)
+        setItems([])
+        setTracks([])
+        setPieces([])
+        setSaved({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
+        setSelectedKey(null)
+        setPendingStart(null)
+        useStore.getState().setLayout(null)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }, [layout, openLayout, refreshLayouts])
 
   const addTrack = useCallback((start, end) => {
     if (start.x === end.x && start.y === end.y) return
@@ -333,14 +387,14 @@ export function useLayoutEditor() {
   // DCC turnouts: their outputs are read from the Z21 every two seconds while operating
   const { turnoutStates, throwPlaced } = useTurnoutControl(pieces, tool === 'operate', setError)
 
-  // Flex track bends through two points. Making it curved puts them a third and two thirds along the track
+  // Flex track is curved by two handles. Making it curved puts them a third and two thirds along the track
   const makeCurved = useCallback(
     (id) => {
       setPieces((prev) =>
         prev.map((piece) => {
           if (piece.id !== id) return piece
           const length = piece.length ?? libraryById[piece.piece_id]?.length ?? 0
-          return { ...piece, bend: [{ x: length / 3, y: 0 }, { x: (2 * length) / 3, y: 0 }] }
+          return { ...piece, handles: [{ x: length / 3, y: 0 }, { x: (2 * length) / 3, y: 0 }] }
         })
       )
     },
@@ -351,11 +405,37 @@ export function useLayoutEditor() {
     setPieces((prev) =>
       prev.map((piece) => {
         if (piece.id !== id) return piece
-        const { bend: _removed, ...rest } = piece
+        const { handles: _removed, ...rest } = piece
         return rest
       })
     )
   }, [])
+
+  // Drag a whole placed piece by (dx, dy). It joins another piece's open end if one is near
+  const dragPiece = useCallback(
+    (id, dx, dy) => {
+      setPieces((prev) => {
+        const placed = prev.find((piece) => piece.id === id)
+        if (!placed) return prev
+        const update = draggedPiecePlacement(placed, libraryById, prev.filter((piece) => piece.id !== id), dx, dy)
+        return prev.map((piece) => (piece.id === id ? { ...piece, ...update } : piece))
+      })
+    },
+    [libraryById]
+  )
+
+  // Turn a placed piece about its centre, in degrees. It joins an open end it lands near
+  const rotatePiece = useCallback(
+    (id, degrees) => {
+      setPieces((prev) => {
+        const placed = prev.find((piece) => piece.id === id)
+        if (!placed) return prev
+        const update = rotatedPiecePlacement(placed, libraryById, prev.filter((piece) => piece.id !== id), degrees)
+        return prev.map((piece) => (piece.id === id ? { ...piece, ...update } : piece))
+      })
+    },
+    [libraryById]
+  )
 
   // Drag an open end of a placed piece. It snaps to a nearby open end of another piece, if there is one
   const dragPlacedEnd = useCallback(
@@ -380,32 +460,32 @@ export function useLayoutEditor() {
     setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, length } : piece)))
   }, [])
 
-  // Smooth a bent flex track: the bend points that make the curve fairest, keeping both ends' angles and length
+  // Smooth a curved flex track: the handles that make the curve fairest, keeping both ends' angles and length
   const smoothCurve = useCallback(
     (id) => {
       setPieces((prev) =>
         prev.map((piece) => {
-          if (piece.id !== id || !Array.isArray(piece.bend)) return piece
+          if (piece.id !== id || !Array.isArray(piece.handles)) return piece
           const shape = pieceShape(placedPiece(piece, libraryById))
           const length = piece.length ?? libraryById[piece.piece_id]?.length
           if (!shape || !length) return piece
-          const bend = smoothBend(shape, length).map((point) => ({
+          const handles = smoothHandles(shape, length).map((point) => ({
             x: Math.round(point.x * 100) / 100,
             y: Math.round(point.y * 100) / 100,
           }))
-          return { ...piece, bend }
+          return { ...piece, handles }
         })
       )
     },
     [libraryById]
   )
 
-  // Move one bend point. The point is in the piece's own frame, in mm
-  const moveBendPoint = useCallback((id, index, point) => {
+  // Move one handle. The handle is in the piece's own frame, in mm
+  const moveHandle = useCallback((id, index, point) => {
     setPieces((prev) =>
       prev.map((piece) => {
-        if (piece.id !== id || !Array.isArray(piece.bend)) return piece
-        return { ...piece, bend: piece.bend.map((existing, i) => (i === index ? point : existing)) }
+        if (piece.id !== id || !Array.isArray(piece.handles)) return piece
+        return { ...piece, handles: piece.handles.map((existing, i) => (i === index ? point : existing)) }
       })
     )
   }, [])
@@ -452,14 +532,18 @@ export function useLayoutEditor() {
     setDcc,
     makeCurved,
     straighten,
-    moveBendPoint,
+    moveHandle,
     dragPlacedEnd,
+    dragPiece,
+    rotatePiece,
     setPlacedLength,
     smoothCurve,
     freePlace,
     setFreePlace,
     switchLayout,
     createLayout,
+    renameLayout,
+    deleteLayout,
     importAnyRail,
     save,
   }

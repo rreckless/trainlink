@@ -9,6 +9,7 @@
 // is true, then rotated by rotation, then moved by (x, y).
 
 import { distance, distanceToSegment } from './model.js'
+import { curvedShape } from './curves.js'
 
 export const JOIN_TOLERANCE = 0.5
 export const SNAP_DISTANCE = 40
@@ -51,115 +52,14 @@ function arcPoints(radius, sweep, side) {
   return points
 }
 
-// Flex track bent through two points, as AnyRail's flexible track is. The track runs from the origin to
-// (length, 0) and passes through both points. Points are in the piece's own frame, in mm
-const BEND_STEPS = 16
-
-// Point on a cubic Hermite segment from p0 to p1, with end tangents m0 and m1, at t from 0 to 1
-function hermite(p0, m0, p1, m1, t) {
-  const t2 = t * t
-  const t3 = t2 * t
-  const h00 = 2 * t3 - 3 * t2 + 1
-  const h10 = t3 - 2 * t2 + t
-  const h01 = -2 * t3 + 3 * t2
-  const h11 = t3 - t2
-  return {
-    x: h00 * p0.x + h10 * m0.x + h01 * p1.x + h11 * m1.x,
-    y: h00 * p0.y + h10 * m0.y + h01 * p1.y + h11 * m1.y,
-  }
-}
-
-function bentShape(length, bend) {
-  const points = [{ x: 0, y: 0 }, { x: bend[0].x, y: bend[0].y }, { x: bend[1].x, y: bend[1].y }, { x: length, y: 0 }]
-  // Catmull-Rom tangents through the points. The ends use the direction of their first and last segment
-  const tangents = [
-    { x: points[1].x - points[0].x, y: points[1].y - points[0].y },
-    { x: (points[2].x - points[0].x) / 2, y: (points[2].y - points[0].y) / 2 },
-    { x: (points[3].x - points[1].x) / 2, y: (points[3].y - points[1].y) / 2 },
-    { x: points[3].x - points[2].x, y: points[3].y - points[2].y },
-  ]
-  const path = [points[0]]
-  for (let i = 0; i < 3; i += 1) {
-    for (let step = 1; step <= BEND_STEPS; step += 1) {
-      path.push(hermite(points[i], tangents[i], points[i + 1], tangents[i + 1], step / BEND_STEPS))
-    }
-  }
-  // The ends head the way the drawn track leaves them, so a joined piece lines up with the curve
-  const leaving = tangents[3]
-  const entering = tangents[0]
-  return {
-    endpoints: [
-      { x: 0, y: 0, heading: normalizeDegrees(deg(Math.atan2(entering.y, entering.x)) + 180) },
-      { x: length, y: 0, heading: normalizeDegrees(deg(Math.atan2(leaving.y, leaving.x))) },
-    ],
-    paths: [path],
-  }
-}
-
-// Sum of turning squared over length along a sampled path. Lower is a fairer, more even curve
-export function bendingEnergy(path) {
-  let energy = 0
-  for (let i = 1; i < path.length - 1; i += 1) {
-    const a = path[i - 1]
-    const b = path[i]
-    const c = path[i + 1]
-    const v1 = { x: b.x - a.x, y: b.y - a.y }
-    const v2 = { x: c.x - b.x, y: c.y - b.y }
-    const l1 = Math.hypot(v1.x, v1.y)
-    const l2 = Math.hypot(v2.x, v2.y)
-    if (l1 === 0 || l2 === 0) continue
-    let turn = Math.atan2(v1.x * v2.y - v1.y * v2.x, v1.x * v2.x + v1.y * v2.y)
-    energy += (turn * turn) / ((l1 + l2) / 2)
-  }
-  return energy
-}
-
-// The two bend points that make the flex track fairest, keeping both ends' angles and the piece length.
-// Each bend point stays on its end's line, so only how far along that line it sits changes
-export function smoothBend(shape, length) {
-  const startAngle = rad(normalizeDegrees(shape.endpoints[0].heading - 180))
-  const endAngle = rad(shape.endpoints[1].heading)
-  const build = (r1, r2) => [
-    { x: r1 * Math.cos(startAngle), y: r1 * Math.sin(startAngle) },
-    { x: length - r2 * Math.cos(endAngle), y: -r2 * Math.sin(endAngle) },
-  ]
-  const cost = (r1, r2) => bendingEnergy(bentShape(length, build(r1, r2)).paths[0])
-
-  // Coarse search over how far each bend point sits along its end's line, then refine around the best
-  let best = { r1: length / 3, r2: length / 3, value: Infinity }
-  const steps = 24
-  for (let i = 1; i <= steps; i += 1) {
-    for (let j = 1; j <= steps; j += 1) {
-      const r1 = (i / steps) * length
-      const r2 = (j / steps) * length
-      const value = cost(r1, r2)
-      if (value < best.value) best = { r1, r2, value }
-    }
-  }
-  let spread = length / steps
-  for (let round = 0; round < 6; round += 1) {
-    const centre = best
-    for (let i = -4; i <= 4; i += 1) {
-      for (let j = -4; j <= 4; j += 1) {
-        const r1 = Math.max(0.01 * length, centre.r1 + (i * spread) / 4)
-        const r2 = Math.max(0.01 * length, centre.r2 + (j * spread) / 4)
-        const value = cost(r1, r2)
-        if (value < best.value) best = { r1, r2, value }
-      }
-    }
-    spread /= 4
-  }
-  return build(best.r1, best.r2)
-}
-
 // Geometry for a library piece, or null if this release can't place it.
 // Returns { endpoints: [{x, y, heading}], paths: [[{x, y}, ...], ...] }
 export function pieceShape(piece) {
   if (!isPlaceable(piece)) return null
 
-  // Flex track with bend points is drawn through them
-  if (piece.type === 'flex' && Array.isArray(piece.bend) && piece.bend.length === 2) {
-    return bentShape(piece.length, piece.bend)
+  // Flex track with two handles is curved
+  if (piece.type === 'flex' && Array.isArray(piece.handles) && piece.handles.length === 2) {
+    return curvedShape(piece.length, piece.handles)
   }
 
   // Flex track is placed as a straight of its length
@@ -400,7 +300,7 @@ export function nearestOpenEnd(ends, point) {
 // or moves with the cursor when there is no target. `base` is the library piece
 export function placeDraggedEnd(placed, base, shape, index, point, target) {
   const ends = worldEndpoints(shape, placed)
-  if (base.type === 'flex' && !Array.isArray(placed.bend)) {
+  if (base.type === 'flex' && !Array.isArray(placed.handles)) {
     const far = ends[1 - index]
     const from = index === 0 ? point : far
     const to = index === 0 ? far : point
@@ -435,12 +335,13 @@ export function placedPiece(placed, library) {
   for (const key of PLACEMENT_DIMENSIONS) {
     if (placed[key] !== undefined) overrides[key] = placed[key]
   }
-  if (placed.bend !== undefined) overrides.bend = placed.bend
+  if (placed.handles !== undefined) overrides.handles = placed.handles
   return { ...base, ...overrides }
 }
 
 // Open ends are endpoints of placed pieces that are not joined to another piece
-export function openEnds(placedPieces, library) {
+// Every end of every piece, each marked open or joined. An end is joined when another piece's end is on it
+export function pieceEnds(placedPieces, library) {
   const all = []
   for (const placed of placedPieces) {
     const shape = pieceShape(placedPiece(placed, library))
@@ -449,13 +350,14 @@ export function openEnds(placedPieces, library) {
       all.push({ ...endpoint, pieceId: placed.id, index })
     })
   }
-  return all.filter(
-    (end) =>
-      !all.some(
-        (other) =>
-          other.pieceId !== end.pieceId && distance(other, end) <= JOIN_TOLERANCE
-      )
-  )
+  return all.map((end) => ({
+    ...end,
+    open: !all.some((other) => other.pieceId !== end.pieceId && distance(other, end) <= JOIN_TOLERANCE),
+  }))
+}
+
+export function openEnds(placedPieces, library) {
+  return pieceEnds(placedPieces, library).filter((end) => end.open)
 }
 
 // Best placement for a piece joined to the open end nearest the cursor.
@@ -493,6 +395,90 @@ export function snapPlacement(piece, placedPieces, library, cursor) {
     }
   }
   return best
+}
+
+// How far apart two open ends can be, and the piece still fit between them, for both ends to join
+const TWO_END_TOLERANCE_MM = 1
+
+// Placement that puts piece ends `i` and `k` on the open ends `from` and `to`, or null if the piece is the wrong length
+function fitTwoEnds(piece, shape, i, k, from, to, flip) {
+  const mirror = (end) => (flip ? { x: end.x, y: -end.y } : { x: end.x, y: end.y })
+  const a = mirror(shape.endpoints[i])
+  const b = mirror(shape.endpoints[k])
+  const localLength = Math.hypot(b.x - a.x, b.y - a.y)
+  const worldLength = Math.hypot(to.x - from.x, to.y - from.y)
+  if (Math.abs(localLength - worldLength) > TWO_END_TOLERANCE_MM) return null
+  const rotation = normalizeDegrees(deg(Math.atan2(to.y - from.y, to.x - from.x)) - deg(Math.atan2(b.y - a.y, b.x - a.x)))
+  // Centre the two ends between their targets, so the error is shared equally between them
+  const centreLocal = rotatePoint({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, rotation)
+  // Each end should point back into its open end, so its heading is the open end's heading plus 180
+  const headingOf = (endpoint) => normalizeDegrees((flip ? -endpoint.heading : endpoint.heading) + rotation)
+  const off = (actual, wanted) => Math.abs(((actual - wanted + 540) % 360) - 180)
+  const error = off(headingOf(shape.endpoints[i]), from.heading + 180) + off(headingOf(shape.endpoints[k]), to.heading + 180)
+  return {
+    x: (from.x + to.x) / 2 - centreLocal.x,
+    y: (from.y + to.y) / 2 - centreLocal.y,
+    rotation,
+    flip,
+    error,
+  }
+}
+
+// A placed piece with its ends near open ends of other pieces joins them: both ends if the piece fits exactly
+// between two open ends, otherwise the one end nearest. Returns the placement unchanged if no end is near enough
+export function snapToOpenEnds(placed, library, others) {
+  const piece = placedPiece(placed, library)
+  const shape = piece ? pieceShape(piece) : null
+  if (!shape) return placed
+
+  const open = openEnds(others, library)
+  const near = worldEndpoints(shape, placed)
+    .map((end, index) => ({ index, end, target: nearestOpenEnd(open, end) }))
+    .filter((pair) => pair.target)
+  let best = null
+  for (let p = 0; p < near.length; p += 1) {
+    for (let q = p + 1; q < near.length; q += 1) {
+      const from = near[p].target
+      const to = near[q].target
+      if (from.x === to.x && from.y === to.y) continue
+      for (const flip of flipChoices(piece)) {
+        const fit = fitTwoEnds(piece, shape, near[p].index, near[q].index, from, to, flip)
+        if (fit && (!best || fit.error < best.error)) best = fit
+      }
+    }
+  }
+  if (best) {
+    const { error: _error, ...placement } = best
+    return { ...placed, ...placement }
+  }
+
+  for (const { end } of near) {
+    const joined = snapPlacement(piece, others, library, end)
+    if (joined) return { ...placed, ...joined }
+  }
+  return placed
+}
+
+// A placed piece moved by (dx, dy), then joined to any open end it lands near
+export function draggedPiecePlacement(placed, library, others, dx, dy) {
+  return snapToOpenEnds({ ...placed, x: placed.x + dx, y: placed.y + dy }, library, others)
+}
+
+// A placed piece turned by `degrees` about its centre, then joined to any open end it lands near
+export function rotatedPiecePlacement(placed, library, others, degrees) {
+  const shape = pieceShape(placedPiece(placed, library))
+  if (!shape) return placed
+  const centre = (placement) => {
+    const ends = worldEndpoints(shape, placement)
+    return { x: (ends[0].x + ends[ends.length - 1].x) / 2, y: (ends[0].y + ends[ends.length - 1].y) / 2 }
+  }
+  const before = centre(placed)
+  const turned = { ...placed, rotation: normalizeDegrees(placed.rotation + degrees) }
+  const after = centre(turned)
+  // Move the origin so the centre stays where it was
+  turned.x += before.x - after.x
+  turned.y += before.y - after.y
+  return snapToOpenEnds(turned, library, others)
 }
 
 // Piece nearest to the point, within tolerance. Returns the placed piece or null

@@ -7,6 +7,7 @@ export const layoutApi = {
   getLayout: (id) => request('GET', `/api/layouts/${id}`),
   createLayout: (body) => request('POST', '/api/layouts', body),
   updateLayout: (id, body) => request('PATCH', `/api/layouts/${id}`, body),
+  deleteLayout: (id) => request('DELETE', `/api/layouts/${id}`),
   importAnyRail: (body) => request('POST', '/api/layouts/anyrail-import', body),
   throwTurnout: (turnout, output) => request('POST', `/api/z21/turnouts/${turnout}/throw`, { output }),
   getTurnoutStates: (turnouts) => request('GET', `/api/z21/turnouts?addresses=${turnouts.join(',')}`),

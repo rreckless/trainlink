@@ -88,9 +88,27 @@ def test_list_and_get_layouts(client, layout_id):
     assert client.get("/api/layouts/999").status_code == 404
 
 
+def test_rename_layout(client, layout_id):
+    response = client.patch(f"/api/layouts/{layout_id}", json={"name": "  Yard  "})
+    assert response.status_code == 200
+    assert response.json()["name"] == "Yard"
+
+
+def test_rename_layout_to_blank_or_taken_name_refused(client, layout_id):
+    assert client.patch(f"/api/layouts/{layout_id}", json={"name": "   "}).status_code == 400
+    client.post("/api/layouts", json={"name": "Other", "width": 100, "height": 50, "scale": "N"})
+    assert client.patch(f"/api/layouts/{layout_id}", json={"name": "Other"}).status_code == 409
+
+
 def test_delete_empty_layout(client, layout_id):
     assert client.delete(f"/api/layouts/{layout_id}").status_code == 204
     assert client.get(f"/api/layouts/{layout_id}").status_code == 404
+
+
+def test_delete_layout_with_track_removes_it(client, layout_id):
+    client.patch(f"/api/layouts/{layout_id}", json={"elements": {"tracks": [_track()]}})
+    assert client.delete(f"/api/layouts/{layout_id}").status_code == 204
+    assert client.get("/api/layouts").json() == []
 
 
 def test_delete_layout_with_blocks_is_refused(client, layout_id):

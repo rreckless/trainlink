@@ -133,3 +133,118 @@ def _fit_four(local, world):
                     local_of_world[world_index] = local_index
                 best = (origin, rotation, flip, local_of_world, error)
     return best
+
+
+# Curved flex track: a cubic Bezier from the origin to (length, 0), with two handles off the track. The first
+# handle lies along the start and the second along the end, so the track leaves and arrives at the angles the
+# handles give. The shape is the same as the layout editor's (frontend/src/layout/curves.js), so a fit here is
+# what the editor will draw
+BEZIER_STEPS = 24
+
+
+def bezier_path(length, handles):
+    """Points along flex track of `length` curved by its two handles"""
+    p0, p1 = (0.0, 0.0), handles[0]
+    p2, p3 = handles[1], (length, 0.0)
+    path = []
+    for step in range(BEZIER_STEPS + 1):
+        t = step / BEZIER_STEPS
+        u = 1 - t
+        a, b, c, d = u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t
+        path.append((
+            a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+            a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1],
+        ))
+    return path
+
+
+def fit_handles(samples, length, start_angle, end_angle):
+    """Handles for flex track whose path follows `samples` as closely as possible.
+
+    samples are points of the curve in the track's own frame (origin at its start, x along its chord).
+    The track leaves its start at start_angle and arrives at its end at end_angle, both in radians, and
+    keeps its length. Each handle stays on its end's line, so the end angles are kept exactly.
+    """
+    def build(r1, r2):
+        return [
+            (r1 * math.cos(start_angle), r1 * math.sin(start_angle)),
+            (length - r2 * math.cos(end_angle), -r2 * math.sin(end_angle)),
+        ]
+
+    def cost(r1, r2):
+        path = bezier_path(length, build(r1, r2))
+        return sum(min(math.dist(sample, point) for point in path) ** 2 for sample in samples)
+
+    low = 0.02 * length
+    best = (length / 3, length / 3, float("inf"))
+    grid = 16
+    for i in range(1, grid + 1):
+        for j in range(1, grid + 1):
+            r1 = low + (i / grid) * (1.2 * length - low)
+            r2 = low + (j / grid) * (1.2 * length - low)
+            value = cost(r1, r2)
+            if value < best[2]:
+                best = (r1, r2, value)
+    spread = 1.2 * length / grid
+    for _ in range(4):
+        centre_1, centre_2 = best[0], best[1]
+        for i in range(-3, 4):
+            for j in range(-3, 4):
+                r1 = max(low, centre_1 + i * spread / 3)
+                r2 = max(low, centre_2 + j * spread / 3)
+                value = cost(r1, r2)
+                if value < best[2]:
+                    best = (r1, r2, value)
+        spread /= 3
+    return build(best[0], best[1])
+
+
+def arc_bend_samples(radius, sweep, flip, count=24):
+    """Samples of a circular arc from the origin, in the frame where it starts along the x axis, and its chord.
+    Returns (samples in the chord frame, chord length, chord angle in radians, start angle, end angle).
+    The arc turns toward +y, or toward -y when flip is set. The chord frame is the one with the chord along x.
+    """
+    sign = -1.0 if flip else 1.0
+    local = [
+        (radius * math.sin(sweep * k / (count - 1)), sign * radius * (1 - math.cos(sweep * k / (count - 1))))
+        for k in range(count)
+    ]
+    end = local[-1]
+    chord = math.hypot(end[0], end[1])
+    angle = math.atan2(end[1], end[0])
+    samples = [_rotate_radians(point, -angle) for point in local]
+    start_tangent = -angle
+    end_tangent = sign * sweep - angle
+    return samples, chord, angle, start_tangent, end_tangent
+
+
+def bezier_bend_samples(start, control_start, control_end, end, count=24):
+    """Samples of a cubic Bezier in the chord frame, with the chord length, the chord angle, and the end angles.
+    Returns (samples, chord length, chord angle in radians, start angle, end angle), all in the chord frame.
+    """
+    def point(t):
+        u = 1 - t
+        return (
+            u ** 3 * start[0] + 3 * u * u * t * control_start[0] + 3 * u * t * t * control_end[0] + t ** 3 * end[0],
+            u ** 3 * start[1] + 3 * u * u * t * control_start[1] + 3 * u * t * t * control_end[1] + t ** 3 * end[1],
+        )
+
+    chord_vector = (end[0] - start[0], end[1] - start[1])
+    chord = math.hypot(*chord_vector)
+    angle = math.atan2(chord_vector[1], chord_vector[0])
+    samples = [
+        _rotate_radians((point(k / (count - 1))[0] - start[0], point(k / (count - 1))[1] - start[1]), -angle)
+        for k in range(count)
+    ]
+    first = control_start if math.dist(start, control_start) > 1e-6 else control_end
+    last = control_end if math.dist(end, control_end) > 1e-6 else control_start
+    start_tangent = math.atan2(first[1] - start[1], first[0] - start[0]) - angle
+    end_tangent = math.atan2(end[1] - last[1], end[0] - last[0]) - angle
+    return samples, chord, angle, start_tangent, end_tangent
+
+
+def _rotate_radians(point, radians):
+    return (
+        point[0] * math.cos(radians) - point[1] * math.sin(radians),
+        point[0] * math.sin(radians) + point[1] * math.cos(radians),
+    )
