@@ -22,10 +22,12 @@ import logging
 from typing import Optional, Callable
 from datetime import datetime
 
+from .z21_frames import LAN_X_HEADER, build_frame, build_xbus_frame, encode_address, xor_checksum  # noqa: F401
+from .z21_locos import XBUS_LOCO_INFO_REPLY, build_loco_info_request, parse_loco_info  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 # LAN frame headers (2 bytes, little-endian on the wire)
-LAN_X_HEADER = 0x0040
 LAN_SET_BROADCASTFLAGS = 0x0050
 LAN_RMBUS_DATACHANGED = 0x0080
 LAN_RMBUS_GETDATA = 0x0081
@@ -43,8 +45,6 @@ RBUS_INPUTS_PER_MODULE = 8
 
 # X-Bus command bytes
 XBUS_LOCO_DRIVE = 0xE4
-XBUS_LOCO_INFO_REQUEST = 0xE3
-XBUS_LOCO_INFO_DB0 = 0xF0
 XBUS_STOP = 0x80
 XBUS_GET_STATUS = (0x21, 0x24, 0x05)
 XBUS_TRACK_POWER_ON = (0x21, 0x81)
@@ -69,34 +69,12 @@ MIN_ADDRESS = 1
 MAX_ADDRESS = 9999
 
 
-def xor_checksum(data: bytes) -> int:
-    """XOR of all bytes, used as the X-Bus checksum"""
-    result = 0
-    for byte in data:
-        result ^= byte
-    return result
 
 
-def build_frame(header: int, data: bytes = b"") -> bytes:
-    """Wrap data in a LAN frame: DataLen(2) + Header(2) + Data"""
-    return struct.pack('<HH', 4 + len(data), header) + data
 
 
-def build_xbus_frame(xbus: bytes) -> bytes:
-    """Wrap an X-Bus command in a LAN_X frame and append its checksum"""
-    return build_frame(LAN_X_HEADER, xbus + bytes([xor_checksum(xbus)]))
 
 
-def encode_address(address: int) -> tuple[int, int]:
-    """Encode a DCC address as (high byte, low byte).
-
-    Addresses above 127 are long addresses and need the 0xC0 flag in the high byte.
-    """
-    if not (MIN_ADDRESS <= address <= MAX_ADDRESS):
-        raise ValueError(f"Address must be {MIN_ADDRESS}-{MAX_ADDRESS}")
-    if address < 128:
-        return 0x00, address
-    return 0xC0 | ((address >> 8) & 0x3F), address & 0xFF
 
 
 def encode_speed_step(speed: int, forward: bool) -> int:
@@ -116,12 +94,6 @@ def build_loco_drive(address: int, speed: int, forward: bool) -> bytes:
     ah, al = encode_address(address)
     xbus = bytes([XBUS_LOCO_DRIVE, SPEED_STEP_MODE_128, ah, al, encode_speed_step(speed, forward)])
     return build_xbus_frame(xbus)
-
-
-def build_loco_info_request(address: int) -> bytes:
-    """Build a LAN_X_GET_LOCO_INFO frame"""
-    ah, al = encode_address(address)
-    return build_xbus_frame(bytes([XBUS_LOCO_INFO_REQUEST, XBUS_LOCO_INFO_DB0, ah, al]))
 
 
 def build_emergency_stop() -> bytes:
@@ -228,6 +200,10 @@ class Z21Driver:
         self.feedback: dict = {}
         # Turnout outputs as the Z21 last reported them: {turnout: output or None}
         self.turnouts: dict = {}
+        # Locomotive state as the Z21 last reported it: {address: {speed, direction, functions}}
+        self.locos: dict = {}
+        # Called with (address, speed) for every locomotive reply
+        self.loco_observer: Optional[Callable] = None
 
     @property
     def track_state(self) -> str:
@@ -290,6 +266,7 @@ class Z21Driver:
         self.central_state = None
         self.feedback = {}
         self.turnouts = {}
+        self.locos = {}
         logger.info("Disconnected from Z21")
 
     async def get_status(self):
@@ -406,6 +383,9 @@ class Z21Driver:
                 # Reply to LAN_X_GET_STATUS
                 await self._apply_central_state(message[6])
 
+            elif header == LAN_X_HEADER and len(message) >= 13 and message[4] == XBUS_LOCO_INFO_REPLY:
+                await self._apply_loco_info(message[4:-1])
+
             elif header == LAN_X_HEADER and len(message) >= 9 and message[4] == XBUS_TURNOUT_INFO:
                 await self._apply_turnout_info(message[5], message[6], message[7])
 
@@ -466,6 +446,20 @@ class Z21Driver:
         self.turnouts[turnout] = output
         if self.on_status_changed:
             await self.on_status_changed({"status": "turnout_changed", "turnout": turnout, "output": output})
+
+    async def _apply_loco_info(self, data: bytes):
+        """Store a locomotive's reported speed, direction, and functions. Notify listeners if they changed"""
+        info = parse_loco_info(data)
+        if info is None:
+            return
+        if self.loco_observer:
+            self.loco_observer(info["address"], info["speed"])
+        state = {key: info[key] for key in ("speed", "direction", "functions")}
+        if self.locos.get(info["address"]) == state:
+            return
+        self.locos[info["address"]] = state
+        if self.on_status_changed:
+            await self.on_status_changed({"status": "loco_changed", "address": info["address"]})
 
     def get_connection_status(self) -> dict:
         """Get Z21 connection status

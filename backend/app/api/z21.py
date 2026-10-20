@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from app.drivers.z21_driver import RBUS_GROUPS, get_z21_driver, Z21Driver
 from app.drivers.z21_turnouts import MAX_TURNOUT, MIN_TURNOUT, request_turnout_info, throw_turnout
+from app.drivers.z21_locos import MAX_FUNCTION, request_loco_info, set_function
+from app.services.moving_time import tracker
 
 router = APIRouter(prefix="/api/z21", tags=["z21"])
 
@@ -28,14 +30,23 @@ class TurnoutCommand(BaseModel):
     output: int = Field(ge=0, le=1)
 
 
+class FunctionCommand(BaseModel):
+    """Switch one function of a locomotive"""
+    address: int = Field(ge=1, le=9999)
+    function: int = Field(ge=0, le=MAX_FUNCTION)
+    on: bool
+
+
 class EmergencyStopRequest(BaseModel):
     """Emergency stop request"""
     confirm: bool = True
 
 
 async def get_z21() -> Z21Driver:
-    """Dependency to get Z21 driver"""
-    return await get_z21_driver()
+    """Dependency to get Z21 driver. Locomotive replies feed the moving time tracker"""
+    z21 = await get_z21_driver()
+    z21.loco_observer = tracker.observe
+    return z21
 
 
 @router.post("/connect")
@@ -134,6 +145,43 @@ async def get_turnout_states(addresses: str = "", z21: Z21Driver = Depends(get_z
     }
 
 
+@router.post("/loco/function")
+async def set_locomotive_function(command: FunctionCommand, z21: Z21Driver = Depends(get_z21)):
+    """Switch a locomotive function (F0 is the light)"""
+    if not z21.connected:
+        raise HTTPException(status_code=503, detail="Z21 not connected")
+    if z21.track_state != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Track is not ready ({z21.track_state}). Locomotive commands are blocked",
+        )
+    await set_function(z21, command.address, command.function, command.on)
+    return {"status": "function_set", "address": command.address, "function": command.function, "on": command.on}
+
+
+@router.get("/locos")
+async def get_locomotive_states(addresses: str = "", z21: Z21Driver = Depends(get_z21)):
+    """Last reported state of each locomotive listed, as a comma-separated list. Unknown is null.
+
+    Asks the Z21 for each one first, which also subscribes to its replies. The replies update the states on a later call.
+    """
+    try:
+        locos = [int(part) for part in addresses.split(",") if part.strip()]
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Addresses must be numbers") from error
+    if any(not (1 <= address <= 9999) for address in locos):
+        raise HTTPException(status_code=400, detail="Addresses must be 1-9999")
+
+    if z21.connected:
+        for address in locos:
+            await request_loco_info(z21, address)
+    tracker.flush_if_due()
+    return {
+        "connected": z21.connected,
+        "states": {str(address): z21.locos.get(address) for address in locos},
+    }
+
+
 @router.post("/track-power/on")
 async def track_power_on(z21: Z21Driver = Depends(get_z21)):
     """Turn track power on after a short circuit or manual power off.
@@ -182,6 +230,7 @@ async def set_locomotive_speed(
     
     if not success:
         raise HTTPException(status_code=500, detail="Failed to set locomotive speed")
+    tracker.observe(command.address, command.speed)
     
     return {
         "status": "speed_set",
