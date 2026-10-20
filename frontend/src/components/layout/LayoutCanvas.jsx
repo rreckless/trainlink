@@ -73,6 +73,10 @@ export default function LayoutCanvas({
   const zoomRef = useRef(1)
   // Layout point and screen offset to keep in place after the next zoom, so zooming stays around the pointer
   const anchor = useRef(null)
+  // Drag to scroll: where a press on empty canvas started, and whether it has moved far enough to be a drag
+  const stageRef = useRef(null)
+  const pan = useRef(null)
+  const panned = useRef(false)
 
   useLayoutEffect(() => {
     const target = anchor.current
@@ -138,7 +142,45 @@ export default function LayoutCanvas({
     onCursor(pointerOf(event))
   }
 
+  // A press on empty canvas starts a pan. A press on a piece, item, or handle does not
+  const startPan = (event) => {
+    // Every press starts with no drag, so a click after an earlier pan still counts
+    panned.current = false
+    const stage = stageRef.current
+    const element = scroller.current
+    if (!stage || !element || event.button !== 0) return
+    const point = stage.getPointerPosition()
+    if (!point || stage.getIntersection(point)) return
+    pan.current = { x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop }
+  }
+
+  useEffect(() => {
+    const onMove = (event) => {
+      const start = pan.current
+      const element = scroller.current
+      if (!start || !element) return
+      const dx = event.clientX - start.x
+      const dy = event.clientY - start.y
+      if (!panned.current && Math.hypot(dx, dy) < 4) return
+      // Set before the click that follows a release, so that click is ignored
+      panned.current = true
+      element.scrollLeft = start.left - dx
+      element.scrollTop = start.top - dy
+    }
+    const onUp = () => {
+      pan.current = null
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
   const handleStageClick = (event) => {
+    // The click that ends a drag is not a click
+    if (panned.current) return
     const raw = pointerOf(event)
     if (!raw) return
     if (operating) {
@@ -200,8 +242,9 @@ export default function LayoutCanvas({
         </button>
       </div>
 
-      <div ref={scroller} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+      <div ref={scroller} onMouseDown={startPan} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
         <Stage
+          ref={stageRef}
           width={layout.width * zoom}
           height={layout.height * zoom}
           scaleX={zoom}
