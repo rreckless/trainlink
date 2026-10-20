@@ -5,7 +5,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 **Status key:** ✅ Done · 🟡 Partial · 🧪 Built but untested · ⬜ Not started
 
-**Last reviewed:** 2026-10-19
+**Last reviewed:** 2026-10-20
 
 ---
 
@@ -14,18 +14,19 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 | Area | Status | Notes |
 |------|--------|-------|
 | Project setup, Docker (PostgreSQL, Redis), Python 3.12 venv | ✅ | Renamed to TrainLink |
-| Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status. Train run on real Z21 (user test) |
-| Locomotive control UI | ✅ | Speed slider, direction buttons, emergency stop. Train run on real Z21 (user test) |
-| System settings UI (Z21 host and port) | 🧪 | Depends on the Z21 driver being tested |
-| Database models and schemas | 🟡 | Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation defined. No REST routes for them |
+| Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status, track power resume. Train run on real Z21 (user test). Turnout commands and R-BUS feedback 🧪 not yet tried on hardware |
+| Control page (locomotives, operate layout, Z21 connection) | 🧪 | Server-side roster, multi-select speed and direction, emergency stop. Replaces the old Locomotives section. Browser-tested with the Z21 stubbed; train run on real Z21 (user test) |
+| System settings UI (Z21 host and port) | ✅ | Host and port are shared with the Control page |
+| Database models and schemas | 🟡 | Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation defined. REST routes exist for all except CommandStation |
 | WebSocket endpoint | 🟡 | Endpoint and connection manager exist. Messages are echoed to all clients. No auth, no typed events |
 | Redis | 🟡 | Configured in Docker and config. Not used in code |
 | Frontend state (Zustand) | 🟡 | Store exists. Only some panels read from it |
-| Switchboard, Route Manager, Layout Editor | 🟡 | Placeholder UI only |
-| Locomotive Panel | 🟡 | Placeholder component |
+| Layout Editor | 🧪 | Drawing, placement, AnyRail import, zoom, DCC turnout addresses, save and load. Browser-tested with Playwright |
+| Switchboard, Route Manager | 🟡 | Placeholder UI only |
 | Electron wrapper | 🟡 | `electron/` scaffold exists. Not verified to run |
-| Backend tests | ⬜ | `backend/tests/` is empty |
-| Mock Z21 for testing | ⬜ | Not started |
+| Backend tests | ✅ | 192 tests in `backend/tests/` |
+| Frontend tests | ✅ | 42 tests (`npm test`) |
+| Mock Z21 for testing | ✅ | UDP responder in `backend/tests/conftest.py` |
 
 ---
 
@@ -74,18 +75,19 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ FastAPI app with CORS and health check
    - 🟡 WebSocket endpoint (echo only, no authentication)
    - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation. REST routes exist for Locomotive, Block, Signal, and Route only
-   - 🟡 Basic REST API: Z21, locomotives, blocks, signals, routes. Feedback, layouts, and command stations still need routes
+   - 🟡 REST API: Z21, locomotives, blocks, signals, routes, feedbacks, layouts, track library. Command stations still need routes
    - ⬜ State management in Redis
 
 3. **Frontend Foundation** 🟡
-   - 🟡 Layout editor skeleton (placeholder)
-   - 🧪 Locomotive control panel
+   - ✅ Layout editor (drawing, placement, import, zoom, save and load)
+   - 🧪 Control page: locomotive roster and operate layout
    - ✅ Connection status display (Z21 heartbeat)
-   - 🧪 Settings UI (Z21 host and port)
+   - ✅ Settings UI (Z21 host and port), shared with the Control page
 
-4. **Testing Infrastructure** ⬜
-   - ✅ Backend unit test setup (`backend/tests/`, 30 passing)
-   - 🟡 Integration test framework (driver tests run against the mock)
+4. **Testing Infrastructure** 🟡
+   - ✅ Backend tests (`backend/tests/`, 192 passing)
+   - ✅ Frontend unit tests (`npm test`, 42 passing)
+   - 🟡 Integration tests (driver tests run against the mock; browser tests run from a scratch Playwright script, not yet in the repo)
    - ✅ Mock Z21 UDP responder for testing (`backend/tests/conftest.py`)
    - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13. Real hardware test still pending
 
@@ -94,6 +96,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 1. **Locomotive Control** 🧪
    - ✅ Speed control (0–126 steps). Verified on hardware
+   - ✅ Several locomotives at once: tick the roster to send one speed or direction to all of them
    - ✅ Direction (Forward / Reverse / Stop). Verified on hardware
    - ⬜ Function buttons (lights, sounds). Z21 function commands not implemented
    - ⬜ Travelled time and distance tracking
@@ -102,7 +105,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Track state from Z21 (short circuit, track power off), with locomotive commands blocked until ready and a Resume Track Power action. Reconnect in Settings
 
 2. **Block System** ⬜
-   - 🟡 Block model exists
+   - 🟡 Block model and REST routes exist
    - ⬜ Block definition and visualization
    - ⬜ Block occupancy detection via Z21 feedback
    - ⬜ Block linking to signals
@@ -110,7 +113,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ⬜ Block properties UI
 
 3. **Signal Control** ⬜
-   - 🟡 Signal model exists
+   - 🟡 Signal model and REST routes exist
    - ⬜ Main signal aspects (Stop, Caution, Go)
    - ⬜ Warning signals
    - ⬜ Automatic signal assignment from block state
@@ -119,18 +122,21 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 4. **Layout Drawing** 🧪
    - ✅ Layout REST routes (track segments stored in layout elements)
    - 🧪 Draw straight track segments (free drawing, kept alongside track pieces)
-   - 🧪 Track library: 52 PECO N gauge entries, taken from PECO product pages. Each piece records its source page and whether its figures are confirmed there
+   - 🧪 Track library: 53 PECO N gauge entries, taken from PECO product pages, plus a custom curve whose radius is set per placement. Each piece records its source page and whether its figures are confirmed there
    - 🧪 Place Code 80 straights, curves, and turnouts (Setrack and Streamline Code 80 share one system). Ends snap to open ends and a layout uses one track system
    - 🧪 Flex track (Code 80 and Code 55) is placed as a straight of its catalogue length.
    - 🧪 SL-U395F/U396F: measured from the vector plan sheet (16.4mm toe, about 540mm diverging radius, 137mm long). The catalogue 457mm radius and 10 degree frog angle don't match the drawing.
    - 🧪 Other Streamline Code 55 medium, large, and small-radius turnouts still use the frog-angle model. They need the same check against their plan sheets before they're trusted
    - 🧪 Single slips SL-380F and SL-E380F: geometry measured from the PECO plan sheet (tracks 154.3mm and 154.2mm, crossing angle 9.9°, matching the listed 154mm and 10°)
    - 🧪 Curved double radius turnouts SL-386/387 (Code 80): traced from the PECO plan sheet. Arcs of 457mm and 914mm after an 8.5mm toe, both ending at 158.04mm
-   - 🧪 SL-E399F 3-way turnout: PROVISIONAL. Built from manual readings of the plan sheet (branch departures at about 47mm and 73mm, radii about 341mm and 597mm). The drawing's rails cross at the switch and couldn't be paired reliably. **TODO: revisit with a higher-resolution plan sheet or a physical measurement.**
+   - 🟡 SL-E399F 3-way turnout: branch radii and sweeps measured from the AnyRail layout's anchor positions. The branch departure points (47mm and 73mm) are still from the plan sheet, because the anchors fix where each branch ends but not where it leaves the straight. **TODO: check the departure points on a higher-resolution plan sheet or a physical measurement.**
+   - 🧪 Import from AnyRail (JMRI layout-config XML): turnouts, straights, curves, slips and the three-way are placed from the file. Tested on one layout, which closes with no open joints
+   - 🧪 Custom-length straights and curves: a placed piece carries its own length, radius, or angle
+   - 🧪 Zoom in and out (25% to 400%), with Ctrl or Cmd and the wheel around the pointer
    - ⬜ Y turnouts (SL-397, SL-E397), ST-44/45 curved turnouts, and SL-E397F and ST-7 (no plan sheet): still unplaceable
    - 🧪 Crossings, curved turnouts and Code 55 curved turnouts: placeable from the crossing and curve models. Not all checked against drawings
    - 🧪 Place blocks, signals, feedbacks
-   - 🧪 Save and load layouts
+   - 🧪 Save and load layouts (layout width and height are saved with the track)
    - 🧪 Drag-and-drop editing
    - 🧪 Snap-to-grid (20 unit grid)
    - ⬜ Signals and feedbacks are placed but have no link to automation or hardware yet
@@ -139,7 +145,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 **Goal**: Route-based automation
 
 1. **Route Management** ⬜
-   - 🟡 Route model exists, Route Manager UI is a placeholder
+   - 🟡 Route model and REST routes exist, Route Manager UI is a placeholder
    - ⬜ Route definition (sequence of blocks)
    - ⬜ Route creation UI with wizard
    - ⬜ Advanced route options (speed limits, dwell times)
@@ -157,14 +163,14 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ⬜ Automatic signal management to prevent collisions
    - ⬜ Deadlock prevention
 
-4. **Turnouts** ⬜
-   - ⬜ Z21 turnout commands
-   - ⬜ Turnout state tracking
-   - ⬜ Turnout control in the switchboard
+4. **Turnouts** 🧪
+   - 🧪 Z21 turnout commands (LAN_X_SET_TURNOUT, queued, activate then deactivate), frames checked against the spec. Not yet tried on a turnout
+   - 🧪 Turnout state from Z21 replies (LAN_X_TURNOUT_INFO), polled while operating
+   - 🟡 DCC address and straight output per placed turnout. Turnout control is on the Control page (Operate panel), not the Switchboard. Only plain turnouts take an address
 
-5. **Feedback / Sensor Integration** ⬜
-   - ⬜ Z21 feedback message handling
-   - 🟡 Feedback model exists
+5. **Feedback / Sensor Integration** 🟡
+   - 🟡 Z21 R-BUS feedback parsed and stored, read through `GET /api/z21/feedback`. Not yet verified on hardware
+   - 🟡 Feedback model and REST routes exist
    - ⬜ Multiple feedbacks per block
    - ⬜ Occupancy detection logic and debouncing
    - ⬜ Sensor feedback UI in layout editor
@@ -202,13 +208,13 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 1. **Serial/UDP Communication** 🟡
    - ✅ UDP transport with async I/O
    - ✅ Connection status and heartbeat
-   - ⬜ Protocol parsing for incoming Z21 messages (only outgoing commands are built)
+   - 🟡 Incoming parsing: status, system state, R-BUS feedback, turnout info. Locomotive info replies not parsed
    - ⬜ Error handling and recovery
 
 2. **Z21 Feature Support** ⬜
-   - ⬜ Query Z21 system state and version
-   - ⬜ Query locomotive info (speed, direction, functions)
-   - ⬜ Track power on and off
+   - 🟡 Query Z21 system state (version not queried)
+   - ⬜ Query locomotive info (speed, direction, functions). Request is sent, reply not parsed
+   - 🟡 Track power on, with resume after a short circuit. Track power off not built
    - ⬜ Feature detection
 
 3. **Locomotive Decoder Management** ⬜
@@ -292,9 +298,11 @@ Entry criteria:
 
 1. ✅ **Test locomotive control against a real Z21.** Done: a train ran under TrainLink control (user test). Still to confirm on hardware: short-circuit detection, track power resume, and feedback. Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. Frame bytes have been checked against the Z21 LAN Protocol Specification v1.13.
 2. ✅ Mock Z21 UDP responder (done)
-3. ✅ Backend unit tests for the Z21 packet builder and the speed and direction logic (done, 30 passing)
-4. ✅ REST routes for locomotives, blocks, signals, and routes (done, 79 passing). Layouts and command stations still need routes so blocks can be linked to signals and feedback.
-5. 🟡 Z21 R-BUS feedback parsing and `GET /api/z21/feedback` done (spec section 7, 92 tests passing). Still to do: link feedback inputs to blocks, and verify on hardware.
+3. ✅ Backend unit tests for the Z21 packet builder and the speed and direction logic (done; 192 backend tests now)
+4. ✅ REST routes for locomotives, blocks, signals, routes, feedbacks, layouts, and the track library. Command stations still need routes.
+5. 🟡 Z21 R-BUS feedback parsing and `GET /api/z21/feedback` done. Still to do: link feedback inputs to blocks, and verify on hardware. **Next.**
+6. ✅ DCC turnout control: turnouts take a DCC address, and the Operate panel switches them. Spec v1.13 commands. Not yet tried on hardware
+7. ✅ Control page: locomotive roster with multi-select, the layout in operate mode, and the Z21 connection at the top. Browser-tested with the Z21 stubbed
 
 ---
 
@@ -346,22 +354,22 @@ Feedback
 ## Critical Components
 
 ### Backend Modules
-1. **Layout Manager**: Load, save, validate layouts. ⬜
+1. **Layout Manager**: Load, save, validate layouts. 🟡 (REST routes, track validation, AnyRail import)
 2. **Block Controller**: Track occupancy, manage blocks. ⬜
 3. **Signal Controller**: Manage signal states from block state. ⬜
 4. **Route Engine**: Execute routes, handle automation. ⬜
-5. **Locomotive Manager**: Control trains, track state. 🧪 (Z21 speed and direction)
+5. **Locomotive Manager**: Control trains, track state. 🧪 (Z21 speed and direction, roster, multi-select)
 6. **Z21 Driver**: Abstract the Z21 UDP link. 🧪
 7. **WebSocket Server**: Real-time multi-client communication. 🟡
 8. **State Synchronizer**: Keep state consistent across clients. ⬜
 
 ### Frontend Components
-1. **Layout Editor**: Draw and configure the layout. 🧪 (drawing, placement, save/load; not yet tested in a browser)
+1. **Layout Editor**: Draw and configure the layout. 🧪 (drawing, placement, AnyRail import, zoom, save/load; browser-tested with Playwright)
 2. **Switchboard View**: Visual representation of the layout. 🟡 (placeholder)
-3. **Locomotive Control**: Control individual trains. 🧪
+3. **Control page**: Locomotive roster, operate layout, and Z21 connection. 🧪
 4. **Route Manager**: Create and manage routes. 🟡 (placeholder)
 5. **Block Monitor**: View block states. ⬜
-6. **System Settings**: Z21 connection settings. 🧪
+6. **System Settings**: Z21 connection settings, shared with the Control page. ✅
 7. **Network Status**: Show connected clients. ⬜
 8. **Event Log**: Display system events. ⬜
 
@@ -375,43 +383,60 @@ Current layout of the repository. Items marked ⬜ are planned.
 trainlink/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                       # FastAPI app, WebSocket endpoint
+│   │   ├── main.py                       # ✅ FastAPI app, routers, WebSocket endpoint
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── models/                       # SQLAlchemy models (block, command_station, feedback, layout, locomotive, route, signal)
-│   │   ├── schemas/                      # Pydantic schemas (same entities)
+│   │   ├── schemas/                      # Pydantic schemas (same entities, plus AnyRail import request)
 │   │   ├── api/
-│   │   │   ├── z21.py                    # ✅ Z21 routes
-│   │   │   ├── locomotives.py            # ⬜
-│   │   │   ├── blocks.py                 # ⬜
-│   │   │   ├── signals.py                # ⬜
-│   │   │   └── routes.py                 # ⬜
+│   │   │   ├── z21.py                    # ✅ Z21 routes: connection, status, locomotives, track power, turnouts, feedback
+│   │   │   ├── locomotives.py            # ✅
+│   │   │   ├── blocks.py                 # ✅
+│   │   │   ├── signals.py                # ✅
+│   │   │   ├── routes.py                 # ✅
+│   │   │   ├── feedbacks.py              # ✅
+│   │   │   ├── layouts.py                # ✅ Layouts, track validation, AnyRail import preview
+│   │   │   └── track_library.py          # ✅
 │   │   ├── ws/
 │   │   │   └── connection_manager.py     # 🟡
-│   │   ├── services/                     # ⬜ Business logic (empty)
-│   │   │   ├── layout_service.py
-│   │   │   ├── block_service.py
-│   │   │   ├── route_service.py
-│   │   │   └── locomotive_service.py
+│   │   ├── services/
+│   │   │   ├── track_library.py          # ✅ Loads the track library from data/track_library
+│   │   │   ├── anyrail_import.py         # 🧪 AnyRail (JMRI XML) import
+│   │   │   ├── anyrail_geometry.py       # 🧪 Geometry for the import
+│   │   │   ├── layout_service.py         # ⬜
+│   │   │   ├── block_service.py          # ⬜
+│   │   │   ├── route_service.py          # ⬜
+│   │   │   └── locomotive_service.py     # ⬜
 │   │   └── drivers/
-│   │       ├── z21_driver.py             # 🧪
+│   │       ├── z21_driver.py             # 🧪 UDP, status, speed, feedback, turnout replies
+│   │       ├── z21_turnouts.py           # 🧪 Turnout command frames and throw sequence
 │   │       ├── base_driver.py            # ⬜ Interface for future adapters (Phase 7)
 │   │       ├── marklin_p50x.py           # ⬜ Phase 7
 │   │       ├── lenz_intellibox.py        # ⬜ Phase 7
 │   │       └── loconet_driver.py         # ⬜ Phase 7
-│   ├── tests/                            # ⬜ Empty
+│   ├── data/track_library/               # ✅ PECO N gauge and custom curve
+│   ├── tests/                            # ✅ 192 tests
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── LocomotiveControl.jsx     # 🧪
-│   │   │   ├── LocomotivePanel.jsx       # 🟡
-│   │   │   ├── SystemSettings.jsx        # 🧪
+│   │   │   ├── control/
+│   │   │   │   ├── ControlView.jsx       # 🧪 Control page: connection, track state, panels
+│   │   │   │   ├── LocomotiveRoster.jsx  # 🧪 Roster with multi-select speed and direction
+│   │   │   │   └── OperatePanel.jsx      # 🧪 Layout in operate mode
+│   │   │   ├── layout/                   # 🧪 Canvas, toolbar, properties, track picker, AnyRail import
+│   │   │   ├── LayoutEditor.jsx          # 🧪
+│   │   │   ├── SystemSettings.jsx        # ✅
 │   │   │   ├── Switchboard.jsx           # 🟡
-│   │   │   ├── RouteManager.jsx          # 🟡
-│   │   │   └── LayoutEditor.jsx          # 🟡
+│   │   │   └── RouteManager.jsx          # 🟡
 │   │   ├── hooks/
+│   │   │   ├── useLayoutEditor.js        # 🧪
+│   │   │   ├── useTurnoutControl.js      # 🧪 Turnout polling and switching
+│   │   │   ├── useZ21Connection.js       # ✅ Connect, disconnect, shared address
+│   │   │   ├── useZ21Status.js           # ✅
 │   │   │   └── useWebSocket.js           # 🟡
+│   │   ├── layout/                       # 🧪 Track geometry and layout model
+│   │   ├── services/                     # 🧪 api.js, layoutApi.js, locomotiveApi.js
 │   │   ├── store/
 │   │   │   └── index.js                  # 🟡 Zustand
 │   │   ├── App.jsx
@@ -446,7 +471,7 @@ trainlink/
 | Phase | Duration | Status | Key Deliverable |
 |-------|----------|--------|-----------------|
 | Foundation | 2-3 weeks | 🟡 Mostly done | Working WebSocket server and basic UI |
-| Core Features | 3-4 weeks | 🧪 Loco control only | Full locomotive and block control |
+| Core Features | 3-4 weeks | 🟡 Loco control, layout editor, turnout control | Full locomotive and block control |
 | Automation | 3-4 weeks | ⬜ | Route-based automation working |
 | Multi-Client | 2-3 weeks | ⬜ | Network support functional |
 | Z21 Hardening | 2-3 weeks | ⬜ | Verified Z21 integration |
@@ -465,8 +490,8 @@ trainlink/
 - [x] Implement WebSocket server (echo only)
 - [x] Build layout editor component (placeholder)
 - [x] Create locomotive control UI
-- [ ] Test locomotive control against real Z21
-- [ ] Build mock Z21 for testing
+- [x] Test locomotive control against real Z21
+- [x] Build mock Z21 for testing
 - [ ] Build comprehensive test suite
 - [ ] Document API and component interfaces
 - [ ] Phase 7: Extract base driver interface (after Z21 complete)
@@ -490,16 +515,16 @@ trainlink/
 ## Success Criteria
 
 ✅ **MVP Complete when:**
-- [ ] Z21 connection verified on real hardware
-- [ ] Locomotive speed and direction control verified on real hardware
+- [x] Z21 connection verified on real hardware
+- [x] Locomotive speed and direction control verified on real hardware
 - [ ] Emergency stop verified on real hardware
-- [ ] Layout editor functional
+- [x] Layout editor functional
 - [ ] Block occupancy detection functional
 - [ ] Basic signal automation in place
 - [ ] Multiple clients can connect and sync
 
 ✅ **Feature Complete (Z21) when:**
-- [ ] Z21 turnout and track power control working
+- [ ] Z21 turnout and track power control working (turnouts 🧪, not yet tried on hardware)
 - [ ] Routes and automation fully working
 - [ ] Multi-client support stable
 - [ ] Export and import functionality working
