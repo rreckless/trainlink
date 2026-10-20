@@ -2,6 +2,25 @@ import { useEffect, useState } from 'react'
 import { locomotiveApi } from '../../services/locomotiveApi'
 
 const LOCOMOTIVE_TYPES = ['diesel', 'steam', 'electric', 'other']
+// Moving time in hours, minutes, and seconds
+function formatDuration(seconds) {
+  const total = Math.floor(seconds ?? 0)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`
+  if (minutes > 0) return `${minutes}m ${String(secs).padStart(2, '0')}s`
+  return `${secs}s`
+}
+
+// F0 is the light. The others are the functions the decoder maps
+const FUNCTION_BUTTONS = [
+  { index: 0, label: 'Light' },
+  { index: 1, label: 'F1' },
+  { index: 2, label: 'F2' },
+  { index: 3, label: 'F3' },
+  { index: 4, label: 'F4' },
+]
 const EMPTY_FORM = { name: '', dcc_address: '', locomotive_type: 'diesel', length: '' }
 
 // Locomotives on the server. Tick several to send one speed or direction to all of them
@@ -14,6 +33,8 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
   const [message, setMessage] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
   const [adding, setAdding] = useState(false)
+  // What the Z21 last reported for each locomotive, by address. Read every two seconds
+  const [reported, setReported] = useState({})
 
   const refresh = () =>
     locomotiveApi
@@ -26,6 +47,29 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
     // refresh only once, on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const addressKey = locomotives.map((loc) => loc.dcc_address).join(',')
+  useEffect(() => {
+    if (addressKey === '') return undefined
+    let cancelled = false
+    // Errors are not shown here: the Z21 may be offline, and this would repeat every two seconds
+    const read = () => {
+      // The roster list carries each locomotive's moving time, so it is refreshed on the same tick
+      refresh()
+      return locomotiveApi
+        .getStates(addressKey.split(',').map(Number))
+        .then((result) => {
+          if (!cancelled) setReported(result.states)
+        })
+        .catch(() => {})
+    }
+    read()
+    const timer = setInterval(read, 2000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [addressKey])
 
   const toggle = (id) =>
     setSelected((prev) => {
@@ -66,6 +110,37 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
   const selectedStates = locomotives.filter((loc) => selected.has(loc.id)).map((loc) => commanded[loc.id])
   const groupSpeed = selectedStates.length > 0 ? selectedStates[0]?.speed ?? 0 : 0
   const groupDirection = selectedStates.length > 0 ? selectedStates[0]?.direction ?? 'stop' : 'stop'
+
+  // Switch a function on every selected locomotive. If they all have it on, switch it off
+  const sendFunction = async (index) => {
+    const targets = locomotives.filter((loc) => selected.has(loc.id))
+    if (targets.length === 0) return onError('Select one or more locomotives first')
+    const hasIt = (loc) => reported[loc.dcc_address]?.functions?.includes(index) ?? false
+    const on = !targets.every(hasIt)
+    setBusy(true)
+    onError('')
+    setMessage('')
+    const results = await Promise.allSettled(targets.map((loc) => locomotiveApi.setFunction(loc.dcc_address, index, on)))
+    const failed = []
+    setReported((prev) => {
+      const next = { ...prev }
+      targets.forEach((loc, i) => {
+        if (results[i].status !== 'fulfilled') return
+        const current = next[loc.dcc_address] ?? { speed: null, direction: 'stop', functions: [] }
+        const functions = on
+          ? [...new Set([...current.functions, index])].sort((a, b) => a - b)
+          : current.functions.filter((f) => f !== index)
+        next[loc.dcc_address] = { ...current, functions }
+      })
+      return next
+    })
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') failed.push(`${targets[i].name}: ${result.reason.message}`)
+    })
+    if (failed.length > 0) onError(failed.join('. '))
+    else setMessage(`${FUNCTION_BUTTONS.find((f) => f.index === index).label} ${on ? 'on' : 'off'} for ${targets.length} locomotive${targets.length === 1 ? '' : 's'}`)
+    setBusy(false)
+  }
 
   const emergencyStop = async () => {
     setBusy(true)
@@ -224,9 +299,23 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
             </div>
           </div>
 
+          <div className="grid grid-cols-5 gap-2">
+            {FUNCTION_BUTTONS.map((fn) => (
+              <button
+                key={fn.index}
+                onClick={() => sendFunction(fn.index)}
+                disabled={disabled || selected.size === 0}
+                className="py-2 rounded text-sm font-semibold bg-slate-600 hover:bg-slate-500 disabled:opacity-50"
+              >
+                {fn.label}
+              </button>
+            ))}
+          </div>
+
           <div className="space-y-2">
             {locomotives.map((loc) => {
               const state = commanded[loc.id]
+              const live = reported[loc.dcc_address]
               return (
                 <div
                   key={loc.id}
@@ -239,7 +328,13 @@ export default function LocomotiveRoster({ controlsEnabled, onError }) {
                     <p className="font-semibold">{loc.name}</p>
                     <p className="text-xs text-slate-400">
                       Address {loc.dcc_address} · {loc.locomotive_type}
-                      {state ? ` · speed ${state.speed} ${state.direction}` : ' · not set this session'}
+                      {live && live.speed !== null
+                        ? ` · Z21: speed ${live.speed} ${live.direction}`
+                        : state
+                        ? ` · sent: speed ${state.speed} ${state.direction}`
+                        : ' · no state yet'}
+                      {live?.functions?.length ? ` · functions ${live.functions.map((f) => `F${f}`).join(' ')}` : ''}
+                      {` · moved ${formatDuration(loc.travelled_time)}`}
                     </p>
                   </div>
                   <button
