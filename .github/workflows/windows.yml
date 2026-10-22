@@ -1,9 +1,7 @@
 name: Windows build
 
 on:
-  push:
-    branches: [master]
-  pull_request:
+  # Run by hand: Actions tab, or gh workflow run windows.yml --ref <branch>
   workflow_dispatch:
 
 jobs:
