@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { FUNCTION_COUNT, functionLabel } from '../../hooks/useLocomotiveRoster'
+import { IS_DESKTOP } from '../../services/api'
+import { pickPictureInDesktop } from '../../services/desktopFiles'
 import { pictureUrl } from '../../services/locomotiveApi'
 
 const LOCOMOTIVE_TYPES = ['diesel', 'steam', 'electric', 'other']
@@ -21,6 +23,17 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
   const [functions, setFunctions] = useState(locomotive?.function_labels ?? defaultFunctions())
   const [picture, setPicture] = useState(null)
   const [error, setError] = useState('')
+
+  // The desktop app's own dialog. A cancelled dialog keeps the picture already chosen
+  const choosePicture = async () => {
+    setError('')
+    try {
+      const chosen = await pickPictureInDesktop()
+      if (chosen) setPicture(chosen)
+    } catch (err) {
+      setError(String(err))
+    }
+  }
 
   const setFunction = (index, change) =>
     setFunctions((prev) => prev.map((item, i) => (i === index ? { ...item, ...change } : item)))
@@ -97,15 +110,29 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
           <img src={pictureUrl(locomotive)} alt="" className="w-24 h-16 object-cover rounded bg-slate-800" />
         )}
         {picture && <span className="text-sm text-slate-300">New picture: {picture.name}</span>}
-        <label className="text-sm text-slate-300">
-          Picture (JPEG, PNG, or WebP, 2 MB max)
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(event) => setPicture(event.target.files[0] ?? null)}
-            className="mt-1 block text-sm text-slate-300"
-          />
-        </label>
+        <div className="text-sm text-slate-300">
+          <span className="block mb-1">Picture (JPEG, PNG, or WebP, 2 MB max)</span>
+          {IS_DESKTOP ? (
+            <button
+              type="button"
+              onClick={choosePicture}
+              disabled={busy}
+              className="px-3 py-2 bg-slate-700 rounded text-white hover:bg-slate-600 disabled:opacity-50"
+            >
+              Choose picture…
+            </button>
+          ) : (
+            <label className="inline-block px-3 py-2 bg-slate-700 rounded text-white hover:bg-slate-600 cursor-pointer">
+              Choose picture…
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setPicture(event.target.files[0] ?? null)}
+                className="sr-only"
+              />
+            </label>
+          )}
+        </div>
         {locomotive?.image_url && (
           <button type="button" onClick={() => onRemovePicture(locomotive)} disabled={busy} className="px-3 py-1 bg-slate-800 rounded text-sm hover:bg-red-800">
             Remove picture
