@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useStore } from './store'
 import { useZ21StatusPolling } from './hooks/useZ21Status'
 import TopBar from './components/shell/TopBar'
@@ -10,6 +10,8 @@ import LocomotiveSetup from './components/locomotives/LocomotiveSetup'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
 import SystemSettings from './components/SystemSettings'
+import SignIn from './components/auth/SignIn'
+import { authApi } from './services/authApi'
 
 const PAGE_VIEWS = {
   switchboard: Switchboard,
@@ -24,14 +26,40 @@ function App() {
   const activeTab = useStore((state) => state.activeTab)
   const setActiveTab = useStore((state) => state.setActiveTab)
   const [collapsed, setCollapsed] = useState(false)
+  const [account, setAccount] = useState({ loading: true, signedIn: false, email: '' })
   useZ21StatusPolling()
+
+  const loadAccount = useCallback(async () => {
+    try {
+      const data = await authApi.getSession()
+      setAccount({ loading: false, signedIn: data.signed_in, email: data.email ?? '' })
+    } catch {
+      setAccount({ loading: false, signedIn: false, email: '' })
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAccount()
+  }, [loadAccount])
+
+  const signOut = async () => {
+    await authApi.signOut()
+    setAccount({ loading: false, signedIn: false, email: '' })
+  }
+
+  if (account.loading) {
+    return <div className="h-screen bg-slate-900" />
+  }
+  if (!account.signedIn) {
+    return <SignIn onSignedIn={loadAccount} />
+  }
 
   const page = PAGES.find((item) => item.id === activeTab) ?? PAGES[0]
   const View = PAGE_VIEWS[page.id] ?? Switchboard
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white">
-      <TopBar onOpen={setActiveTab} />
+      <TopBar onOpen={setActiveTab} email={account.email} onSignOut={signOut} />
       <div className="flex flex-1 min-h-0">
         <SideNav activeTab={page.id} onOpen={setActiveTab} collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
         <main className="flex-1 min-w-0 flex flex-col">

@@ -5,6 +5,7 @@ use std::sync::Mutex;
 
 use rusqlite::Connection;
 
+use crate::auth::Auth;
 use crate::moving_time::MovingTime;
 use crate::z21::Z21;
 
@@ -19,13 +20,20 @@ pub struct AppState {
     pub inner: Mutex<Inner>,
     /// Locomotive pictures, one file per locomotive
     pub images: PathBuf,
+    /// Sign-in. Kept outside the lock, since its calls go over the network
+    pub auth: Auth,
 }
 
 impl AppState {
     pub fn new(db: Connection, images: PathBuf) -> AppState {
+        AppState::with_auth(db, images, Auth::for_app())
+    }
+
+    pub fn with_auth(db: Connection, images: PathBuf, auth: Auth) -> AppState {
         AppState {
             inner: Mutex::new(Inner { db, z21: Z21::new(), moving: MovingTime::new() }),
             images,
+            auth,
         }
     }
 }

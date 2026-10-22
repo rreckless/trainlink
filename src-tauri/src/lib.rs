@@ -3,6 +3,7 @@
 
 
 pub mod anyrail;
+pub mod auth;
 pub mod api;
 pub mod db;
 pub mod fields;
