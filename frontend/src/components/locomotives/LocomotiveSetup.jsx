@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { confirmAction } from '../../services/dialogs'
 import { locomotiveApi, pictureUrl } from '../../services/locomotiveApi'
 import LocomotiveForm from './LocomotiveForm'
 
@@ -64,7 +65,7 @@ export default function LocomotiveSetup() {
   }
 
   const remove = async (loco) => {
-    if (!window.confirm(`Delete ${loco.name}? Its picture and settings are removed too.`)) return
+    if (!(await confirmAction(`Delete ${loco.name}? Its picture and settings are removed too.`, { okLabel: 'Delete', danger: true }))) return
     setBusy(true)
     setError('')
     try {

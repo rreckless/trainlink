@@ -1,3 +1,5 @@
+import { askText } from './dialogs'
+
 // The desktop app answers API calls from its own core. WebView2 on Windows reaches a custom scheme as an http address
 export const IS_DESKTOP = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
@@ -28,7 +30,7 @@ let declinedAt = 0
 let signingIn = null
 
 async function signIn() {
-  const token = window.prompt('Enter the TrainLink server token. The server prints where it is kept when it starts')
+  const token = await askText('Enter the TrainLink server token. The server prints where it is kept when it starts', '', { okLabel: 'Sign in' })
   if (!token) return false
   try {
     const response = await fetch(`${BASE_URL}/login`, {

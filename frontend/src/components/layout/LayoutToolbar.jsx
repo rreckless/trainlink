@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { askText } from '../../services/dialogs'
 
 const TOOLS = [
   { id: 'select', label: 'Select' },
@@ -68,8 +69,8 @@ export default function LayoutToolbar({
         </button>
 
         <button
-          onClick={() => {
-            const name = window.prompt('Rename layout to:', layout?.name ?? '')
+          onClick={async () => {
+            const name = await askText('Rename layout to:', layout?.name ?? '', { okLabel: 'Rename' })
             if (name !== null && name.trim()) onRenameLayout(name.trim())
           }}
           disabled={!layout || busy}
