@@ -18,8 +18,8 @@ Model railway control for DCC layouts, built around the Roco Z21. TrainLink runs
 | macOS desktop app | Built as an unsigned DMG. Runs on this Mac |
 | Windows desktop app | Built as an unsigned installer by GitHub Actions. Tested on a Windows PC: it runs, shows synced data, and connects to the Z21 |
 | Web version | Runs on the same core as the desktop app |
-| Email and Google sign-in | Working on the web server. The desktop Google return is not yet tested |
-| Sync between devices | Built, with unit and live tests passing. A full test on two real devices is still to do |
+| Email and Google sign-in | Working on the desktop app and the web version |
+| Sync between devices | Working. Tested between devices, with unit and live tests passing |
 | Code signing | None yet. Windows shows a SmartScreen warning, and macOS needs right-click, Open the first time |
 | Android and iOS | Not started |
 
