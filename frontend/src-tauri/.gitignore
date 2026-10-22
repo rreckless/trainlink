@@ -1,2 +1,5 @@
 target/
-gen/
+gen/*
+!gen/apple/
+gen/apple/*
+!gen/apple/tauri
