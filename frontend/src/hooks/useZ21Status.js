@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useStore } from '../store'
+import { BASE_URL } from '../services/api'
 
-const STATUS_URL = 'http://localhost:8000/api/z21/status'
+const STATUS_URL = `${BASE_URL}/api/z21/status`
 
 // Fetch the Z21 status once and store it. Anything that changes the Z21 calls this afterwards
 export const refreshZ21Status = async () => {

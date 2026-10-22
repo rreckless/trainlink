@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { refreshZ21Status } from './useZ21Status'
+import { BASE_URL } from '../services/api'
 
-const Z21_API = 'http://localhost:8000/api/z21'
+const Z21_API = `${BASE_URL}/api/z21`
 
 // Connect to and disconnect from the Z21. Settings and the Control page share the address and the actions
 export function useZ21Connection() {

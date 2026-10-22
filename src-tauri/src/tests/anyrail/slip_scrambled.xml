@@ -1,0 +1,16 @@
+<layout-config><LayoutEditor>
+<positionablepoint ident="A1" x="0" y="200" type="ANCHOR"/>
+<positionablepoint ident="A2" x="100" y="100" type="ANCHOR"/>
+<tracksegment ident="F1" connect1name="A1" type1="POS_POINT" connect2name="A2" type2="POS_POINT" arc="yes" angle="90"/>
+<positionablepoint ident="PA" x="132.0336" y="22.5048" type="ANCHOR"/>
+<positionablepoint ident="PB" x="99.9735" y="71.3713" type="ANCHOR"/>
+<positionablepoint ident="PC" x="127.7050" y="19.6938" type="ANCHOR"/>
+<positionablepoint ident="PD" x="95.6990" y="68.5954" type="ANCHOR"/>
+<positionablepoint ident="PFAR" x="155.6990" y="88.5954" type="ANCHOR"/>
+<tracksegment ident="CA" connect1name="SL1" type1="SLIP_A" connect2name="PA" type2="POS_POINT"/>
+<tracksegment ident="CB" connect1name="SL1" type1="SLIP_B" connect2name="PB" type2="POS_POINT"/>
+<tracksegment ident="CC" connect1name="SL1" type1="SLIP_C" connect2name="PC" type2="POS_POINT"/>
+<tracksegment ident="CD" connect1name="SL1" type1="SLIP_D" connect2name="PD" type2="POS_POINT"/>
+<tracksegment ident="S" connect1name="PA" type1="POS_POINT" connect2name="PFAR" type2="POS_POINT"/>
+<layoutSlip ident="SL1"/>
+</LayoutEditor></layout-config>

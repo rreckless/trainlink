@@ -1,0 +1,71 @@
+{
+ "ambiguous_curves": [],
+ "gaps": [],
+ "hand_mismatches": [
+  "TOR3"
+ ],
+ "height": 891,
+ "scale_mm_per_pixel": 2.635,
+ "track_pieces": [
+  {
+   "flip": false,
+   "id": "jmri-TOR1",
+   "piece_id": "peco-n-sl-u395f",
+   "rotation": 0.0,
+   "x": 313.5,
+   "y": 50.0
+  },
+  {
+   "flip": false,
+   "id": "jmri-TOL2",
+   "piece_id": "peco-n-sl-u396f",
+   "rotation": 180.0,
+   "x": 840.5,
+   "y": 50.0
+  },
+  {
+   "flip": false,
+   "id": "jmri-TOR3",
+   "piece_id": "peco-n-sl-u395f",
+   "rotation": 0.0,
+   "x": 1367.5,
+   "y": 50.0
+  },
+  {
+   "flip": false,
+   "handles": [
+    {
+     "x": 105.3634,
+     "y": -105.3634
+    },
+    {
+     "x": 267.2819,
+     "y": -105.3634
+    }
+   ],
+   "id": "jmri-F1",
+   "length": 372.6453,
+   "piece_id": "peco-n-sl-300f",
+   "rotation": 315.0,
+   "x": 50.0,
+   "y": 313.5
+  },
+  {
+   "flip": false,
+   "id": "jmri-F2",
+   "length": 527.0,
+   "piece_id": "peco-n-sl-300f",
+   "rotation": 90.0,
+   "x": 50.0,
+   "y": 313.5
+  }
+ ],
+ "track_system": "Code 55",
+ "unanchored_turnouts": [
+  "TOR1",
+  "TOL2",
+  "TOR3"
+ ],
+ "unplaced": [],
+ "width": 1418
+}

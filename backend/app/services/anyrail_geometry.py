@@ -128,9 +128,8 @@ def _fit_four(local, world):
                 math.dist(_world(q, origin, rotation, False), w) ** 2 for q, w in zip(paired, world)
             ) / 4)
             if best is None or error < best[4]:
-                local_of_world = [0] * 4
-                for local_index, world_index in enumerate(order):
-                    local_of_world[world_index] = local_index
+                # order[k] is the local end paired with world point k
+                local_of_world = list(order)
                 best = (origin, rotation, flip, local_of_world, error)
     return best
 

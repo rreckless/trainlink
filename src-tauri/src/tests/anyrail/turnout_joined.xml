@@ -1,0 +1,17 @@
+<layout-config>
+<LayoutEditor>
+<positionablepoint ident="A1" x="0" y="200" type="ANCHOR"/>
+<positionablepoint ident="A2" x="100" y="100" type="ANCHOR"/>
+<tracksegment ident="F1" connect1name="A1" type1="POS_POINT" connect2name="A2" type2="POS_POINT" arc="yes" angle="90"/>
+<positionablepoint ident="P1" x="0" y="0" type="ANCHOR"/>
+<positionablepoint ident="P2" x="52" y="0" type="ANCHOR"/>
+<positionablepoint ident="P3" x="52" y="5.33" type="ANCHOR"/>
+<positionablepoint ident="P4" x="152" y="5.33" type="ANCHOR"/>
+<layoutturnout ident="TOR1" type="RH_TURNOUT" connectaname="T-I-TOR1" connectbname="T-EL-TOR1" connectcname="T-ER-TOR1"
+  xcen="0" ycen="0" xb="52" yb="0" xc="52" yc="5.13"/>
+<tracksegment ident="CA" connect1name="TOR1" type1="TURNOUT_A" connect2name="P1" type2="POS_POINT"/>
+<tracksegment ident="CB" connect1name="TOR1" type1="TURNOUT_B" connect2name="P2" type2="POS_POINT"/>
+<tracksegment ident="CC" connect1name="TOR1" type1="TURNOUT_C" connect2name="P3" type2="POS_POINT"/>
+<tracksegment ident="S" connect1name="P3" type1="POS_POINT" connect2name="P4" type2="POS_POINT"/>
+</LayoutEditor>
+</layout-config>
