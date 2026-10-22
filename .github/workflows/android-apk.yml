@@ -27,9 +27,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install the Android NDK
+        # The runner already has the Android SDK in ANDROID_HOME; this adds the NDK to it
         working-directory: .
         run: |
           yes | sdkmanager --licenses > /dev/null
