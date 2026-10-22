@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmAction } from '../../services/dialogs'
 import { locomotiveApi, pictureUrl } from '../../services/locomotiveApi'
 
 
@@ -64,7 +65,7 @@ export default function LocomotiveRoster({ roster, controlsEnabled, onError }) {
   }
 
   const removeLocomotive = async (loc) => {
-    if (!window.confirm(`Remove ${loc.name} from the roster?`)) return
+    if (!(await confirmAction(`Remove ${loc.name} from the roster?`, { okLabel: 'Remove', danger: true }))) return
     onError('')
     try {
       await locomotiveApi.remove(loc.id)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
+import { confirmAction } from '../services/dialogs'
 import { layoutApi } from '../services/layoutApi'
 import {
   ENTITY_KINDS,
@@ -145,8 +146,8 @@ export function useLayoutEditor() {
   }, [refreshLayouts, openLayout])
 
   const switchLayout = useCallback(
-    (id) => {
-      if (dirty && !window.confirm('Discard unsaved changes?')) return
+    async (id) => {
+      if (dirty && !(await confirmAction('Discard unsaved changes?', { okLabel: 'Discard', danger: true }))) return
       setMessage('')
       setImportReport(null)
       openLayout(id)
@@ -197,7 +198,11 @@ export function useLayoutEditor() {
   // Delete the open layout. Afterwards the first remaining layout opens, or the editor is left empty
   const deleteLayout = useCallback(async () => {
     if (!layout) return
-    if (!window.confirm(`Delete layout "${layout.name}"? Its track and items are removed. This cannot be undone.`)) return
+    const confirmed = await confirmAction(`Delete layout "${layout.name}"? Its track and items are removed. This cannot be undone.`, {
+      okLabel: 'Delete',
+      danger: true,
+    })
+    if (!confirmed) return
     setBusy(true)
     setError('')
     setMessage('')
@@ -332,9 +337,10 @@ export function useLayoutEditor() {
   const importAnyRail = useCallback(
     async (xml, innerRadiusMm) => {
       if (!layout) return
-      if (pieces.length > 0 && !window.confirm(
-        `Replace the ${pieces.length} track pieces in this layout with the imported ones? Save to keep the change.`
-      )) return
+      if (pieces.length > 0 && !(await confirmAction(
+        `Replace the ${pieces.length} track pieces in this layout with the imported ones? Save to keep the change.`,
+        { okLabel: 'Replace' }
+      ))) return
       setBusy(true)
       setError('')
       setMessage('')
