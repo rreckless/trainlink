@@ -74,3 +74,13 @@ fn a_three_way_leg_with_no_point_is_refused_not_a_panic() {
     let message = place_three_ways(&groups, &raw, 1.0, &links).err().expect("the import should be refused");
     assert!(message.contains("does not define"), "{message}");
 }
+
+#[test]
+fn a_chosen_file_is_read_as_text_and_a_missing_one_says_why() {
+    let path = std::env::temp_dir().join(format!("trainlink-import-{}.xml", std::process::id()));
+    std::fs::write(&path, "<layout-config/>").unwrap();
+    assert_eq!(crate::import_file::read_xml(&path).unwrap(), "<layout-config/>");
+    std::fs::remove_file(&path).unwrap();
+    let error = crate::import_file::read_xml(&path).unwrap_err();
+    assert!(error.starts_with("Could not read the file:"), "{error}");
+}

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { IS_DESKTOP } from '../../services/api'
 
 const DEFAULT_RADIUS_MM = '263.5'
 const LIST_LIMIT = 10
@@ -24,19 +26,33 @@ function ReportList({ title, items, render }) {
 
 // Pick an AnyRail (JMRI layout-config XML) export and turn it into track pieces in the open layout
 export default function AnyRailImport({ busy, report, onImport, onClose }) {
+  // The browser's file, on the web. In the desktop app, the core reads the chosen file: { name, xml }
   const [file, setFile] = useState(null)
+  const [chosen, setChosen] = useState(null)
   const [radius, setRadius] = useState(DEFAULT_RADIUS_MM)
   const [formError, setFormError] = useState('')
+  const fileName = IS_DESKTOP ? chosen?.name : file?.name
+
+  // The desktop app's own file dialog. The core reads the file, because the webview cannot read every file it picks
+  const chooseInDesktop = async () => {
+    setFormError('')
+    try {
+      const picked = await invoke('pick_anyrail_file')
+      if (picked) setChosen(picked)
+    } catch (err) {
+      setFormError(String(err))
+    }
+  }
 
   const submit = async (event) => {
     event.preventDefault()
     setFormError('')
     const radiusMm = Number(radius)
-    if (!file) return setFormError('Choose the XML file exported from AnyRail')
+    if (IS_DESKTOP ? !chosen : !file) return setFormError('Choose the XML file exported from AnyRail')
     if (!(radiusMm > 0)) return setFormError('The innermost curve radius must be a positive number of mm')
     let xml
     try {
-      xml = await file.text()
+      xml = IS_DESKTOP ? chosen.xml : await file.text()
     } catch (err) {
       return setFormError(`Could not read the file: ${err.message}`)
     }
@@ -65,15 +81,30 @@ export default function AnyRailImport({ busy, report, onImport, onClose }) {
       </p>
 
       <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-        <label className="text-sm text-slate-300">
-          XML file
-          <input
-            type="file"
-            accept=".xml,text/xml,application/xml"
-            onChange={(event) => setFile(event.target.files[0] ?? null)}
-            className="mt-1 w-full text-sm text-slate-300"
-          />
-        </label>
+        <div className="text-sm text-slate-300">
+          <span className="block mb-1">XML file</span>
+          {IS_DESKTOP ? (
+            <button
+              type="button"
+              onClick={chooseInDesktop}
+              disabled={busy}
+              className="px-3 py-2 bg-slate-700 rounded text-white hover:bg-slate-600 disabled:opacity-50"
+            >
+              Choose file…
+            </button>
+          ) : (
+            <label className="inline-block px-3 py-2 bg-slate-700 rounded text-white hover:bg-slate-600 cursor-pointer">
+              Choose file…
+              <input
+                type="file"
+                accept=".xml,text/xml,application/xml"
+                onChange={(event) => setFile(event.target.files[0] ?? null)}
+                className="sr-only"
+              />
+            </label>
+          )}
+          <span className="ml-3 text-xs text-slate-400">{fileName || 'No file chosen'}</span>
+        </div>
         <label className="text-sm text-slate-300">
           Innermost curve radius (mm)
           <input

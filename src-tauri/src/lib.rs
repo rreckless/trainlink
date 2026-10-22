@@ -8,6 +8,7 @@ pub mod api;
 pub mod db;
 pub mod fields;
 pub mod http;
+pub mod import_file;
 pub mod library;
 pub mod moving_time;
 pub mod server;
@@ -67,6 +68,8 @@ fn answer(app: &Arc<AppState>, request: &Request<Vec<u8>>) -> Response<Vec<u8>> 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![import_file::pick_anyrail_file])
         .setup(|app| {
             let folder = app.path().app_data_dir()?;
             std::fs::create_dir_all(&folder)?;
