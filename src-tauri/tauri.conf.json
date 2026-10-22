@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' trainlink://localhost http://trainlink.localhost; connect-src 'self' ipc: http://ipc.localhost trainlink://localhost http://trainlink.localhost; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "devCsp": "default-src 'self' http://localhost:3000 ws://localhost:3000; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; style-src 'self' 'unsafe-inline'; img-src 'self' data: trainlink://localhost http://trainlink.localhost; connect-src 'self' ipc: http://ipc.localhost trainlink://localhost http://trainlink.localhost http://localhost:3000 ws://localhost:3000; font-src 'self' data:; object-src 'none'; base-uri 'none'"
     }
   },
   "bundle": {

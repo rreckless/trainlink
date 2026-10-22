@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../store'
-import { BASE_URL } from '../services/api'
+import { apiFetch, BASE_URL } from '../services/api'
 
 const STATUS_URL = `${BASE_URL}/api/z21/status`
 
@@ -8,7 +8,7 @@ const STATUS_URL = `${BASE_URL}/api/z21/status`
 export const refreshZ21Status = async () => {
   let z21 = { connected: false, state: 'disconnected', lastHeartbeat: null }
   try {
-    const response = await fetch(STATUS_URL)
+    const response = await apiFetch(STATUS_URL)
     if (response.ok) {
       const data = await response.json()
       z21 = {

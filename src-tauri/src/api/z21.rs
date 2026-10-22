@@ -43,6 +43,9 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
 fn connect(app: &Arc<AppState>, call: &Call) -> Out {
     let body = call.json_body()?;
     let host = crate::fields::optional_str(&body, "host")?.unwrap_or_else(|| z21::DEFAULT_HOST.into());
+    if !z21::is_local_address(&host) {
+        return Err(ApiError::unprocessable("The Z21 must be on this computer or your local network, given as an IP address"));
+    }
     let port = crate::fields::optional_int(&body, "port")?.unwrap_or(z21::DEFAULT_PORT as i64);
     let port = u16::try_from(port).map_err(|_| ApiError::unprocessable("port must be 0 to 65535"))?;
     if !z21::connect(app, &host, port) {

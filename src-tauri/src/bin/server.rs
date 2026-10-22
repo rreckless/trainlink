@@ -2,8 +2,8 @@
 //!
 //! Usage: trainlink-server [--port 8000] [--host 127.0.0.1] [--data <folder>] [--web <built frontend folder>]
 
-use std::net::TcpListener;
-use std::path::PathBuf;
+use std::net::{IpAddr, TcpListener};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use trainlink_lib::{db, server, state::AppState, sync};
@@ -48,10 +48,36 @@ fn parse(args: &[String]) -> Result<Options, String> {
     Ok(options)
 }
 
+/// Only this computer can reach a loopback address. Any other address can be reached from the network
+fn is_loopback(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+/// The token other devices sign in with. It is made once and kept in the data folder, so it stays the same
+fn token(data: &Path) -> std::io::Result<String> {
+    let path = data.join("server-token");
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        let existing = text.trim().to_string();
+        if !existing.is_empty() {
+            return Ok(existing);
+        }
+    }
+    let token = uuid::Uuid::new_v4().simple().to_string();
+    std::fs::write(&path, &token)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(token)
+}
+
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let options = parse(&args).map_err(std::io::Error::other)?;
     std::fs::create_dir_all(&options.data)?;
+    let loopback = is_loopback(&options.host);
+    let access = server::Access { loopback, token: if loopback { String::new() } else { token(&options.data)? } };
     let connection = db::open(&options.data.join("trainlink.db")).map_err(|error| std::io::Error::other(error.to_string()))?;
     let app = Arc::new(AppState::new(connection, options.data.join("locomotive_images")));
     sync::spawn_loop(app.clone());
@@ -61,5 +87,8 @@ fn main() -> std::io::Result<()> {
     }
     let listener = TcpListener::bind((options.host.as_str(), options.port))?;
     eprintln!("TrainLink server on http://{}:{}", options.host, options.port);
-    server::run(listener, app, options.web)
+    if !loopback {
+        eprintln!("Other devices sign in with the token in {}", options.data.join("server-token").display());
+    }
+    server::run(listener, app, options.web, access)
 }
