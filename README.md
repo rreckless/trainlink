@@ -29,7 +29,7 @@ The plan is in [docs/desktop-plan.md](docs/desktop-plan.md).
 
 | Folder | What it is |
 |--------|------------|
-| `src-tauri/` | The Rust core: database, Z21 link, API, AnyRail importer, sign-in and sync, the web server (`trainlink-server`), and the Tauri desktop shell |
+| `frontend/src-tauri/` | The Rust core: database, Z21 link, API, AnyRail importer, sign-in and sync, the web server (`trainlink-server`), and the Tauri desktop shell |
 | `frontend/` | The React interface, used by the desktop apps and the web version |
 | `supabase/` | The cloud database schema and its row-level security tests |
 | `docs/` | The desktop, sync, and mobile plan, and the login plan |
@@ -52,7 +52,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the step-by-step guide to the web version
 ## Tests
 
 ```
-cd src-tauri && cargo test          # Rust core: API, Z21 bytes, importer, web server, sign-in
+cd frontend/src-tauri && cargo test    # Rust core: API, Z21 bytes, importer, web server, sign-in
 cd frontend && npm test             # layout geometry and model
 ```
 
