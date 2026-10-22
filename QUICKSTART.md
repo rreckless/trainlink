@@ -32,13 +32,15 @@ cd frontend && npm run dev
 
 Open http://localhost:3000. The development settings point the page at port 8000. To use another port, change both: `VITE_API_BASE=http://localhost:8001 npm run dev`.
 
-## Desktop app (macOS)
+## Desktop app
 
-Run it in development:
+Run it in development (macOS or Windows):
 
 ```
 frontend/node_modules/.bin/tauri dev
 ```
+
+### macOS
 
 Build the app and a disk image:
 
@@ -47,6 +49,18 @@ frontend/node_modules/.bin/tauri build --bundles app,dmg
 ```
 
 The build is in `src-tauri/target/release/bundle/`. It isn't signed or notarised, so the first time you open it, right-click it and choose Open.
+
+### Windows
+
+Build the installer:
+
+```
+frontend\node_modules\.bin\tauri build --bundles nsis
+```
+
+The installer is in `src-tauri\target\release\bundle\nsis\`. It isn't signed, so Windows SmartScreen warns about it: choose More info, then Run anyway. The installer adds a Windows Firewall rule so the Z21 can reply over UDP.
+
+The **Windows build** workflow on GitHub Actions builds the same installer on every pull request, and it's available as the `trainlink-windows-installer` artifact on the run's page.
 
 ## First steps
 
