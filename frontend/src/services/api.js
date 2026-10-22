@@ -1,7 +1,7 @@
-// The desktop app answers API calls from its own core at trainlink://localhost. In the browser the calls go to
-// the web backend, at VITE_API_BASE when it is set
+// The desktop app answers API calls from its own core at trainlink://localhost
 export const IS_DESKTOP = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-export const BASE_URL = IS_DESKTOP ? 'trainlink://localhost' : (import.meta.env.VITE_API_BASE ?? 'http://localhost:8000')
+// In the browser the API is the server the page came from. Development sets VITE_API_BASE to reach it
+export const BASE_URL = IS_DESKTOP ? 'trainlink://localhost' : (import.meta.env.VITE_API_BASE ?? window.location.origin)
 
 // The reply's JSON, or null for no content. An error reply throws with the server's detail message
 export async function readReply(response) {

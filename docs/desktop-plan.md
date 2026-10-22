@@ -1,6 +1,6 @@
 # Desktop and mobile plan for TrainLink
 
-Plan for shipping TrainLink as standalone apps on macOS, Windows, iOS, and Android, with the apps kept in sync and the web version retired once the desktop apps reach parity. Planning only; no code has changed, and work has not started.
+Plan for shipping TrainLink as standalone apps on macOS, Windows, iOS, and Android, with the apps kept in sync. The web version stays, and the same core serves it. Planning only; no code has changed, and work has not started.
 
 ## Decisions
 
@@ -8,7 +8,7 @@ Plan for shipping TrainLink as standalone apps on macOS, Windows, iOS, and Andro
 - **Sync between devices.** Layouts, the locomotive roster, pictures, and function labels sync across all of a person's apps. Live state (speed, direction, turnout positions) does not sync; it comes from the Z21.
 - **Tauri 2** wraps the web UI for desktop and mobile.
 - **All features on every platform,** including the layout editor on phones and tablets.
-- **Web version retired** once the Mac and Windows apps match it. Phones ship after that.
+- **One backend.** The Rust core serves the desktop apps and the web version. The Python backend, Postgres, and Docker are retired once the web version runs on the core and passes the same tests.
 - **No Apple Developer account yet.** iOS work waits until one is enrolled. Mac, Windows, and Android come first.
 
 ## Where we start
@@ -25,6 +25,7 @@ A phone can't run the Python backend, so the control code moves into something e
 - **Rust core inside Tauri.** It owns the Z21 link (UDP), the local SQLite database, the pictures, and the sync client. The web UI calls it through Tauri commands, so the UI is the same on every platform.
 - **Z21 protocol** is rewritten in Rust from the Python frame code. The Python tests are the reference: the same input must produce the same bytes.
 - **AnyRail importer** is ported from Python to TypeScript, next to the geometry code already in the frontend. The Python importer stays as the reference until the port matches it on your file.
+- **Web version on the same core.** The core serves the web UI over local HTTP, with the same API the desktop app uses. It carries the origin and content-type checks from the security plan, and a token when reachable from the LAN. The Python backend is retired once the web UI passes the same tests on the core.
 - **Local database:** SQLite in each platform's app data folder. The apps keep working offline and sync when they can reach the sync service.
 
 ## Sync
@@ -43,6 +44,8 @@ Sync is the largest new piece, so it gets its own design.
 - **Pictures** are uploaded to the sync service and downloaded to other devices, at the 2 MB limit already in place.
 
 **Sync service: Supabase.** Hosted Postgres with sign-in and realtime. Closest to the current database, and works on every platform. Firebase and CloudKit were rejected: Firebase has a different data model, and CloudKit is Apple only.
+
+**Web version:** the browser build signs in to the same Supabase accounts and keeps a local copy in IndexedDB, with a service worker so the app loads without a connection. This is extra work beyond the desktop sync.
 
 **Accounts: one per person.** Each person signs in with their own account. Each account owns its own layouts and roster, so a household member doesn't see another's data unless they share it later. Data is encrypted in transit.
 
@@ -67,7 +70,7 @@ Sync is the largest new piece, so it gets its own design.
 
 **Phase 3: Windows.** Same core, WebView2, UDP firewall rule, and a code-signing certificate to avoid SmartScreen warnings.
 
-**Phase 4: Web retired.** Once the Mac and Windows apps match the web version, the Python backend, Postgres, and Docker are removed. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
+**Phase 4: Web on the core, Python retired.** Once the Mac and Windows apps match the web version and the web UI runs on the core, the Python backend, Postgres, and Docker are removed. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
 
 **Phase 5: Android, all features.** Phone and tablet layouts for every feature, including the layout editor. The editor needs touch controls: larger handles, pinch to zoom, and a bigger hit area for track ends. Emergency Stop must always be reachable, including after a dropped connection. Android needs the Wi-Fi and local network permissions. Sideloading the APK needs no account; a Play Store listing needs a one-time developer fee.
 
@@ -127,6 +130,6 @@ Sync (above) also covers the new data: consists, route definitions, and decoder 
 - The Python importer mapped slip and three-way ends to the wrong legs when their order was scrambled. A scrambled slip came out with gaps of more than 150 mm. Fixed in the Python importer too, and the importer tests still pass.
 - Picture uploads from the browser are multipart forms, which the Rust core did not accept. Fixed.
 
-**Left in place on purpose:** the Python backend, Postgres, and Docker still serve the web version. Retiring them is your call. The track library JSON is copied into `src-tauri/library`, and the backend keeps its own copy until then.
+**Left in place on purpose:** the Python backend, Postgres, and Docker still serve the web version until Phase 4 moves the web UI onto the core. The track library JSON is copied into `src-tauri/library`, and the backend keeps its own copy until then.
 
 **Not started:** sync (needs a Supabase project and credentials), Windows, iOS, and Android.
