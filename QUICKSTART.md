@@ -14,7 +14,7 @@ Build the interface, then start the server. The server serves both the API and t
 
 ```
 cd frontend && npm run build
-cd ../src-tauri && cargo run --bin server -- --port 8000 --web ../frontend/dist
+cd src-tauri && cargo run --bin server -- --port 8000 --web ../dist
 ```
 
 Open http://localhost:8000.
@@ -26,7 +26,7 @@ Options: `--port` (default 8000), `--host` (default 127.0.0.1), `--data <folder>
 Start the server, then the development interface:
 
 ```
-cd src-tauri && cargo run --bin server -- --port 8000
+cd frontend/src-tauri && cargo run --bin server -- --port 8000
 cd frontend && npm run dev
 ```
 
@@ -37,7 +37,7 @@ Open http://localhost:3000. The development settings point the page at port 8000
 Run it in development (macOS or Windows):
 
 ```
-frontend/node_modules/.bin/tauri dev
+cd frontend && node_modules/.bin/tauri dev
 ```
 
 ### macOS
@@ -45,22 +45,34 @@ frontend/node_modules/.bin/tauri dev
 Build the app and a disk image:
 
 ```
-frontend/node_modules/.bin/tauri build --bundles app,dmg
+cd frontend && node_modules/.bin/tauri build --bundles app,dmg
 ```
 
-The build is in `src-tauri/target/release/bundle/`. It isn't signed or notarised, so the first time you open it, right-click it and choose Open.
+The build is in `frontend/src-tauri/target/release/bundle/`. It isn't signed or notarised, so the first time you open it, right-click it and choose Open.
 
 ### Windows
 
 Build the installer:
 
 ```
-frontend\node_modules\.bin\tauri build --bundles nsis
+cd frontend
+node_modules\.bin\tauri build --bundles nsis
 ```
 
-The installer is in `src-tauri\target\release\bundle\nsis\`. It isn't signed, so Windows SmartScreen warns about it: choose More info, then Run anyway. The installer adds a Windows Firewall rule so the Z21 can reply over UDP.
+The installer is in `frontend\src-tauri\target\release\bundle\nsis\`. It isn't signed, so Windows SmartScreen warns about it: choose More info, then Run anyway. The installer adds a Windows Firewall rule so the Z21 can reply over UDP.
 
 The **Windows build** workflow on GitHub Actions builds the same installer on every pull request, and it's available as the `trainlink-windows-installer` artifact on the run's page.
+
+## Android app
+
+Needs Android Studio, with the NDK (Side by side) installed from its SDK Manager, and the Rust Android targets (`rustup target add aarch64-linux-android x86_64-linux-android`).
+
+```
+cd frontend && node_modules/.bin/tauri android init
+cd frontend && node_modules/.bin/tauri android build --debug --apk --target aarch64 --target x86_64
+```
+
+The APK is in `frontend/src-tauri/gen/android/app/build/outputs/apk/`. The generated Android project (`src-tauri/gen/`) is not committed. `src-tauri/tauri` is a small launcher the Android build needs: its Gradle step runs `node tauri`, and Node needs a file with that name in that folder. It hands over to the Tauri CLI that the frontend installs.
 
 ## First steps
 

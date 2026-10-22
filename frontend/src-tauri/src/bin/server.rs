@@ -32,7 +32,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         host: "127.0.0.1".into(),
         port: 8000,
         data: default_data(),
-        web: ["../frontend/dist", "frontend/dist"].iter().map(PathBuf::from).find(|path| path.is_dir()),
+        web: ["../dist", "../frontend/dist", "frontend/dist"].iter().map(PathBuf::from).find(|path| path.is_dir()),
     };
     let mut rest = args.iter().skip(1);
     while let Some(flag) = rest.next() {
