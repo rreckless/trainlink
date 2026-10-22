@@ -8,7 +8,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
       NDK_VERSION: 30.0.16248370
     defaults:
       run:
@@ -31,10 +30,11 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - name: Install the Android NDK
+        working-directory: .
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "ndk;${NDK_VERSION}"
-        working-directory: .
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -51,13 +51,9 @@ jobs:
         run: npm test
 
       - name: Generate the Android project
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
         run: node_modules/.bin/tauri android init
 
       - name: Build the APK
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
         run: node_modules/.bin/tauri android build --debug --apk --target aarch64 --target x86_64
 
       - uses: actions/upload-artifact@v4
