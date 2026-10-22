@@ -9,6 +9,7 @@ mod moving;
 mod anyrail;
 mod auth;
 mod server;
+mod sync;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

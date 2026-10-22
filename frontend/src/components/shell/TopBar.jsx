@@ -3,6 +3,7 @@ import { AlertOctagon, Search, Zap } from 'lucide-react'
 import { useStore } from '../../store'
 import { locomotiveApi } from '../../services/locomotiveApi'
 import { PAGES, describeTrack } from './navigation'
+import SyncStatus from './SyncStatus'
 
 // Find pages by name. Enter opens the first match
 function PageSearch({ onOpen }) {
@@ -122,7 +123,8 @@ export default function TopBar({ onOpen, email, onSignOut }) {
         <PageSearch onOpen={onOpen} />
       </div>
       <PowerControls />
-      <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
+      <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
+        <SyncStatus />
         <span className="text-xs text-slate-400 max-w-[12rem] truncate" title={email}>{email}</span>
         <button onClick={onSignOut} className="px-2 py-1 rounded-md text-xs text-slate-200 bg-slate-800 border border-slate-700 hover:bg-slate-700">
           Sign out

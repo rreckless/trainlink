@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::Value;
 
-use super::now;
+use super::{now, sync};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Block {
@@ -137,7 +137,9 @@ pub fn insert_block(conn: &Connection, block: &NewBlock) -> rusqlite::Result<i64
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
         params![block.layout_id, block.name, block.x, block.y, block.max_speed, block.length, now()],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    sync::mark_new(conn, "blocks", id)?;
+    Ok(id)
 }
 
 /// Write the editable columns back. `occupied` follows the state
@@ -147,10 +149,12 @@ pub fn save_block(conn: &Connection, block: &Block) -> rusqlite::Result<()> {
          WHERE id = ?1",
         params![block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, now()],
     )?;
+    sync::mark_changed(conn, "blocks", block.id)?;
     Ok(())
 }
 
 pub fn delete_block(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    sync::forget(conn, "blocks", id)?;
     conn.execute("DELETE FROM blocks WHERE id = ?1", [id])?;
     Ok(())
 }
@@ -204,7 +208,9 @@ pub fn insert_signal(conn: &Connection, layout_id: i64, name: &str, x: f64, y: f
          VALUES (?1, ?2, ?3, ?4, ?5, 'stop', ?6, ?6)",
         params![layout_id, name, x, y, signal_type, now()],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    sync::mark_new(conn, "signals", id)?;
+    Ok(id)
 }
 
 pub fn save_signal(conn: &Connection, signal: &Signal) -> rusqlite::Result<()> {
@@ -212,10 +218,12 @@ pub fn save_signal(conn: &Connection, signal: &Signal) -> rusqlite::Result<()> {
         "UPDATE signals SET name = ?2, x = ?3, y = ?4, aspect = ?5, updated_at = ?6 WHERE id = ?1",
         params![signal.id, signal.name, signal.x, signal.y, signal.aspect, now()],
     )?;
+    sync::mark_changed(conn, "signals", signal.id)?;
     Ok(())
 }
 
 pub fn delete_signal(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    sync::forget(conn, "signals", id)?;
     conn.execute("DELETE FROM signals WHERE id = ?1", [id])?;
     Ok(())
 }
@@ -269,7 +277,9 @@ pub fn insert_feedback(conn: &Connection, layout_id: i64, name: &str, x: f64, y:
          VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
         params![layout_id, name, x, y, number, now()],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    sync::mark_new(conn, "feedbacks", id)?;
+    Ok(id)
 }
 
 pub fn save_feedback(conn: &Connection, feedback: &Feedback) -> rusqlite::Result<()> {
@@ -277,10 +287,12 @@ pub fn save_feedback(conn: &Connection, feedback: &Feedback) -> rusqlite::Result
         "UPDATE feedbacks SET name = ?2, x = ?3, y = ?4, state = ?5, updated_at = ?6 WHERE id = ?1",
         params![feedback.id, feedback.name, feedback.x, feedback.y, feedback.state, now()],
     )?;
+    sync::mark_changed(conn, "feedbacks", feedback.id)?;
     Ok(())
 }
 
 pub fn delete_feedback(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    sync::forget(conn, "feedbacks", id)?;
     conn.execute("DELETE FROM feedbacks WHERE id = ?1", [id])?;
     Ok(())
 }
@@ -344,7 +356,9 @@ pub fn insert_route(conn: &Connection, route: &NewRoute) -> rusqlite::Result<i64
             now()
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    sync::mark_new(conn, "routes", id)?;
+    Ok(id)
 }
 
 pub fn save_route(conn: &Connection, route: &Route) -> rusqlite::Result<()> {
@@ -360,10 +374,12 @@ pub fn save_route(conn: &Connection, route: &Route) -> rusqlite::Result<()> {
             now()
         ],
     )?;
+    sync::mark_changed(conn, "routes", route.id)?;
     Ok(())
 }
 
 pub fn delete_route(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    sync::forget(conn, "routes", id)?;
     conn.execute("DELETE FROM routes WHERE id = ?1", [id])?;
     Ok(())
 }

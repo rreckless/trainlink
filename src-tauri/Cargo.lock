@@ -3726,6 +3726,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "ureq",
+ "uuid",
 ]
 
 [[package]]

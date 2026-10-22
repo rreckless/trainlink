@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 
 use crate::auth::Auth;
+use crate::sync::SyncStatus;
 use crate::moving_time::MovingTime;
 use crate::z21::Z21;
 
@@ -22,6 +23,8 @@ pub struct AppState {
     pub images: PathBuf,
     /// Sign-in. Kept outside the lock, since its calls go over the network
     pub auth: Auth,
+    /// The last sync's outcome, for the status line
+    pub sync: Mutex<SyncStatus>,
 }
 
 impl AppState {
@@ -34,6 +37,7 @@ impl AppState {
             inner: Mutex::new(Inner { db, z21: Z21::new(), moving: MovingTime::new() }),
             images,
             auth,
+            sync: Mutex::new(SyncStatus::default()),
         }
     }
 }

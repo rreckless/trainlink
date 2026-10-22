@@ -11,6 +11,7 @@ pub mod http;
 pub mod library;
 pub mod moving_time;
 pub mod server;
+pub mod sync;
 pub mod state;
 pub mod z21;
 
@@ -56,7 +57,9 @@ pub fn run() {
             let folder = app.path().app_data_dir()?;
             std::fs::create_dir_all(&folder)?;
             let connection = db::open(&folder.join("trainlink.db"))?;
-            app.manage(Arc::new(AppState::new(connection, folder.join("locomotive_images"))));
+            let state = Arc::new(AppState::new(connection, folder.join("locomotive_images")));
+            sync::spawn_loop(state.clone());
+            app.manage(state);
             Ok(())
         })
         .register_asynchronous_uri_scheme_protocol("trainlink", |context: UriSchemeContext<'_, _>, request, responder: UriSchemeResponder| {

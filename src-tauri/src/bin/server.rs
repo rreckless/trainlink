@@ -6,7 +6,7 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use trainlink_lib::{db, server, state::AppState};
+use trainlink_lib::{db, server, state::AppState, sync};
 
 struct Options {
     host: String,
@@ -49,6 +49,7 @@ fn main() -> std::io::Result<()> {
     std::fs::create_dir_all(&options.data)?;
     let connection = db::open(&options.data.join("trainlink.db")).map_err(|error| std::io::Error::other(error.to_string()))?;
     let app = Arc::new(AppState::new(connection, options.data.join("locomotive_images")));
+    sync::spawn_loop(app.clone());
     match &options.web {
         Some(path) => eprintln!("Web UI from {}", path.display()),
         None => eprintln!("No built web UI found. Run npm run build in frontend/, or pass --web"),
