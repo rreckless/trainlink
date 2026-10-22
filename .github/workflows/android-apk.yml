@@ -31,8 +31,9 @@ jobs:
         # The runner already has the Android SDK in ANDROID_HOME; this adds the NDK to it
         working-directory: .
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "ndk;${NDK_VERSION}"
+          SDKMANAGER=$(find "${ANDROID_HOME}/cmdline-tools" -path '*/bin/sdkmanager' | head -1)
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "ndk;${NDK_VERSION}"
           echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
