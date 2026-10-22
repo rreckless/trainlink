@@ -92,6 +92,19 @@ Sync is the largest new piece, so it gets its own design.
 
 No open questions remain in this plan.
 
+## Features to add on every platform
+
+These come from the review against the other app (see the implementation plan, Phases 8 and 9). Each is built once in the Rust core and the UI, then shipped on every platform:
+
+- **Live occupancy:** the core already reads the Z21 feedback. It needs a feedback event to the UI, and the Switchboard and layout editor need to show it.
+- **Route running:** needs automatic driving in the core before the Run button can work.
+- **Consists and multi-throttle:** the core sends the commands; the UI shows the consist and each throttle.
+- **Controller support:** the input layer differs per platform (gamepad input in the web view on desktop, separate handling on phones). Emergency stop stays on a fixed button.
+- **Decoder programming:** new Z21 programming commands in the Rust core. Writes need the same confirmation and read-back as the web version.
+- **Cab view:** deferred until a camera or video source is chosen.
+
+Sync (above) also covers the new data: consists, route definitions, and decoder profiles sync like the roster.
+
 ## Status: Mac app built
 
 **Built (uncommitted, on branch `desktop-mac`):**

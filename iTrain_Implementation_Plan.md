@@ -13,20 +13,26 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Project setup, Docker (PostgreSQL, Redis), Python 3.12 venv | ✅ | Renamed to TrainLink |
-| Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status, track power resume. Train run on real Z21 (user test). Turnout commands and R-BUS feedback 🧪 not yet tried on hardware |
-| Control page (locomotives, operate layout, Z21 connection) | 🧪 | Server-side roster, multi-select speed and direction, emergency stop. Replaces the old Locomotives section. Browser-tested with the Z21 stubbed; train run on real Z21 (user test) |
+| Project setup, Docker (PostgreSQL, Redis), Python 3.12 venv | ✅ | Renamed to TrainLink. Docker runs PostgreSQL and Redis |
+| Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status, track power resume. Speed, direction, and emergency stop verified on hardware. Turnout commands and R-BUS feedback not yet tried on hardware |
+| Locomotive control and roster | 🧪 | Multi-select speed and direction, emergency stop, 20 function buttons with labels and momentary buttons, pictures, moving time. Browser-tested with the Z21 stubbed. Functions and moving time not yet verified on hardware |
+| Z21 state (locomotive replies, track state) | 🧪 | Replies parsed for speed, direction, and functions, and shown on the roster. Short circuit and track power off block commands. Tested against a fake Z21 in the Rust tests |
+| Control page (operate layout, Z21 connection) | 🧪 | Layout in operate mode, turnout throws, Z21 connection at the top. Browser-tested with the Z21 stubbed |
+| Web app shell | ✅ | Top bar with page search, track power state, and emergency stop. Grouped navigation with a collapse toggle. Connection card |
 | System settings UI (Z21 host and port) | ✅ | Host and port are shared with the Control page |
+| Desktop app (Mac) | 🧪 | Tauri app with a Rust core: the same API, database, Z21 link, and importer. Release DMG built. Window and Control page checked. Pull request #12. Not yet run against the real Z21 |
 | Database models and schemas | 🟡 | Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation defined. REST routes exist for all except CommandStation |
-| WebSocket endpoint | 🟡 | Endpoint and connection manager exist. Messages are echoed to all clients. No auth, no typed events |
-| Redis | 🟡 | Configured in Docker and config. Not used in code |
+| WebSocket endpoint | 🟡 | Still in the Python backend, echoing messages. The web UI no longer uses it, and the desktop app has no WebSocket |
+| Redis | 🟡 | Runs in Docker and is configured. Not used in code |
 | Frontend state (Zustand) | 🟡 | Store exists. Only some panels read from it |
-| Layout Editor | 🧪 | Drawing, placement, AnyRail import, zoom, DCC turnout addresses, save and load. Browser-tested with Playwright |
-| Switchboard, Route Manager | 🟡 | Placeholder UI only |
-| Electron wrapper | 🟡 | `electron/` scaffold exists. Not verified to run |
-| Backend tests | ✅ | 192 tests in `backend/tests/` |
-| Frontend tests | ✅ | 42 tests (`npm test`) |
-| Mock Z21 for testing | ✅ | UDP responder in `backend/tests/conftest.py` |
+| Layout Editor | 🧪 | Drawing, placement, curved flex track with handles, joins, rotation, rename and delete, open-end markers, AnyRail import (matches the Python importer on a real file). Browser-tested with Playwright |
+| Switchboard | 🟡 | Lists the first five blocks. No turnout or occupancy view yet |
+| Route Manager | 🟡 | Routes can be created and edited. Run does nothing yet, because route execution is not built |
+| Electron wrapper | ⬜ | Superseded by the Tauri desktop app. The `electron/` folder is an unused scaffold to remove |
+| Backend tests | ✅ | 241 tests in `backend/tests/`, with PostgreSQL running |
+| Frontend tests | ✅ | 60 tests (`npm test`) |
+| Desktop core tests | ✅ | 46 Rust tests (`cargo test` in `src-tauri/`) |
+| Mock Z21 for testing | ✅ | UDP responder in `backend/tests/conftest.py`. The Rust tests use a fake Z21 on localhost |
 
 ---
 
@@ -111,6 +117,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ⬜ Block linking to signals
    - ⬜ Automatic signal management
    - ⬜ Block properties UI
+   - ⬜ Live occupancy on the Switchboard and in the layout editor. The Z21 feedback is read, but no screen shows it yet
 
 3. **Signal Control** ⬜
    - 🟡 Signal model and REST routes exist
@@ -150,6 +157,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ⬜ Route creation UI with wizard
    - ⬜ Advanced route options (speed limits, dwell times)
    - ⬜ Route visualization
+   - ⬜ Run and Stop on the Route Manager. The Run button does nothing yet, and the backend refuses to run a route until automatic driving is built
 
 2. **Automatic Driving** ⬜
    - ⬜ Simple automatic mode (follow route)
@@ -291,6 +299,44 @@ Entry criteria:
    - ⬜ Auto-detect command station type
    - ⬜ Query available features
    - ⬜ Configure based on capabilities
+
+### Phase 8: Driver Tools (2-3 weeks)
+**Goal**: Drive more than one locomotive at a time, and use more than the keyboard and mouse
+
+1. **Consists** ⬜
+   - ⬜ Link locomotives into a consist with a lead locomotive, which drives all of them
+   - ⬜ Check the Z21 spec v1.13 for consist commands. If it has none, send speed and direction to each member
+   - ⬜ Consists saved with the roster, with a direction per member
+   - ⬜ Functions chosen per member, or sent to the whole consist
+
+2. **Multi-Throttle** ⬜
+   - ⬜ Several locomotives on screen at once, each with its own speed, direction, and functions
+   - ⬜ Builds on the roster's group control
+
+3. **Controller Support** ⬜
+   - ⬜ USB and Bluetooth game controllers and throttles
+   - ⬜ Map speed, direction, functions, and emergency stop to buttons and axes
+   - ⬜ Emergency stop cannot be mapped to anything that could be pressed by accident
+
+4. **Cab View and Cab Ride** ⬜ (deferred)
+   - ⬜ Needs a camera or video feed source chosen first. Not planned in detail until then
+
+### Phase 9: Decoder Programming (3-4 weeks)
+**Goal**: Read and write decoder settings (CVs) on the programming track
+**Needs Phase 5 decoder profiles first.** Writing a wrong CV can stop a decoder working, so every write is checked.
+
+1. **Programming Track** ⬜
+   - ⬜ Read and write CVs with the Z21 programming commands. Check the command codes in the spec v1.13 before implementing
+   - ⬜ Direct mode on the programming track, and POM mode on the main track if the spec and decoder allow it
+
+2. **CV Browser** ⬜
+   - ⬜ List CVs with names and ranges from the decoder profile
+   - ⬜ Show the current value, and edit it
+
+3. **Safety** ⬜
+   - ⬜ Confirmation before every write
+   - ⬜ Refuse values outside the CV's range
+   - ⬜ Read the value back after each write and report any mismatch
 
 ---
 
