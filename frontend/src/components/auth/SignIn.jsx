@@ -1,5 +1,17 @@
 import { useState } from 'react'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { IS_DESKTOP } from '../../services/api'
 import { authApi } from '../../services/authApi'
+
+// The desktop app waits while the sign-in finishes in the browser: about three minutes
+async function waitForSignIn() {
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const session = await authApi.getSession()
+    if (session.signed_in) return
+  }
+  throw new Error('The Google sign-in did not finish. Try again')
+}
 
 const MODES = {
   signin: { title: 'Sign in', action: 'Sign in', switchText: 'New to TrainLink? Create an account', switchTo: 'signup' },
@@ -21,6 +33,27 @@ export default function SignIn({ onSignedIn }) {
     setMode(next)
     setError('')
     setNotice('')
+  }
+
+  const signInWithGoogle = async () => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const { url } = await authApi.startGoogle(window.location.origin, IS_DESKTOP)
+      if (!IS_DESKTOP) {
+        window.location.href = url
+        return
+      }
+      await openUrl(url)
+      setNotice('Finish signing in with Google in your browser.')
+      await waitForSignIn()
+      onSignedIn()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const submit = async (event) => {
@@ -96,6 +129,16 @@ export default function SignIn({ onSignedIn }) {
             )}
           </div>
         </form>
+        {mode !== 'reset' && (
+          <button
+            type="button"
+            onClick={signInWithGoogle}
+            disabled={busy}
+            className="mt-3 w-full py-2 rounded-lg bg-white text-slate-900 hover:bg-slate-200 font-semibold disabled:opacity-50"
+          >
+            Continue with Google
+          </button>
+        )}
         <p className="text-xs text-slate-500 text-center mt-4">
           Your layouts and locomotives belong to your account. Sync between devices is coming next.
         </p>

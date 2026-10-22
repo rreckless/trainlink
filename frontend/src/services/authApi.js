@@ -7,4 +7,6 @@ export const authApi = {
   signUp: (email, password) => request('POST', '/api/auth/sign-up', { email, password }),
   signOut: () => request('POST', '/api/auth/sign-out'),
   resetPassword: (email) => request('POST', '/api/auth/reset-password', { email }),
+  // The address to open for Google. The browser comes back to this page's address, or to the desktop app
+  startGoogle: (origin, desktop) => request('POST', '/api/auth/google', { origin, desktop }),
 }

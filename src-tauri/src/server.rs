@@ -237,7 +237,7 @@ fn sign_in(request: &Request, access: &Access) -> (Reply, Option<String>) {
     (Reply::empty(204), Some(format!("{TOKEN_COOKIE}={given}; HttpOnly; SameSite=Strict; Path=/")))
 }
 
-fn write_reply(stream: &mut impl Write, reply: &Reply, origin: Option<&str>, cookie: Option<&str>) -> std::io::Result<()> {
+pub(crate) fn write_reply(stream: &mut impl Write, reply: &Reply, origin: Option<&str>, cookie: Option<&str>) -> std::io::Result<()> {
     let cors = match origin {
         Some(origin) => format!(
             "Access-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Credentials: true\r\nAccess-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nVary: Origin\r\n"
@@ -302,6 +302,9 @@ pub fn web_file(root: &Path, target: &str) -> Option<PathBuf> {
 /// Answer one request: the API under /api, the web UI everywhere else
 pub fn answer(app: &Arc<AppState>, web: Option<&Path>, request: &Request) -> Reply {
     let (path, query) = request.target.split_once('?').unwrap_or((request.target.as_str(), ""));
+    if path == "/auth/callback" && request.method == "GET" {
+        return crate::auth::google::callback(app, query, true);
+    }
     if path == "/api" || path.starts_with("/api/") || path == "/health" {
         return handle(app, &Call {
             method: &request.method,

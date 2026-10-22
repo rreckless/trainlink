@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use super::send;
+use super::{app, send};
 use crate::auth::store::MemoryStore;
 use crate::auth::{check_credentials, Auth, Session, SignUp};
 use crate::state::AppState;
@@ -221,4 +221,45 @@ fn the_session_file_is_owner_only_and_round_trips() {
     }
     store.clear();
     assert!(store.load().is_none());
+}
+
+#[test]
+fn the_google_challenge_is_the_documented_pkce_value() {
+    // RFC 7636, appendix B
+    assert_eq!(crate::auth::google::challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+}
+
+#[test]
+fn a_google_code_is_exchanged_only_with_the_verifier_this_app_started_with() {
+    use crate::auth::google::challenge;
+    let base = fake_service(|target, body| {
+        if target.starts_with("/auth/v1/token?grant_type=pkce") && body["auth_code"] == "the-code" {
+            // The service checks that the verifier hashes to the challenge it was given. The fake returns that hash
+            let verifier = body["code_verifier"].as_str().unwrap_or_default();
+            return (200, json!({ "access_token": challenge(verifier), "refresh_token": "r", "expires_in": 3600, "user": { "id": "u", "email": "g@example.com" } }));
+        }
+        (400, json!({ "msg": "bad code" }))
+    });
+    let auth = Auth::new(&base, "anon", Box::new(MemoryStore::new()));
+    let url = auth.google_start("http://127.0.0.1:47831/callback");
+    assert!(url.contains("provider=google"));
+    assert!(url.contains("redirect_to=http%3A%2F%2F127.0.0.1%3A47831%2Fcallback"));
+    assert!(url.contains("code_challenge_method=s256"));
+    let sent = url.split("code_challenge=").nth(1).unwrap().split('&').next().unwrap().to_string();
+
+    assert!(auth.google_finish("someone-elses-code").is_err());
+    let session = auth.google_finish("the-code").unwrap();
+    assert_eq!(session.access_token, sent);
+    assert_eq!(session.email, "g@example.com");
+    // The verifier is used once. A second return has nothing to exchange
+    assert!(auth.google_finish("the-code").is_err());
+}
+
+#[test]
+fn a_return_without_a_well_formed_code_is_refused_before_the_service() {
+    let app = app();
+    let reply = crate::auth::google::callback(&app, "error=access_denied", false);
+    assert!(String::from_utf8_lossy(&reply.body).contains("cancelled or did not finish"));
+    let reply = crate::auth::google::callback(&app, "code=a%20b", false);
+    assert!(String::from_utf8_lossy(&reply.body).contains("cancelled or did not finish"));
 }
