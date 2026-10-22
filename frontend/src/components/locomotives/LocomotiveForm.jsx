@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FUNCTION_COUNT, functionLabel } from '../../hooks/useLocomotiveRoster'
-import { IS_DESKTOP } from '../../services/api'
+import { NATIVE_FILE_PICKER } from '../../services/api'
 import { pickPictureInDesktop } from '../../services/desktopFiles'
 import { pictureUrl } from '../../services/locomotiveApi'
 
@@ -112,7 +112,7 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
         {picture && <span className="text-sm text-slate-300">New picture: {picture.name}</span>}
         <div className="text-sm text-slate-300">
           <span className="block mb-1">Picture (JPEG, PNG, or WebP, 2 MB max)</span>
-          {IS_DESKTOP ? (
+          {NATIVE_FILE_PICKER ? (
             <button
               type="button"
               onClick={choosePicture}

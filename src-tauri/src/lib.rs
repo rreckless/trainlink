@@ -4,6 +4,7 @@
 
 pub mod anyrail;
 pub mod auth;
+pub mod bridge;
 pub mod api;
 pub mod db;
 pub mod fields;
@@ -65,11 +66,12 @@ fn answer(app: &Arc<AppState>, request: &Request<Vec<u8>>) -> Response<Vec<u8>> 
         .unwrap_or_else(|_| Response::new(Vec::new()))
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![import_file::pick_anyrail_file, import_file::pick_picture_file])
+        .invoke_handler(tauri::generate_handler![import_file::pick_anyrail_file, import_file::pick_picture_file, bridge::api_call])
         .setup(|app| {
             let folder = app.path().app_data_dir()?;
             std::fs::create_dir_all(&folder)?;

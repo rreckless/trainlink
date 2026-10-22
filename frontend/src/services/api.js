@@ -1,9 +1,14 @@
+import { invoke } from '@tauri-apps/api/core'
 import { askText } from './dialogs'
 
-// The desktop app answers API calls from its own core. WebView2 on Windows reaches a custom scheme as an http address
+// The desktop and mobile apps answer API calls from their own core. Windows and Android webviews reach a custom scheme as
+// an http address
 export const IS_DESKTOP = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+export const IS_ANDROID = typeof navigator !== 'undefined' && navigator.userAgent.includes('Android')
 const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
-const DESKTOP_BASE = IS_WINDOWS ? 'http://trainlink.localhost' : 'trainlink://localhost'
+const DESKTOP_BASE = IS_WINDOWS || IS_ANDROID ? 'http://trainlink.localhost' : 'trainlink://localhost'
+// The native file dialog and its reading in the core: desktop only. Android uses the page's own file picker
+export const NATIVE_FILE_PICKER = IS_DESKTOP && !IS_ANDROID
 // In the browser the API is the server the page came from. Development sets VITE_API_BASE to reach it
 export const BASE_URL = IS_DESKTOP ? DESKTOP_BASE : (import.meta.env.VITE_API_BASE ?? window.location.origin)
 
@@ -45,17 +50,55 @@ async function signIn() {
   }
 }
 
+// The bytes of a request body, for the command channel
+async function bodyBytes(body) {
+  if (body === undefined || body === null) return new Uint8Array()
+  if (typeof body === 'string') return new TextEncoder().encode(body)
+  if (body instanceof ArrayBuffer) return new Uint8Array(body)
+  if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer())
+  throw new Error('This upload cannot be sent from the Android app')
+}
+
+function toBase64(bytes) {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
+}
+
+function fromBase64(text) {
+  return Uint8Array.from(atob(text), (char) => char.charCodeAt(0))
+}
+
+// On Android a write goes to the core as a command, because the webview does not pass the body to the address. The
+// reply is rebuilt as a Response, so the callers read it the same way
+async function sendThroughCore(url, init) {
+  const headers = new Headers(init.headers ?? {})
+  const bytes = await bodyBytes(init.body)
+  const reply = await invoke('api_call', {
+    request: {
+      method: init.method ?? 'POST',
+      path: url.slice(BASE_URL.length),
+      contentType: headers.get('Content-Type') ?? 'application/json',
+      bodyBase64: toBase64(bytes),
+    },
+  })
+  const payload = reply.status === 204 ? null : fromBase64(reply.bodyBase64)
+  return new Response(payload, { status: reply.status, headers: { 'Content-Type': reply.contentType } })
+}
+
 // Every request to the server goes through here, so the sign-in cookie is sent and a refusal can ask for the token
 export async function apiFetch(url, init = {}) {
   const options = { ...init, credentials: IS_DESKTOP ? 'omit' : 'include' }
-  const response = await fetch(url, options)
+  const isWrite = !['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase())
+  const send = (target, sendOptions) => (IS_ANDROID && isWrite ? sendThroughCore(target, sendOptions) : fetch(target, sendOptions))
+  const response = await send(url, options)
   if (response.status !== 401 || IS_DESKTOP || Date.now() - declinedAt < ASK_AGAIN_AFTER_MS) return response
   const pending = signingIn ?? (signingIn = signIn().finally(() => { signingIn = null }))
   if (!(await pending)) {
     declinedAt = Date.now()
     return response
   }
-  return fetch(url, options)
+  return send(url, options)
 }
 
 export async function request(method, path, body) {

@@ -65,7 +65,8 @@ function ConnectionCard({ collapsed }) {
 export default function SideNav({ activeTab, onOpen, collapsed, onToggle }) {
   return (
     <nav
-      className={`${collapsed ? 'w-16' : 'w-60'} flex-shrink-0 flex flex-col bg-slate-950 border-r border-slate-800 transition-[width] duration-150`}
+      // The whole menu scrolls, including the connection card at its foot, so the card is reachable when the window is short
+      className={`${collapsed ? 'w-16' : 'w-60'} flex-shrink-0 self-stretch min-h-0 overflow-y-auto flex flex-col bg-slate-950 border-r border-slate-800 transition-[width] duration-150`}
       aria-label="Main"
     >
       <div className={`flex items-center h-11 px-3 ${collapsed ? 'justify-center' : 'justify-end'}`}>
@@ -79,7 +80,7 @@ export default function SideNav({ activeTab, onOpen, collapsed, onToggle }) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 space-y-4">
+      <div className="px-2 space-y-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
             {!collapsed && <p className="px-2 pb-1 text-[11px] uppercase tracking-wider text-slate-500">{group.title}</p>}
@@ -92,7 +93,8 @@ export default function SideNav({ activeTab, onOpen, collapsed, onToggle }) {
         ))}
       </div>
 
-      <div className="p-2">
+      {/* Under the menu items, with room below it so it clears the window's bottom edge (where the shelf can cover it) */}
+      <div className="p-2 pb-20">
         <ConnectionCard collapsed={collapsed} />
       </div>
     </nav>
