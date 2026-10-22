@@ -1,5 +1,6 @@
 //! Where the session is kept: the operating system's keychain in the app, and memory in tests
 
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use super::Session;
@@ -13,9 +14,48 @@ pub trait SessionStore: Send + Sync {
     fn clear(&self);
 }
 
-/// The macOS Keychain (or Windows Credential Manager, once built there)
+/// The session in a file in the app's data folder, readable only by the user account. Used while builds are
+/// not signed with a developer identity: the Keychain asks again after every build in that case
+pub struct FileStore {
+    path: PathBuf,
+}
+
+impl FileStore {
+    pub fn new(path: &Path) -> FileStore {
+        FileStore { path: path.to_path_buf() }
+    }
+}
+
+impl SessionStore for FileStore {
+    fn load(&self) -> Option<Session> {
+        let text = std::fs::read_to_string(&self.path).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    fn save(&self, session: &Session) -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt;
+        let text = serde_json::to_string(session).map_err(|error| error.to_string())?;
+        if let Some(folder) = self.path.parent() {
+            std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+        }
+        // Written to a new file with owner-only permissions, then moved into place, so a crash never leaves half a file
+        let temporary = self.path.with_extension("json.tmp");
+        std::fs::write(&temporary, text).map_err(|error| error.to_string())?;
+        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600)).map_err(|error| error.to_string())?;
+        std::fs::rename(&temporary, &self.path).map_err(|error| error.to_string())
+    }
+
+    fn clear(&self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// The macOS Keychain. Kept for when the app is signed with a developer identity, which keeps the Keychain from
+/// asking again after each build
+#[allow(dead_code)]
 pub struct KeychainStore;
 
+#[allow(dead_code)]
 impl KeychainStore {
     pub fn new() -> KeychainStore {
         KeychainStore
@@ -26,6 +66,7 @@ impl KeychainStore {
     }
 }
 
+#[allow(dead_code)]
 impl SessionStore for KeychainStore {
     fn load(&self) -> Option<Session> {
         let text = Self::entry().ok()?.get_password().ok()?;

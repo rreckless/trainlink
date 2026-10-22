@@ -28,8 +28,10 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// The data folder is the parent of the picture folder
     pub fn new(db: Connection, images: PathBuf) -> AppState {
-        AppState::with_auth(db, images, Auth::for_app())
+        let data = images.parent().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+        AppState::with_auth(db, images, Auth::for_app(&data))
     }
 
     pub fn with_auth(db: Connection, images: PathBuf, auth: Auth) -> AppState {
