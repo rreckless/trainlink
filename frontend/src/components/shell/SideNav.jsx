@@ -93,7 +93,8 @@ export default function SideNav({ activeTab, onOpen, collapsed, onToggle }) {
         ))}
       </div>
 
-      <div className="mt-auto p-2">
+      {/* Under the menu items, with room below it so it clears the window's bottom edge (where the shelf can cover it) */}
+      <div className="p-2 pb-20">
         <ConnectionCard collapsed={collapsed} />
       </div>
     </nav>
