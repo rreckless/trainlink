@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { IS_DESKTOP } from '../../services/api'
+import { NATIVE_FILE_PICKER } from '../../services/api'
 
 const DEFAULT_RADIUS_MM = '263.5'
 const LIST_LIMIT = 10
@@ -31,7 +31,7 @@ export default function AnyRailImport({ busy, report, onImport, onClose }) {
   const [chosen, setChosen] = useState(null)
   const [radius, setRadius] = useState(DEFAULT_RADIUS_MM)
   const [formError, setFormError] = useState('')
-  const fileName = IS_DESKTOP ? chosen?.name : file?.name
+  const fileName = NATIVE_FILE_PICKER ? chosen?.name : file?.name
 
   // The desktop app's own file dialog. The core reads the file, because the webview cannot read every file it picks
   const chooseInDesktop = async () => {
@@ -48,11 +48,11 @@ export default function AnyRailImport({ busy, report, onImport, onClose }) {
     event.preventDefault()
     setFormError('')
     const radiusMm = Number(radius)
-    if (IS_DESKTOP ? !chosen : !file) return setFormError('Choose the XML file exported from AnyRail')
+    if (NATIVE_FILE_PICKER ? !chosen : !file) return setFormError('Choose the XML file exported from AnyRail')
     if (!(radiusMm > 0)) return setFormError('The innermost curve radius must be a positive number of mm')
     let xml
     try {
-      xml = IS_DESKTOP ? chosen.xml : await file.text()
+      xml = NATIVE_FILE_PICKER ? chosen.xml : await file.text()
     } catch (err) {
       return setFormError(`Could not read the file: ${err.message}`)
     }
@@ -83,7 +83,7 @@ export default function AnyRailImport({ busy, report, onImport, onClose }) {
       <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
         <div className="text-sm text-slate-300">
           <span className="block mb-1">XML file</span>
-          {IS_DESKTOP ? (
+          {NATIVE_FILE_PICKER ? (
             <button
               type="button"
               onClick={chooseInDesktop}

@@ -1,9 +1,13 @@
 import { askText } from './dialogs'
 
-// The desktop app answers API calls from its own core. WebView2 on Windows reaches a custom scheme as an http address
+// The desktop and mobile apps answer API calls from their own core. Windows and Android webviews reach a custom scheme as
+// an http address
 export const IS_DESKTOP = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+const IS_ANDROID = typeof navigator !== 'undefined' && navigator.userAgent.includes('Android')
 const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
-const DESKTOP_BASE = IS_WINDOWS ? 'http://trainlink.localhost' : 'trainlink://localhost'
+const DESKTOP_BASE = IS_WINDOWS || IS_ANDROID ? 'http://trainlink.localhost' : 'trainlink://localhost'
+// The native file dialog and its reading in the core: desktop only. Android uses the page's own file picker
+export const NATIVE_FILE_PICKER = IS_DESKTOP && !IS_ANDROID
 // In the browser the API is the server the page came from. Development sets VITE_API_BASE to reach it
 export const BASE_URL = IS_DESKTOP ? DESKTOP_BASE : (import.meta.env.VITE_API_BASE ?? window.location.origin)
 
