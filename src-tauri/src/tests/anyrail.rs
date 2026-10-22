@@ -84,3 +84,12 @@ fn a_chosen_file_is_read_as_text_and_a_missing_one_says_why() {
     let error = crate::import_file::read_xml(&path).unwrap_err();
     assert!(error.starts_with("Could not read the file:"), "{error}");
 }
+
+#[test]
+fn only_jpeg_png_and_webp_pictures_are_accepted() {
+    use std::path::Path;
+    assert_eq!(crate::import_file::picture_type(Path::new("Class 08.JPG")), Some("image/jpeg"));
+    assert_eq!(crate::import_file::picture_type(Path::new("shunter.webp")), Some("image/webp"));
+    assert_eq!(crate::import_file::picture_type(Path::new("notes.txt")), None);
+    assert_eq!(crate::import_file::picture_type(Path::new("no-extension")), None);
+}

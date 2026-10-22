@@ -69,7 +69,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![import_file::pick_anyrail_file])
+        .invoke_handler(tauri::generate_handler![import_file::pick_anyrail_file, import_file::pick_picture_file])
         .setup(|app| {
             let folder = app.path().app_data_dir()?;
             std::fs::create_dir_all(&folder)?;
