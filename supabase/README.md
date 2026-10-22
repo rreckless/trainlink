@@ -23,14 +23,22 @@ A passing run ends with `RLS tests passed`.
 
 1. In the Supabase dashboard, open the SQL Editor and paste the contents of `migrations/20261022100000_init.sql`. Run it once.
 2. Under Authentication → Users, add two test users with auto-confirm on, and note their emails and passwords.
-3. Run the HTTP tests with the public anon key, not the secret key:
+3. Run the HTTP tests with the public anon key, not the secret key. Put the settings in a file outside the repository, for example `~/trainlink-test.env`:
 
 ```
-SUPABASE_URL=https://bnvvdicbimmmcmllease.supabase.co \
-SUPABASE_ANON_KEY=<anon key> \
-TEST_A_EMAIL=<test user A> TEST_A_PASSWORD=<password> \
-TEST_B_EMAIL=<test user B> TEST_B_PASSWORD=<password> \
+export SUPABASE_URL=https://bnvvdicbimmmcmllease.supabase.co
+export SUPABASE_ANON_KEY=<anon key>
+export TEST_A_EMAIL=<test user A>
+export TEST_A_PASSWORD=<password>
+export TEST_B_EMAIL=<test user B>
+export TEST_B_PASSWORD=<password>
+```
+
+Then, from the repository root, in the same terminal:
+
+```
+set -a; source ~/trainlink-test.env; set +a
 node --test supabase/tests/rls_http_test.mjs
 ```
 
-Keep the test passwords out of the repository. The secret key is never needed for these tests.
+The test lists any setting that is missing. Keep the file and the passwords out of the repository. The secret key is never needed for these tests.

@@ -6,11 +6,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-const env = (name) => {
-  const value = process.env[name]
-  if (!value) throw new Error(`Set ${name} before running these tests`)
-  return value
+const REQUIRED = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'TEST_A_EMAIL', 'TEST_A_PASSWORD', 'TEST_B_EMAIL', 'TEST_B_PASSWORD']
+const missing = REQUIRED.filter((name) => !process.env[name])
+if (missing.length > 0) {
+  throw new Error(`Set these before running the tests: ${missing.join(', ')}`)
 }
+const env = (name) => process.env[name]
 const URL_BASE = env('SUPABASE_URL').replace(/\/$/, '')
 const ANON = env('SUPABASE_ANON_KEY')
 
