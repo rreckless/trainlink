@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store'
+import { IS_DESKTOP } from '../services/api'
 
 export const useWebSocket = (url = 'ws://localhost:8000/ws') => {
   const wsRef = useRef(null)
@@ -44,6 +45,12 @@ export const useWebSocket = (url = 'ws://localhost:8000/ws') => {
   }, [])
 
   useEffect(() => {
+    // The desktop core runs inside the app, so there is no server to connect to
+    if (IS_DESKTOP) {
+      setConnected(true)
+      setClientId('desktop')
+      return undefined
+    }
     connect()
 
     return () => {
@@ -51,7 +58,7 @@ export const useWebSocket = (url = 'ws://localhost:8000/ws') => {
         wsRef.current.close()
       }
     }
-  }, [connect])
+  }, [connect, setConnected, setClientId])
 
   return { send, connected: wsRef.current?.readyState === WebSocket.OPEN }
 }

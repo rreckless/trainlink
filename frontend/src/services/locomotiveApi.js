@@ -1,21 +1,21 @@
-import { BASE_URL, request } from './api'
+import { BASE_URL, IS_DESKTOP, readReply, request } from './api'
 
-// Pictures are sent as form data, not JSON
+// Pictures are sent as form data in the browser. The desktop core takes the picture's bytes as the body
 async function sendForm(method, path, file) {
+  if (IS_DESKTOP) {
+    // Read the bytes first. A File sent as the body goes as a stream, which the app's own protocol does not receive
+    const bytes = file ? await file.arrayBuffer() : undefined
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: file ? { 'Content-Type': file.type || 'application/octet-stream' } : undefined,
+      body: bytes,
+    })
+    return readReply(response)
+  }
   const form = new FormData()
   if (file) form.append('file', file)
   const response = await fetch(`${BASE_URL}${path}`, { method, body: form })
-  if (!response.ok) {
-    let message = `Request failed (${response.status})`
-    try {
-      const data = await response.json()
-      if (typeof data.detail === 'string') message = data.detail
-    } catch (error) {
-      // No JSON body. Keep the status message
-    }
-    throw new Error(message)
-  }
-  return response.json()
+  return readReply(response)
 }
 
 // Locomotive roster, setup, and Z21 locomotive commands
