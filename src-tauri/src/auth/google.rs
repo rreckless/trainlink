@@ -21,6 +21,8 @@ use crate::state::AppState;
 /// The port the desktop app listens on for the browser to come back to. It must be on Supabase's redirect list
 pub const DESKTOP_PORT: u16 = 47831;
 pub const DESKTOP_RETURN: &str = "http://127.0.0.1:47831/callback";
+/// The link the Android app opens when Google returns. The system browser opens it, and the app takes it over
+pub const APP_RETURN: &str = "trainlink://auth-callback";
 
 /// Set once the desktop listener is running, so that it starts only once
 static LISTENING: AtomicBool = AtomicBool::new(false);
@@ -79,9 +81,20 @@ impl Auth {
 
 /// The code in a callback's query, if it is well formed. Anything else is refused before it reaches the service
 fn code_from(query: &str) -> Option<&str> {
-    query.split('&').find_map(|pair| pair.strip_prefix("code=")).filter(|code| {
-        !code.is_empty() && code.len() <= 512 && code.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
-    })
+    query.split('&').find_map(|pair| pair.strip_prefix("code=")).filter(|code| well_formed_code(code))
+}
+
+/// Whether a sign-in code has the shape Supabase gives, so that nothing else reaches the service
+pub fn well_formed_code(code: &str) -> bool {
+    !code.is_empty() && code.len() <= 512 && code.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+}
+
+/// Completes a sign-in whose return the app received itself, from its own link. The code is checked first
+pub fn complete(app: &Arc<AppState>, code: &str) -> Result<(), ApiError> {
+    if !well_formed_code(code) {
+        return Err(ApiError::bad_request("The sign-in code was not valid"));
+    }
+    finish(app, code)
 }
 
 /// The browser's return from Google. Signs the device in with the code, claims it for the account, and shows the outcome

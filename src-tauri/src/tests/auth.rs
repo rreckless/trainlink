@@ -263,3 +263,16 @@ fn a_return_without_a_well_formed_code_is_refused_before_the_service() {
     let reply = crate::auth::google::callback(&app, "code=a%20b", false);
     assert!(String::from_utf8_lossy(&reply.body).contains("cancelled or did not finish"));
 }
+
+#[test]
+fn the_app_return_link_is_sent_to_google_sign_in_encoded_and_a_bad_code_is_refused() {
+    use crate::auth::google::{complete, well_formed_code, APP_RETURN};
+    let auth = Auth::new("http://127.0.0.1:1", "anon", Box::new(MemoryStore::new()));
+    let url = auth.google_start(APP_RETURN);
+    assert!(url.contains("redirect_to=trainlink%3A%2F%2Fauth-callback"), "{url}");
+    assert!(well_formed_code("pkce_abc-123.XYZ"));
+    assert!(!well_formed_code("a b"));
+    assert!(!well_formed_code(""));
+    let error = complete(&app(), "a b").unwrap_err();
+    assert_eq!(error.detail, "The sign-in code was not valid");
+}

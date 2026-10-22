@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { IS_DESKTOP } from '../../services/api'
+import { IS_ANDROID, IS_DESKTOP } from '../../services/api'
 import { authApi } from '../../services/authApi'
 
 // The desktop app waits while the sign-in finishes in the browser: about three minutes
@@ -20,12 +20,12 @@ const MODES = {
 }
 
 // The sign-in screen. Shown until someone is signed in
-export default function SignIn({ onSignedIn }) {
+export default function SignIn({ onSignedIn, initialError = '' }) {
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError)
   const [notice, setNotice] = useState('')
   const copy = MODES[mode]
 
@@ -40,7 +40,13 @@ export default function SignIn({ onSignedIn }) {
     setError('')
     setNotice('')
     try {
-      const { url } = await authApi.startGoogle(window.location.origin, IS_DESKTOP)
+      // Android opens Google in the system browser, which returns to the app's link (see useGoogleReturn)
+      const { url } = await authApi.startGoogle(window.location.origin, IS_DESKTOP && !IS_ANDROID, IS_ANDROID)
+      if (IS_ANDROID) {
+        await openUrl(url)
+        setNotice('Finish signing in with Google in your browser. TrainLink continues when it returns.')
+        return
+      }
       if (!IS_DESKTOP) {
         window.location.href = url
         return

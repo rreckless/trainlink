@@ -26,14 +26,34 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "nsis"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
     "category": "Utility",
-    "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
     "windows": {
       "nsis": {
         "installMode": "perMachine",
         "installerHooks": "windows/hooks.nsi"
       }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": [
+            "trainlink"
+          ],
+          "appLink": false
+        }
+      ]
     }
   }
 }

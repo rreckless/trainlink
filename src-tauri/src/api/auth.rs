@@ -37,9 +37,12 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         ("POST", ["google"]) => {
             let body = call.json_body()?;
             let desktop = body.get("desktop").and_then(Value::as_bool).unwrap_or(false);
+            let in_app = body.get("app").and_then(Value::as_bool).unwrap_or(false);
             let return_to = if desktop {
                 crate::auth::google::listen(app)?;
                 crate::auth::google::DESKTOP_RETURN.to_string()
+            } else if in_app {
+                crate::auth::google::APP_RETURN.to_string()
             } else {
                 let origin = fields::required_str(&body, "origin")?;
                 if !is_origin(&origin) {
@@ -48,6 +51,12 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
                 format!("{origin}/auth/callback")
             };
             Ok(Reply::json(200, json!({ "url": app.auth.google_start(&return_to) })))
+        }
+        ("POST", ["google", "complete"]) => {
+            let body = call.json_body()?;
+            let code = fields::required_str(&body, "code")?;
+            crate::auth::google::complete(app, &code)?;
+            Ok(Reply::json(200, session_json(app)))
         }
         ("POST", ["sign-out"]) => {
             app.auth.sign_out();
