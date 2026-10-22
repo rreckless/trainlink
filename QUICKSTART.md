@@ -74,6 +74,20 @@ cd frontend && node_modules/.bin/tauri android build --debug --apk --target aarc
 
 The APK is in `frontend/src-tauri/gen/android/app/build/outputs/apk/`. The generated Android project (`src-tauri/gen/`) is not committed. `src-tauri/tauri` is a small launcher the Android build needs: its Gradle step runs `node tauri`, and Node needs a file with that name in that folder. It hands over to the Tauri CLI that the frontend installs.
 
+## iPad app
+
+Needs Xcode (from the Mac App Store), with its iOS simulator platform (`xcodebuild -downloadPlatform iOS`), the Rust iOS targets (`rustup target add aarch64-apple-ios aarch64-apple-ios-sim`), and `xcodegen` (`brew install xcodegen`).
+
+The first time, accept the Xcode licence (`sudo xcodebuild -license accept`, then `sudo xcodebuild -runFirstLaunch`).
+
+```
+cd frontend && node_modules/.bin/tauri ios init
+cd frontend && scripts/ios-ipad.sh
+cd frontend && node_modules/.bin/tauri ios build --debug --target aarch64-sim
+```
+
+`ios init` regenerates the Xcode project, so run `scripts/ios-ipad.sh` after it each time. The generated project lives in `frontend/src-tauri/gen/apple`. Like the Android build, the Xcode build step runs `node tauri`, so `frontend/src-tauri/gen/apple/tauri` is a launcher that is committed.
+
 ## First steps
 
 1. Open **Settings** and check the Z21 address (default 10.0.0.111, port 21105).
