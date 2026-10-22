@@ -14,18 +14,18 @@ Plan for shipping TrainLink as standalone apps on macOS, Windows, iOS, and Andro
 ## Where we start
 
 - **Frontend:** React and Vite, with react-konva for the layout canvas. Browser-only parts are the AnyRail file picker (it reads the file in the browser, which is where the OneDrive error came from) and the API address.
-- **Backend:** FastAPI with SQLAlchemy on Postgres in Docker. Tests already run on SQLite.
-- **Z21:** UDP on the LAN at 10.0.0.111. Protocol frames are in `backend/app/drivers/z21_*.py`.
-- **Local files:** locomotive pictures are stored under `backend/data`, tied to the source tree.
+- **Backend:** the Rust core, on SQLite. The Python backend has been removed (see git history).
+- **Z21:** UDP on the LAN at 10.0.0.111. Protocol frames are in `src-tauri/src/z21/`.
+- **Local files:** locomotive pictures are stored in each app's data folder (see the README).
 
 ## Architecture: one core, shared by every platform
 
 A phone can't run the Python backend, so the control code moves into something every platform can run:
 
 - **Rust core inside Tauri.** It owns the Z21 link (UDP), the local SQLite database, the pictures, and the sync client. The web UI calls it through Tauri commands, so the UI is the same on every platform.
-- **Z21 protocol** is rewritten in Rust from the Python frame code. The Python tests are the reference: the same input must produce the same bytes.
-- **AnyRail importer** is ported from Python to TypeScript, next to the geometry code already in the frontend. The Python importer stays as the reference until the port matches it on your file.
-- **Web version on the same core.** The core serves the web UI over local HTTP, with the same API the desktop app uses. It carries the origin and content-type checks from the security plan, and a token when reachable from the LAN. The Python backend is retired once the web UI passes the same tests on the core.
+- **Z21 protocol:** rewritten in Rust (done). The same input produces the same bytes as the old Python code, checked by tests.
+- **AnyRail importer:** ported to Rust (done), not TypeScript. It matches the old Python importer on the fixtures and on your AnyRail file.
+- **Web version on the same core.** The core serves the web UI over local HTTP, with the same API the desktop app uses. It carries the origin and content-type checks from the security plan, and a token when reachable from the LAN. The Python backend has been retired: the web UI runs on the core (done).
 - **Local database:** SQLite in each platform's app data folder. The apps keep working offline and sync when they can reach the sync service.
 
 ## Sync
@@ -70,7 +70,7 @@ Sync is the largest new piece, so it gets its own design.
 
 **Phase 3: Windows.** Same core, WebView2, UDP firewall rule, and a code-signing certificate to avoid SmartScreen warnings.
 
-**Phase 4: Web on the core, Python retired.** Once the Mac and Windows apps match the web version and the web UI runs on the core, the Python backend, Postgres, and Docker are removed. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
+**Phase 4: Web on the core, Python retired.** Done: the web UI runs on the core and the Python backend is removed. Postgres and Docker remain until the data move. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
 
 **Phase 5: Android, all features.** Phone and tablet layouts for every feature, including the layout editor. The editor needs touch controls: larger handles, pinch to zoom, and a bigger hit area for track ends. Emergency Stop must always be reachable, including after a dropped connection. Android needs the Wi-Fi and local network permissions. Sideloading the APK needs no account; a Play Store listing needs a one-time developer fee.
 
@@ -84,7 +84,7 @@ Sync is the largest new piece, so it gets its own design.
 - **Sync conflicts** can lose edits when the same layout is changed on two devices at once. The current rule is simple; a merge approach is a later option.
 - **Two apps driving one Z21:** the Z21 accepts several LAN clients, but each app shows its own live state until the Z21 broadcast reaches it.
 - **Local Network permission** on macOS and iOS, and firewall rules on Windows, can block UDP. Checked in Phase 0 and Phase 3.
-- **Porting risk:** the Rust Z21 code and the TypeScript importer must match the Python versions on tests before the Python backend is retired.
+- **Porting risk:** resolved for the web UI. The Rust Z21 code and importer match the old Python versions on tests before the Python backend was removed.
 - **Safety on a phone:** a dropped Wi-Fi connection must show clearly, and Emergency Stop must still work after reconnecting.
 
 ## Decisions made
@@ -112,7 +112,7 @@ Sync (above) also covers the new data: consists, route definitions, and decoder 
 
 **Built (uncommitted, on branch `desktop-mac`):**
 - `src-tauri/`: a Rust core inside Tauri. It holds the database (SQLite in the app data folder), the Z21 link, the full API the web UI uses, the track library, moving time, and the AnyRail importer.
-- The UI calls the core at `trainlink://localhost` when it runs in the app. The browser build still calls the web backend on port 8000.
+- The UI calls the core at `trainlink://localhost` when it runs in the app. The browser build calls the core's web server (see the README).
 - Release bundles: `TrainLink.app` and `TrainLink_0.1.0_aarch64.dmg`. They are not signed or notarised, since that needs an Apple Developer account, so the first launch needs right-click, Open.
 
 **Checked:**
@@ -130,6 +130,6 @@ Sync (above) also covers the new data: consists, route definitions, and decoder 
 - The Python importer mapped slip and three-way ends to the wrong legs when their order was scrambled. A scrambled slip came out with gaps of more than 150 mm. Fixed in the Python importer too, and the importer tests still pass.
 - Picture uploads from the browser are multipart forms, which the Rust core did not accept. Fixed.
 
-**Left in place on purpose:** the Python backend, Postgres, and Docker still serve the web version until Phase 4 moves the web UI onto the core. The track library JSON is copied into `src-tauri/library`, and the backend keeps its own copy until then.
+**Left in place on purpose:** Postgres and Docker, until the data move. The old Python backend's data folder (pictures and the track library) was moved out of the repository to `~/trainlink-python-backup`. The track library JSON lives in `src-tauri/library`.
 
 **Not started:** sync (needs a Supabase project and credentials), Windows, iOS, and Android.
