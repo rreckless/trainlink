@@ -47,9 +47,25 @@ pub fn handle(app: &Arc<AppState>, call: &Call) -> Reply {
     }
     let segments: Vec<&str> = call.path.split('/').filter(|part| !part.is_empty()).collect();
     match route(app, call, &segments) {
-        Ok(reply) => reply,
+        Ok(reply) => {
+            if reply.status < 300 && changes_synced_data(call.method, call.path) {
+                crate::sync::request_sync();
+            }
+            reply
+        }
         Err(error) => error.into_reply(),
     }
+}
+
+/// Whether a request changed data that syncs: a write to layouts, the roster, or the track on a layout. Reads, sign-in,
+/// the Z21, and sync itself do not. Moving time follows on the sync interval
+pub fn changes_synced_data(method: &str, path: &str) -> bool {
+    if method == "GET" {
+        return false;
+    }
+    ["/api/layouts", "/api/locomotives", "/api/blocks", "/api/signals", "/api/feedbacks", "/api/routes"]
+        .iter()
+        .any(|prefix| path == *prefix || path.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/')))
 }
 
 fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {

@@ -9,7 +9,7 @@ pub mod trackside;
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use rusqlite::{params, Connection};
@@ -26,6 +26,8 @@ use cloud::{Cloud, SupabaseCloud};
 const TABLES: [&str; 6] = ["layouts", "locomotives", "blocks", "signals", "feedbacks", "routes"];
 const EVENTS: &str = "moving_time_events";
 const INTERVAL: Duration = Duration::from_secs(30);
+/// How long after a change the loop waits before it reads, so that a burst of edits is sent together
+const DEBOUNCE: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct SyncStatus {
@@ -80,10 +82,33 @@ pub fn sync_and_record(app: &AppState) -> Result<Report, ApiError> {
     result
 }
 
-/// Sync every interval while signed in. Failures are recorded, and the next run tries again
+/// Set when a change has been made that should be sent. The loop wakes on it, instead of waiting for the interval
+static WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+
+/// Asks the sync loop to run soon. Several changes close together make one sync, because the loop waits DEBOUNCE
+/// after the first before it reads the database
+pub fn request_sync() {
+    let (pending, wake) = &WAKE;
+    *pending.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+    wake.notify_one();
+}
+
+/// Waits until a sync is requested, or the timeout passes. Clears the request
+pub fn wait_for_request(timeout: Duration) {
+    let (pending, wake) = &WAKE;
+    let guard = pending.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (mut guard, _) = wake
+        .wait_timeout_while(guard, timeout, |requested| !*requested)
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *guard = false;
+}
+
+/// Sync while signed in: soon after a change, and every interval as well, which picks up changes from other devices.
+/// Failures are recorded, and the next run tries again
 pub fn spawn_loop(app: Arc<AppState>) {
     std::thread::spawn(move || loop {
-        std::thread::sleep(INTERVAL);
+        wait_for_request(INTERVAL);
+        std::thread::sleep(DEBOUNCE);
         if app.auth.session().is_some() {
             let _ = sync_and_record(&app);
         }

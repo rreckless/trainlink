@@ -284,3 +284,28 @@ fn real_sync() {
     sync(&b, &cloud);
     assert!(!layouts(&b).iter().any(|item| item["name"] == name), "the deletion reached the other device");
 }
+
+#[test]
+fn writes_to_synced_data_ask_for_a_sync_and_nothing_else_does() {
+    use crate::api::changes_synced_data;
+    assert!(changes_synced_data("POST", "/api/layouts"));
+    assert!(changes_synced_data("PATCH", "/api/layouts/3"));
+    assert!(changes_synced_data("DELETE", "/api/layouts/3"));
+    assert!(changes_synced_data("POST", "/api/locomotives/7/image"));
+    assert!(changes_synced_data("POST", "/api/blocks"));
+    assert!(changes_synced_data("PATCH", "/api/routes/2"));
+    assert!(!changes_synced_data("GET", "/api/layouts"));
+    assert!(!changes_synced_data("POST", "/api/layoutsx"));
+    assert!(!changes_synced_data("POST", "/api/z21/connect"));
+    assert!(!changes_synced_data("POST", "/api/auth/sign-in"));
+    assert!(!changes_synced_data("POST", "/api/sync/now"));
+}
+
+#[test]
+fn a_request_wakes_the_sync_loop_straight_away() {
+    use std::time::{Duration, Instant};
+    crate::sync::request_sync();
+    let started = Instant::now();
+    crate::sync::wait_for_request(Duration::from_secs(10));
+    assert!(started.elapsed() < Duration::from_secs(5), "waited {:?}", started.elapsed());
+}
