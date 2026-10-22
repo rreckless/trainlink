@@ -2,6 +2,7 @@
 //! operating system's keychain. A session that cannot be refreshed because the network is down is kept, so the
 //! app still works offline with its local data.
 
+pub mod google;
 pub mod store;
 
 use std::sync::Mutex;
@@ -45,6 +46,8 @@ pub struct Auth {
     agent: ureq::Agent,
     /// One refresh at a time, so two requests don't both spend the same refresh token
     refreshing: Mutex<()>,
+    /// The verifier of the Google sign-in in progress, kept until the browser comes back with its code
+    pending: Mutex<Option<String>>,
 }
 
 fn now() -> i64 {
@@ -74,6 +77,7 @@ impl Auth {
             store,
             agent: ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(15)).build(),
             refreshing: Mutex::new(()),
+            pending: Mutex::new(None),
         }
     }
 

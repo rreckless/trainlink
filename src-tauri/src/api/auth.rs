@@ -34,6 +34,21 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             };
             Ok(Reply::json(200, json!({ "status": outcome, "session": session_json(app) })))
         }
+        ("POST", ["google"]) => {
+            let body = call.json_body()?;
+            let desktop = body.get("desktop").and_then(Value::as_bool).unwrap_or(false);
+            let return_to = if desktop {
+                crate::auth::google::listen(app)?;
+                crate::auth::google::DESKTOP_RETURN.to_string()
+            } else {
+                let origin = fields::required_str(&body, "origin")?;
+                if !is_origin(&origin) {
+                    return Err(ApiError::unprocessable("origin must be the address of this TrainLink page"));
+                }
+                format!("{origin}/auth/callback")
+            };
+            Ok(Reply::json(200, json!({ "url": app.auth.google_start(&return_to) })))
+        }
         ("POST", ["sign-out"]) => {
             app.auth.sign_out();
             Ok(Reply::json(200, session_json(app)))
@@ -49,7 +64,7 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
 }
 
 /// A device belongs to one account. If this account may not use it, the new sign-in is undone
-fn claim_or_sign_out(app: &Arc<AppState>, user: &str) -> Result<(), ApiError> {
+pub(crate) fn claim_or_sign_out(app: &Arc<AppState>, user: &str) -> Result<(), ApiError> {
     if let Err(error) = crate::sync::claim(app, user) {
         app.auth.sign_out();
         return Err(error);
@@ -59,6 +74,12 @@ fn claim_or_sign_out(app: &Arc<AppState>, user: &str) -> Result<(), ApiError> {
         let _ = crate::sync::sync_and_record(&app_for_sync);
     });
     Ok(())
+}
+
+/// The address of a page, scheme and host only: no path, query, or spaces
+fn is_origin(origin: &str) -> bool {
+    let rest = origin.strip_prefix("http://").or_else(|| origin.strip_prefix("https://"));
+    rest.is_some_and(|rest| !rest.is_empty() && rest.len() <= 250 && !rest.contains(['/', '?', '#', ' ', '\\']))
 }
 
 /// Who is signed in, if anyone. The tokens are never sent to the page
