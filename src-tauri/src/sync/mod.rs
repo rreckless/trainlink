@@ -4,6 +4,7 @@
 pub mod cloud;
 pub mod events;
 pub mod map;
+pub mod settings;
 pub mod time;
 pub mod trackside;
 
@@ -23,7 +24,7 @@ use crate::state::AppState;
 use cloud::{Cloud, SupabaseCloud};
 
 /// Parents before children, for applying and sending
-const TABLES: [&str; 6] = ["layouts", "locomotives", "blocks", "signals", "feedbacks", "routes"];
+const TABLES: [&str; 7] = ["layouts", "locomotives", "blocks", "signals", "feedbacks", "routes", "settings"];
 const EVENTS: &str = "moving_time_events";
 const INTERVAL: Duration = Duration::from_secs(30);
 /// How long after a change the loop waits before it reads, so that a burst of edits is sent together
@@ -143,6 +144,7 @@ pub fn run(app: &AppState, cloud: &dyn Cloud, images: &Path) -> Result<Report, A
                     "blocks" => trackside::apply_block(db, row)?,
                     "signals" => trackside::apply_signal(db, row)?,
                     "feedbacks" => trackside::apply_feedback(db, row)?,
+                    "settings" => settings::apply_setting(db, row)?,
                     _ => trackside::apply_route(db, row)?,
                 };
                 report.pulled += usize::from(applied);
@@ -163,6 +165,7 @@ pub fn run(app: &AppState, cloud: &dyn Cloud, images: &Path) -> Result<Report, A
             ("signals", trackside::signal_outbound(db, &user)?),
             ("feedbacks", trackside::feedback_outbound(db, &user)?),
             ("routes", trackside::route_outbound(db, &user)?),
+            ("settings", settings::setting_outbound(db, &user)?),
         ] {
             for (local_id, stamp, row) in rows {
                 outgoing.push(Outgoing { table, local_id, stamp, row });

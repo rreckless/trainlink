@@ -309,3 +309,41 @@ fn a_request_wakes_the_sync_loop_straight_away() {
     crate::sync::wait_for_request(Duration::from_secs(10));
     assert!(started.elapsed() < Duration::from_secs(5), "waited {:?}", started.elapsed());
 }
+
+#[test]
+fn settings_set_on_one_device_reach_the_other() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b) = (device("a-settings"), device("b-settings"));
+    send(&a, "PUT", "/api/settings/z21.host", Some(json!({ "value": "10.0.0.50" })));
+    send(&a, "PUT", "/api/settings/z21.port", Some(json!({ "value": 21106 })));
+    sync(&a, &cloud);
+    sync(&b, &cloud);
+    let (status, body) = send(&b, "GET", "/api/settings", None);
+    assert_eq!(status, 200);
+    assert_eq!(body["z21.host"], "10.0.0.50");
+    assert_eq!(body["z21.port"], 21106);
+}
+
+#[test]
+fn the_newer_setting_wins_between_devices() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b) = (device("a-newer"), device("b-newer"));
+    send(&a, "PUT", "/api/settings/z21.host", Some(json!({ "value": "10.0.0.50" })));
+    sync(&a, &cloud);
+    sync(&b, &cloud);
+    tick();
+    send(&b, "PUT", "/api/settings/z21.host", Some(json!({ "value": "192.168.1.9" })));
+    sync(&b, &cloud);
+    sync(&a, &cloud);
+    assert_eq!(send(&a, "GET", "/api/settings", None).1["z21.host"], "192.168.1.9");
+}
+
+#[test]
+fn settings_are_checked_before_they_are_kept() {
+    let app = device("checked-settings");
+    assert_eq!(send(&app, "PUT", "/api/settings/z21.host", Some(json!({ "value": "8.8.8.8" }))).0, 422);
+    assert_eq!(send(&app, "PUT", "/api/settings/z21.host", Some(json!({ "value": 42 }))).0, 422);
+    assert_eq!(send(&app, "PUT", "/api/settings/z21.port", Some(json!({ "value": 0 }))).0, 422);
+    assert_eq!(send(&app, "PUT", "/api/settings/volume", Some(json!({ "value": 3 }))).0, 404);
+    assert_eq!(send(&app, "GET", "/api/settings", None).1, json!({}));
+}

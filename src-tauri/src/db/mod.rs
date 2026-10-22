@@ -6,10 +6,18 @@ use rusqlite::{Connection, Error, ErrorCode};
 
 pub mod layouts;
 pub mod locomotives;
+pub mod settings;
 pub mod sync;
 pub mod trackside;
 
 const SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS settings (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS layouts (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
