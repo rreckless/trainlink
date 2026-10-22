@@ -17,7 +17,8 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             let body = call.json_body()?;
             let email = fields::required_str(&body, "email")?;
             let password = fields::required_str(&body, "password")?;
-            app.auth.sign_in(&email, &password)?;
+            let session = app.auth.sign_in(&email, &password)?;
+            claim_or_sign_out(app, &session.user_id)?;
             Ok(Reply::json(200, session_json(app)))
         }
         ("POST", ["sign-up"]) => {
@@ -25,7 +26,10 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             let email = fields::required_str(&body, "email")?;
             let password = fields::required_str(&body, "password")?;
             let outcome = match app.auth.sign_up(&email, &password)? {
-                SignUp::SignedIn(_) => "signed_in",
+                SignUp::SignedIn(session) => {
+                    claim_or_sign_out(app, &session.user_id)?;
+                    "signed_in"
+                }
                 SignUp::ConfirmEmail => "confirm_email",
             };
             Ok(Reply::json(200, json!({ "status": outcome, "session": session_json(app) })))
@@ -42,6 +46,19 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         }
         _ => Err(ApiError::new(405, "Method not allowed")),
     }
+}
+
+/// A device belongs to one account. If this account may not use it, the new sign-in is undone
+fn claim_or_sign_out(app: &Arc<AppState>, user: &str) -> Result<(), ApiError> {
+    if let Err(error) = crate::sync::claim(app, user) {
+        app.auth.sign_out();
+        return Err(error);
+    }
+    let app_for_sync = app.clone();
+    std::thread::spawn(move || {
+        let _ = crate::sync::sync_and_record(&app_for_sync);
+    });
+    Ok(())
 }
 
 /// Who is signed in, if anyone. The tokens are never sent to the page

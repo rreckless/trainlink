@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::now;
+use super::{now, sync};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Layout {
@@ -71,7 +71,9 @@ pub fn insert(conn: &Connection, layout: &NewLayout) -> rusqlite::Result<i64> {
             stamp
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    sync::mark_new(conn, "layouts", id)?;
+    Ok(id)
 }
 
 /// Write every editable column of a layout back to its row
@@ -91,10 +93,12 @@ pub fn save(conn: &Connection, layout: &Layout) -> rusqlite::Result<()> {
             now()
         ],
     )?;
+    sync::mark_changed(conn, "layouts", layout.id)?;
     Ok(())
 }
 
 pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    sync::forget(conn, "layouts", id)?;
     conn.execute("DELETE FROM layouts WHERE id = ?1", [id])?;
     Ok(())
 }

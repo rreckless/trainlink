@@ -6,6 +6,7 @@ use rusqlite::{Connection, Error, ErrorCode};
 
 pub mod layouts;
 pub mod locomotives;
+pub mod sync;
 pub mod trackside;
 
 const SCHEMA: &str = r#"
@@ -130,7 +131,8 @@ pub fn open_in_memory() -> rusqlite::Result<Connection> {
 
 fn setup(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
-    connection.execute_batch(SCHEMA)
+    connection.execute_batch(SCHEMA)?;
+    sync::migrate(connection)
 }
 
 /// The current UTC time as the API reports it, e.g. 2026-10-20T10:21:00.123456

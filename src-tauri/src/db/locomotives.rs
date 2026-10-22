@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::now;
+use super::{now, sync};
 
 /// The 20 function buttons, with F0 labelled as the light
 pub const FUNCTION_BUTTONS: usize = 20;
@@ -112,7 +112,9 @@ pub fn insert(conn: &Connection, locomotive: &NewLocomotive) -> rusqlite::Result
             stamp
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    sync::mark_new(conn, "locomotives", id)?;
+    Ok(id)
 }
 
 /// Write the editable columns back. Function labels are stored only when the locomotive has its own
@@ -140,10 +142,12 @@ pub fn save(conn: &Connection, locomotive: &Locomotive) -> rusqlite::Result<()> 
             now()
         ],
     )?;
+    sync::mark_changed(conn, "locomotives", locomotive.id)?;
     Ok(())
 }
 
 pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    sync::forget(conn, "locomotives", id)?;
     conn.execute("DELETE FROM locomotives WHERE id = ?1", [id])?;
     Ok(())
 }
@@ -159,11 +163,23 @@ pub fn in_use(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
     Ok(count > 0)
 }
 
-/// Add travelled seconds to the locomotive with this address. Returns false if no locomotive has it
+/// Record seconds of movement for the locomotive with this address. Each run is an event, so every device adds
+/// its own time, and the events sync to the others. Returns false if no locomotive has the address
 pub fn add_travelled_time(conn: &Connection, address: i64, seconds: f64) -> rusqlite::Result<bool> {
-    let changed = conn.execute(
-        "UPDATE locomotives SET travelled_time = travelled_time + ?2, updated_at = ?3 WHERE dcc_address = ?1",
-        params![address, seconds, now()],
+    let Some(id) = conn
+        .query_row("SELECT id FROM locomotives WHERE dcc_address = ?1", [address], |row| row.get::<_, i64>(0))
+        .optional()?
+    else {
+        return Ok(false);
+    };
+    let device = sync::device_id(conn)?;
+    conn.execute(
+        "INSERT INTO moving_time_events (sync_id, locomotive_id, device_id, seconds, recorded_at, dirty) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+        params![sync::new_sync_id(), id, device, seconds, now()],
     )?;
-    Ok(changed > 0)
+    conn.execute(
+        "UPDATE locomotives SET travelled_time = travelled_time + ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, seconds, now()],
+    )?;
+    Ok(true)
 }

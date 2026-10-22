@@ -6,6 +6,7 @@ pub mod layouts;
 pub mod library;
 pub mod locomotives;
 pub mod multipart;
+pub mod sync;
 pub mod trackside;
 pub mod z21;
 
@@ -55,6 +56,7 @@ fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {
     match segments {
         ["health"] => Ok(Reply::json(200, json!({ "status": "healthy", "version": "0.1.0", "database": "connected" }))),
         ["api", "auth", rest @ ..] => auth::route(app, call, rest),
+        ["api", "sync", rest @ ..] => sync::route(app, call, rest),
         ["api", "layouts", rest @ ..] => layouts::route(app, call, rest),
         ["api", "locomotives", rest @ ..] => locomotives::route(app, call, rest),
         ["api", "blocks", rest @ ..] => trackside::blocks(app, call, rest),
