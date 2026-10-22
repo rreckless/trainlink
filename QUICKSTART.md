@@ -82,9 +82,12 @@ The first time, accept the Xcode licence (`sudo xcodebuild -license accept`, the
 
 ```
 cd frontend && node_modules/.bin/tauri ios init
-cd frontend && scripts/ios-ipad.sh
+cd frontend && IOS_TEAM_ID=<your team ID> IOS_BUNDLE_ID=com.<yourname>.trainlink scripts/ios-ipad.sh
 cd frontend && node_modules/.bin/tauri ios build --debug --target aarch64-sim
+cd frontend && node_modules/.bin/tauri ios build --debug --target aarch64 --config '{"identifier":"com.<yourname>.trainlink"}'
 ```
+
+The team ID is in Xcode's account settings. `com.trainlink.app` belongs to another developer, so a device build needs your own identifier. The `--config` override is needed on device builds, because the build takes the identifier from the Tauri configuration. It only changes the iOS app.
 
 `ios init` regenerates the Xcode project, so run `scripts/ios-ipad.sh` after it each time. The generated project lives in `frontend/src-tauri/gen/apple`. Like the Android build, the Xcode build step runs `node tauri`, so `frontend/src-tauri/gen/apple/tauri` is a launcher that is committed.
 
