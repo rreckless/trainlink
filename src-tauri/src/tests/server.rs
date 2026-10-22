@@ -3,7 +3,6 @@
 use std::io::{BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::server::{read_request, run, web_file, Refused, MAX_BODY};
 

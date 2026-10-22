@@ -1,6 +1,7 @@
 //! The REST API, served in-process. Paths, bodies, status codes, and error messages match the web backend,
 //! so the frontend's calls work unchanged
 
+pub mod auth;
 pub mod layouts;
 pub mod library;
 pub mod locomotives;
@@ -53,6 +54,7 @@ pub fn handle(app: &Arc<AppState>, call: &Call) -> Reply {
 fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {
     match segments {
         ["health"] => Ok(Reply::json(200, json!({ "status": "healthy", "version": "0.1.0", "database": "connected" }))),
+        ["api", "auth", rest @ ..] => auth::route(app, call, rest),
         ["api", "layouts", rest @ ..] => layouts::route(app, call, rest),
         ["api", "locomotives", rest @ ..] => locomotives::route(app, call, rest),
         ["api", "blocks", rest @ ..] => trackside::blocks(app, call, rest),

@@ -7,6 +7,7 @@ mod z21;
 mod z21_link;
 mod moving;
 mod anyrail;
+mod auth;
 mod server;
 
 use std::path::PathBuf;

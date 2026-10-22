@@ -109,7 +109,7 @@ function PowerControls() {
   )
 }
 
-export default function TopBar({ onOpen }) {
+export default function TopBar({ onOpen, email, onSignOut }) {
   return (
     <header className="h-14 flex-shrink-0 flex items-center gap-4 px-4 bg-slate-950 border-b border-slate-800">
       <div className="flex items-center gap-2 min-w-[10rem]">
@@ -122,6 +122,12 @@ export default function TopBar({ onOpen }) {
         <PageSearch onOpen={onOpen} />
       </div>
       <PowerControls />
+      <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
+        <span className="text-xs text-slate-400 max-w-[12rem] truncate" title={email}>{email}</span>
+        <button onClick={onSignOut} className="px-2 py-1 rounded-md text-xs text-slate-200 bg-slate-800 border border-slate-700 hover:bg-slate-700">
+          Sign out
+        </button>
+      </div>
     </header>
   )
 }
