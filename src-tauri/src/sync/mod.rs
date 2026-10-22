@@ -105,7 +105,7 @@ pub fn run(app: &AppState, cloud: &dyn Cloud, images: &Path) -> Result<Report, A
     let mut uploads: Vec<(String, std::path::PathBuf)> = Vec::new();
     let mut outgoing: Vec<Outgoing> = Vec::new();
     let mut pending: Vec<(i64, &'static str, String)> = Vec::new();
-    let mut event_rows: Vec<(i64, String, Value)> = Vec::new();
+    let event_rows: Vec<(i64, String, Value)>;
     {
         let inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let db = &inner.db;

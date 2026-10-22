@@ -77,9 +77,9 @@ impl Auth {
         }
     }
 
-    /// The Supabase project, with the keychain for the session
-    pub fn for_app() -> Auth {
-        Auth::new(SUPABASE_URL, SUPABASE_ANON_KEY, Box::new(store::KeychainStore::new()))
+    /// The Supabase project, with the session kept in the app's data folder
+    pub fn for_app(data_folder: &std::path::Path) -> Auth {
+        Auth::new(SUPABASE_URL, SUPABASE_ANON_KEY, Box::new(store::FileStore::new(&data_folder.join("session.json"))))
     }
 
     /// The session to use now, refreshed if it is about to expire. None if nobody is signed in.
