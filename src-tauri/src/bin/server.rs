@@ -16,8 +16,13 @@ struct Options {
 }
 
 fn default_data() -> PathBuf {
-    match std::env::var_os("HOME") {
-        Some(home) => PathBuf::from(home).join("Library/Application Support/com.trainlink.web"),
+    // Windows keeps app data in the roaming AppData folder; macOS keeps it in Application Support
+    #[cfg(windows)]
+    let base = std::env::var_os("APPDATA").map(PathBuf::from);
+    #[cfg(not(windows))]
+    let base = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"));
+    match base {
+        Some(base) => base.join("com.trainlink.web"),
         None => PathBuf::from("data"),
     }
 }

@@ -47,8 +47,10 @@ The default is 10.0.0.111, port 21105. Set it in Settings. Track power is only r
 
 | Mode | Data folder |
 |------|-------------|
-| Desktop app | `~/Library/Application Support/com.trainlink.app` |
-| Web server | `~/Library/Application Support/com.trainlink.web` (default; change with `--data`) |
+| Desktop app (Mac) | `~/Library/Application Support/com.trainlink.app` |
+| Desktop app (Windows) | `%APPDATA%\com.trainlink.app` |
+| Web server (Mac) | `~/Library/Application Support/com.trainlink.web` (default; change with `--data`) |
+| Web server (Windows) | `%APPDATA%\com.trainlink.web` (default; change with `--data`) |
 
 Each folder holds `trainlink.db` (SQLite) and `locomotive_images/`.
 
