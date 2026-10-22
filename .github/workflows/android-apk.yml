@@ -32,7 +32,7 @@ jobs:
         working-directory: .
         run: |
           SDKMANAGER=$(find "${ANDROID_HOME}/cmdline-tools" -path '*/bin/sdkmanager' | head -1)
-          yes | "$SDKMANAGER" --licenses > /dev/null
+          printf 'y\n%.0s' {1..50} | "$SDKMANAGER" --licenses > /dev/null
           "$SDKMANAGER" "ndk;${NDK_VERSION}"
           echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
