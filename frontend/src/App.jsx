@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore } from './store'
 import { useZ21StatusPolling } from './hooks/useZ21Status'
+import { useSyncedSettings } from './hooks/useSyncedSettings'
 import TopBar from './components/shell/TopBar'
 import SideNav from './components/shell/SideNav'
 import { PAGES } from './components/shell/navigation'
@@ -28,6 +29,7 @@ function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [account, setAccount] = useState({ loading: true, signedIn: false, email: '' })
   useZ21StatusPolling()
+  useSyncedSettings(account.signedIn)
 
   const loadAccount = useCallback(async () => {
     try {

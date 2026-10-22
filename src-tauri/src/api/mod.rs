@@ -6,6 +6,7 @@ pub mod layouts;
 pub mod library;
 pub mod locomotives;
 pub mod multipart;
+pub mod settings;
 pub mod sync;
 pub mod trackside;
 pub mod z21;
@@ -63,7 +64,7 @@ pub fn changes_synced_data(method: &str, path: &str) -> bool {
     if method == "GET" {
         return false;
     }
-    ["/api/layouts", "/api/locomotives", "/api/blocks", "/api/signals", "/api/feedbacks", "/api/routes"]
+    ["/api/layouts", "/api/locomotives", "/api/blocks", "/api/signals", "/api/feedbacks", "/api/routes", "/api/settings"]
         .iter()
         .any(|prefix| path == *prefix || path.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/')))
 }
@@ -73,6 +74,7 @@ fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {
         ["health"] => Ok(Reply::json(200, json!({ "status": "healthy", "version": "0.1.0", "database": "connected" }))),
         ["api", "auth", rest @ ..] => auth::route(app, call, rest),
         ["api", "sync", rest @ ..] => sync::route(app, call, rest),
+        ["api", "settings", rest @ ..] => settings::route(app, call, rest),
         ["api", "layouts", rest @ ..] => layouts::route(app, call, rest),
         ["api", "locomotives", rest @ ..] => locomotives::route(app, call, rest),
         ["api", "blocks", rest @ ..] => trackside::blocks(app, call, rest),

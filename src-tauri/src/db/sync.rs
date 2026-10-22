@@ -4,7 +4,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
 /// Tables that sync, in the order a full pull must apply them (parents before children)
-pub const SYNCED_TABLES: [&str; 6] = ["layouts", "locomotives", "blocks", "signals", "feedbacks", "routes"];
+pub const SYNCED_TABLES: [&str; 7] = ["layouts", "locomotives", "blocks", "signals", "feedbacks", "routes", "settings"];
 
 pub fn new_sync_id() -> String {
     uuid::Uuid::new_v4().to_string()

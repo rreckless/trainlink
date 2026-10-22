@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { useZ21Connection } from '../hooks/useZ21Connection'
+import { settingsApi } from '../services/settingsApi'
 
 export default function SystemSettings() {
   const {
@@ -8,6 +9,7 @@ export default function SystemSettings() {
     setZ21Address,
     loading: z21Loading,
     error: z21Error,
+    setError: setZ21Error,
     connect: handleConnect,
     disconnect: handleDisconnect,
   } = useZ21Connection()
@@ -17,6 +19,16 @@ export default function SystemSettings() {
   const z21Connected = z21.connected
   const z21State = z21.state
   const z21LastHeartbeat = z21.lastHeartbeat
+
+  // The address is saved to the account when its field is left, so every device uses it
+  const saveAddress = async () => {
+    try {
+      await settingsApi.set('z21.host', z21Host)
+      await settingsApi.set('z21.port', z21Port)
+    } catch (err) {
+      setZ21Error(err.message)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -80,6 +92,7 @@ export default function SystemSettings() {
               type="text"
               value={z21Host}
               onChange={(e) => setZ21Address(e.target.value, z21Port)}
+              onBlur={saveAddress}
               disabled={z21Connected}
               className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white disabled:opacity-50"
               placeholder="10.0.0.111"
@@ -94,6 +107,7 @@ export default function SystemSettings() {
               type="number"
               value={z21Port}
               onChange={(e) => setZ21Address(z21Host, parseInt(e.target.value))}
+              onBlur={saveAddress}
               disabled={z21Connected}
               className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white disabled:opacity-50"
               placeholder="21105"
