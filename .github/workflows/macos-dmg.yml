@@ -1,0 +1,46 @@
+name: macOS DMG
+
+on:
+  # Run by hand: Actions tab, or gh workflow run macos-dmg.yml --ref <branch>
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Core tests
+        working-directory: frontend/src-tauri
+        run: cargo test
+
+      - name: Build the app and disk image
+        run: node_modules/.bin/tauri build --bundles app,dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trainlink-macos-dmg
+          path: frontend/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error

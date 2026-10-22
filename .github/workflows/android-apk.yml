@@ -1,0 +1,67 @@
+name: Android APK
+
+on:
+  # Run by hand: Actions tab, or gh workflow run android-apk.yml --ref <branch>
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      NDK_VERSION: 30.0.16248370
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install the Android NDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "ndk;${NDK_VERSION}"
+        working-directory: .
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Generate the Android project
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+        run: node_modules/.bin/tauri android init
+
+      - name: Build the APK
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+        run: node_modules/.bin/tauri android build --debug --apk --target aarch64 --target x86_64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trainlink-android-apk
+          path: frontend/src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
+          if-no-files-found: error
