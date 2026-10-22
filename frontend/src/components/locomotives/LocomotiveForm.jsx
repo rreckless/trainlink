@@ -97,15 +97,18 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
           <img src={pictureUrl(locomotive)} alt="" className="w-24 h-16 object-cover rounded bg-slate-800" />
         )}
         {picture && <span className="text-sm text-slate-300">New picture: {picture.name}</span>}
-        <label className="text-sm text-slate-300">
-          Picture (JPEG, PNG, or WebP, 2 MB max)
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(event) => setPicture(event.target.files[0] ?? null)}
-            className="mt-1 block text-sm text-slate-300"
-          />
-        </label>
+        <div className="text-sm text-slate-300">
+          <span className="block mb-1">Picture (JPEG, PNG, or WebP, 2 MB max)</span>
+          <label className="inline-block px-3 py-2 bg-slate-700 rounded text-white hover:bg-slate-600 cursor-pointer">
+            Choose picture…
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => setPicture(event.target.files[0] ?? null)}
+              className="sr-only"
+            />
+          </label>
+        </div>
         {locomotive?.image_url && (
           <button type="button" onClick={() => onRemovePicture(locomotive)} disabled={busy} className="px-3 py-1 bg-slate-800 rounded text-sm hover:bg-red-800">
             Remove picture
