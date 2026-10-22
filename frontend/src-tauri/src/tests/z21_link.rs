@@ -199,3 +199,24 @@ fn disconnecting_forgets_what_the_z21_reported() {
     let (status, _) = send(&app, "POST", "/api/z21/loco/speed", Some(json!({ "address": 3, "speed": 10 })));
     assert_eq!(status, 503);
 }
+
+#[test]
+fn a_turnout_poll_answers_with_the_state_the_z21_sends_back_to_it() {
+    let fake = fake_z21();
+    let app = app();
+    assert!(z21::connect(&app, "127.0.0.1", fake.port));
+    fake.say(&central_state(0x00));
+    assert!(wait_until(|| track_state(&app) == "ready"));
+
+    // The Z21 answers the app's request for turnout 25 with output 1 (ZZ = 10), as it does on the LAN
+    let request = xbus_frame(0x0040, &[0x43, 0x00, 0x18]);
+    let answer = xbus_frame(0x0040, &[0x43, 0x00, 0x18, 0x02]);
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            assert!(fake.wait_for(&request));
+            fake.say(&answer);
+        });
+        let (_, turnouts) = send(&app, "GET", "/api/z21/turnouts?addresses=25", None);
+        assert_eq!(turnouts["states"]["25"], json!(1), "the first answer already carries the Z21's reply");
+    });
+}

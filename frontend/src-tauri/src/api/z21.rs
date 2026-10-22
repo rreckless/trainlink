@@ -14,6 +14,8 @@ const MIN_TURNOUT: i64 = 1;
 const MAX_TURNOUT: i64 = 2048;
 /// How long a turnout output stays active before it is switched off, as the spec's example does
 const THROW: Duration = Duration::from_millis(150);
+/// How long a turnout read waits for the Z21's answers. The Z21 answers on the LAN within milliseconds
+const TURNOUT_REPLY_WAIT: Duration = Duration::from_millis(150);
 
 fn lock(app: &Arc<AppState>) -> std::sync::MutexGuard<'_, Inner> {
     app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -120,14 +122,24 @@ fn turnouts(app: &Arc<AppState>, call: &Call) -> Out {
     if numbers.iter().any(|turnout| !(MIN_TURNOUT..=MAX_TURNOUT).contains(turnout)) {
         return Err(ApiError::bad_request(format!("Turnouts must be {MIN_TURNOUT}-{MAX_TURNOUT}")));
     }
-    let inner = lock(app);
-    if inner.z21.connected {
-        for turnout in &numbers {
-            if let Ok(frame) = commands::turnout_info_request(*turnout) {
-                inner.z21.send(&frame);
+    let asked = {
+        let inner = lock(app);
+        let connected = inner.z21.connected;
+        if connected {
+            for turnout in &numbers {
+                if let Ok(frame) = commands::turnout_info_request(*turnout) {
+                    inner.z21.send(&frame);
+                }
             }
         }
+        connected
+    };
+    // The answers are applied when they arrive, so wait for them. Otherwise this reply would show the old state, and the
+    // page would show it until the next read
+    if asked {
+        std::thread::sleep(TURNOUT_REPLY_WAIT);
     }
+    let inner = lock(app);
     let states: serde_json::Map<String, Value> = numbers
         .iter()
         .map(|turnout| {
