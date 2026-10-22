@@ -17,7 +17,6 @@ Model railway control for DCC layouts, built around the Roco Z21. TrainLink runs
 | `src-tauri/` | The Rust core: database, Z21 link, API, AnyRail importer, the web server (`trainlink-server`), and the Tauri desktop shell |
 | `frontend/` | The React interface, used by the desktop app and the web version |
 | `docs/` | The desktop and mobile plan |
-| `electron/` | An unused scaffold, to be removed |
 | `docker-compose.yml` | PostgreSQL and Redis. Not used by the app. Kept for the data move from the old backend |
 
 ## Requirements
@@ -56,7 +55,10 @@ Each folder holds `trainlink.db` (SQLite) and `locomotive_images/`.
 
 ## Security
 
-The web server listens on `127.0.0.1` only, and it has no login. Do not expose it to a network. Until the security work is finished, anything that can reach the server can drive your trains. See `docs/desktop-plan.md` for the planned fixes.
+- **The web server** listens on `127.0.0.1` by default. Only this computer can reach it, so it needs no token. Requests must name the server by an IP address or `localhost`, and pages from other sites are refused. Writes must be JSON or a form, so a plain form from another site cannot make one.
+- **On a network** (`--host 0.0.0.0` or a LAN address), each device must sign in with the token. The server creates the token the first time it starts with a network address, and prints where it is kept (`server-token` in the data folder). The browser keeps the sign-in in a cookie that other sites cannot read or send.
+- **The Z21 address** must be this computer or a private network address, given as an IP address. The app will not talk to a Z21 anywhere else.
+- **The desktop app** has no network port. Its own pages are the only ones that can call its API.
 
 ## Documentation
 

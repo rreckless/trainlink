@@ -6,7 +6,7 @@
 //! its anchors. Connector segments between a turnout and its anchors have no real length, so they are not placed.
 
 pub mod geometry;
-mod segments;
+pub(crate) mod segments;
 
 use segments::{joint_lines, place_segments, place_slips, place_three_ways, segment_lines, SegmentInputs};
 
@@ -48,6 +48,12 @@ fn round2(value: f64) -> f64 {
 
 fn key(ident: &str, kind: &str) -> Key {
     (ident.to_string(), kind.to_string())
+}
+
+/// The value a file refers to, or an error naming it. A file that refers to something it never defines is refused
+/// with a message, instead of stopping the import
+pub fn need<'a, V>(map: &'a HashMap<Key, V>, key: &Key) -> Result<&'a V, String> {
+    map.get(key).ok_or_else(|| format!("The AnyRail file does not define {} {}", key.0, key.1))
 }
 
 fn attr<'a>(node: &Node<'a, '_>, name: &str) -> &'a str {
@@ -183,7 +189,7 @@ pub struct Turnouts {
     pub placed: HashSet<String>,
 }
 
-pub fn place_turnouts(doc: &Document, raw: &HashMap<Key, Point>, scale: f64, links: &HashMap<Key, Key>, skip: &HashSet<String>) -> Turnouts {
+pub fn place_turnouts(doc: &Document, raw: &HashMap<Key, Point>, scale: f64, links: &HashMap<Key, Key>, skip: &HashSet<String>) -> Result<Turnouts, String> {
     struct Spec {
         ident: String,
         piece_id: &'static str,
@@ -203,7 +209,11 @@ pub fn place_turnouts(doc: &Document, raw: &HashMap<Key, Point>, scale: f64, lin
             unplaced.push(json!({ "ident": ident, "kind": "turnout", "reason": "unknown turnout type" }));
             continue;
         };
-        let (a, b, c) = (raw[&key(&ident, "TURNOUT_A")], raw[&key(&ident, "TURNOUT_B")], raw[&key(&ident, "TURNOUT_C")]);
+        let (a, b, c) = (
+            *need(raw, &key(&ident, "TURNOUT_A"))?,
+            *need(raw, &key(&ident, "TURNOUT_B"))?,
+            *need(raw, &key(&ident, "TURNOUT_C"))?,
+        );
         // Positive when the diverging track turns toward +y, the side a right-hand piece is drawn on
         let cross = (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0);
         if (cross > 0.0) != (hand == "RH_TURNOUT") {
@@ -298,7 +308,7 @@ pub fn place_turnouts(doc: &Document, raw: &HashMap<Key, Point>, scale: f64, lin
     }
 
     let placed = specs.iter().map(|spec| spec.ident.clone()).collect();
-    Turnouts { records, ends, heading_out, mismatches, unplaced, unanchored, gaps, placed }
+    Ok(Turnouts { records, ends, heading_out, mismatches, unplaced, unanchored, gaps, placed })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -331,7 +341,7 @@ pub fn three_way_groups(doc: &Document, connectors: &Connectors) -> Vec<(Vec<Str
     let mut groups = Vec::new();
     let mut used: HashSet<String> = HashSet::new();
     for leg in &connectors.order {
-        let other = &connectors.links[leg];
+        let Some(other) = connectors.links.get(leg) else { continue };
         if !(leg.1.starts_with("TURNOUT_") && other.1.starts_with("TURNOUT_")) {
             continue;
         }
@@ -374,8 +384,8 @@ pub fn import(xml: &str, inner_radius_mm: f64) -> Result<Value, String> {
     let connectors = connectors(&doc);
     let groups = three_way_groups(&doc, &connectors);
     let group_members: HashSet<String> = groups.iter().flat_map(|(idents, _)| idents.iter().cloned()).collect();
-    let turnouts = place_turnouts(&doc, &raw, scale, &connectors.links, &group_members);
-    let three = place_three_ways(&groups, &raw, scale, &connectors.links);
+    let turnouts = place_turnouts(&doc, &raw, scale, &connectors.links, &group_members)?;
+    let three = place_three_ways(&groups, &raw, scale, &connectors.links)?;
     let slips = place_slips(&doc, &raw, scale, &connectors.links)?;
 
     let mut gaps = turnouts.gaps.clone();

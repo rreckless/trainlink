@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { refreshZ21Status } from './useZ21Status'
-import { BASE_URL } from '../services/api'
+import { apiFetch, BASE_URL } from '../services/api'
 
 const Z21_API = `${BASE_URL}/api/z21`
 
@@ -17,7 +17,7 @@ export function useZ21Connection() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${Z21_API}/connect`, {
+      const response = await apiFetch(`${Z21_API}/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ host, port }),
@@ -35,7 +35,7 @@ export function useZ21Connection() {
   const disconnect = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${Z21_API}/disconnect`, { method: 'POST' })
+      const response = await apiFetch(`${Z21_API}/disconnect`, { method: 'POST' })
       if (response.ok) setError(null)
     } catch (err) {
       setError(err.message)

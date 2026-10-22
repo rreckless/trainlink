@@ -58,3 +58,19 @@ fn bad_input_is_refused_with_the_same_messages() {
     );
     assert!(import(include_str!("anyrail/basic.xml"), 0.0).is_err());
 }
+
+#[test]
+fn a_three_way_leg_with_no_point_is_refused_not_a_panic() {
+    use crate::anyrail::segments::place_three_ways;
+    use crate::anyrail::Key;
+    use std::collections::HashMap;
+
+    let key = |ident: &str, kind: &str| -> Key { (ident.to_string(), kind.to_string()) };
+    let outer: Vec<Key> = (1..=4).map(|n| key("P", &format!("LEG{n}"))).collect();
+    // Each leg links to an anchor point the file never defines
+    let links: HashMap<Key, Key> = outer.iter().map(|leg| (leg.clone(), key(&leg.1, "POS_POINT"))).collect();
+    let raw = HashMap::new();
+    let groups = vec![(vec!["T1".to_string(), "T2".to_string()], outer)];
+    let message = place_three_ways(&groups, &raw, 1.0, &links).err().expect("the import should be refused");
+    assert!(message.contains("does not define"), "{message}");
+}

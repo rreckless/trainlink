@@ -6,7 +6,7 @@ pub mod frames;
 pub mod replies;
 
 use std::collections::BTreeMap;
-use std::net::UdpSocket;
+use std::net::{IpAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -25,6 +25,22 @@ use replies::{CentralState, LocoState};
 
 pub const DEFAULT_HOST: &str = "10.0.0.111";
 pub const DEFAULT_PORT: u16 = 21105;
+
+/// Whether the address is this computer or a private network address. The app talks only to a Z21 there, so a
+/// request cannot point it at a computer elsewhere on the internet. A host name other than localhost is refused
+pub fn is_local_address(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
+        Ok(IpAddr::V6(ip)) => {
+            let first = ip.segments()[0];
+            ip.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
+        }
+        Err(_) => false,
+    }
+}
 /// How long the reader waits for a reply before checking whether it should stop
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
 

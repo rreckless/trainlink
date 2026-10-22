@@ -6,7 +6,7 @@ use roxmltree::Document;
 use serde_json::{json, Value};
 
 use super::geometry::{angle, arc_bend_samples, bezier_bend_samples, fit_four, fit_handles, line_difference, three_way_ends, world, Point};
-use super::{attr, record, round2, round4, segment_keys, Connectors, Key, GAP_REPORT_MM, SLIP_KEYS, SLIP_PIECE, STRAIGHT_PIECE, THREE_WAY_PIECE};
+use super::{attr, need, record, round2, round4, segment_keys, Connectors, Key, GAP_REPORT_MM, SLIP_KEYS, SLIP_PIECE, STRAIGHT_PIECE, THREE_WAY_PIECE};
 use crate::library::library;
 
 pub const MIN_CURVE_MM: f64 = 1.0;
@@ -74,15 +74,16 @@ pub struct ThreeWays {
     pub leg_points: HashMap<Key, Point>,
 }
 
-pub fn place_three_ways(groups: &[(Vec<String>, Vec<Key>)], raw: &HashMap<Key, Point>, scale: f64, links: &HashMap<Key, Key>) -> ThreeWays {
+pub fn place_three_ways(groups: &[(Vec<String>, Vec<Key>)], raw: &HashMap<Key, Point>, scale: f64, links: &HashMap<Key, Key>) -> Result<ThreeWays, String> {
     let local = three_way_ends(&library().get(THREE_WAY_PIECE).cloned().unwrap_or(Value::Null));
     let local: Vec<Point> = local.to_vec();
     let mut result = ThreeWays { records: Vec::new(), gaps: Vec::new(), replaced: HashSet::new(), leg_points: HashMap::new() };
     for (idents, outer) in groups {
-        let world_points: Vec<Point> = outer.iter().map(|leg| {
-            let point = raw[&links[leg]];
-            (point.0 * scale, point.1 * scale)
-        }).collect();
+        let mut world_points: Vec<Point> = Vec::with_capacity(outer.len());
+        for leg in outer {
+            let point = *need(raw, need(links, leg)?)?;
+            world_points.push((point.0 * scale, point.1 * scale));
+        }
         let world_points: [Point; 4] = [world_points[0], world_points[1], world_points[2], world_points[3]];
         let fit = fit_four(&local, &world_points);
         let ident = format!("{}-3way", idents[0]);
@@ -90,14 +91,14 @@ pub fn place_three_ways(groups: &[(Vec<String>, Vec<Key>)], raw: &HashMap<Key, P
         result.replaced.extend(idents.iter().cloned());
         for (index, leg) in outer.iter().enumerate() {
             let end = world(local[fit.local_of_world[index]], fit.origin, fit.rotation, fit.flip);
-            result.leg_points.insert(links[leg].clone(), end);
+            result.leg_points.insert(need(links, leg)?.clone(), end);
             let gap = (end.0 - world_points[index].0).hypot(end.1 - world_points[index].1);
             if gap > GAP_REPORT_MM {
                 result.gaps.push(json!({ "ident": ident, "joint": format!("{} {}", leg.0, leg.1), "gap_mm": round2(gap) }));
             }
         }
     }
-    result
+    Ok(result)
 }
 
 /// Slips placed from their four anchors. Returns the records, the gaps, the unplaced slips, the placed idents,

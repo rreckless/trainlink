@@ -111,3 +111,17 @@ fn feedback_frame_is_refused_unless_it_has_ten_module_bytes() {
     assert!(replies::rbus_feedback(0, &[0; 9]).is_none());
     assert_eq!(replies::rbus_feedback(1, &[0; 10]).unwrap().len(), 80);
 }
+
+#[test]
+fn the_z21_must_be_on_this_computer_or_the_local_network() {
+    use crate::z21::is_local_address;
+    assert!(is_local_address("10.0.0.111"));
+    assert!(is_local_address("192.168.1.20"));
+    assert!(is_local_address("172.16.4.5"));
+    assert!(is_local_address("127.0.0.1"));
+    assert!(is_local_address("localhost"));
+    assert!(is_local_address("fd00::5"));
+    assert!(!is_local_address("8.8.8.8"));
+    assert!(!is_local_address("203.0.113.9"));
+    assert!(!is_local_address("example.com"));
+}
