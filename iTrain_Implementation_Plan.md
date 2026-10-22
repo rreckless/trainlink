@@ -13,7 +13,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Project setup, Docker (PostgreSQL, Redis), Python 3.12 venv | ✅ | Renamed to TrainLink. Docker runs PostgreSQL and Redis |
+| Project setup: Rust core, Tauri desktop shell, React frontend | ✅ | Renamed to TrainLink. `docker-compose.yml` is kept for the old PostgreSQL data; the app does not use it |
 | Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status, track power resume. Speed, direction, and emergency stop verified on hardware. Turnout commands and R-BUS feedback not yet tried on hardware |
 | Locomotive control and roster | 🧪 | Multi-select speed and direction, emergency stop, 20 function buttons with labels and momentary buttons, pictures, moving time. Browser-tested with the Z21 stubbed. Functions and moving time not yet verified on hardware |
 | Z21 state (locomotive replies, track state) | 🧪 | Replies parsed for speed, direction, and functions, and shown on the roster. Short circuit and track power off block commands. Tested against a fake Z21 in the Rust tests |
@@ -22,17 +22,17 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 | System settings UI (Z21 host and port) | ✅ | Host and port are shared with the Control page |
 | Desktop app (Mac) | 🧪 | Tauri app with a Rust core: the same API, database, Z21 link, and importer. Release DMG built. Window and Control page checked. Pull request #12. Not yet run against the real Z21 |
 | Database models and schemas | 🟡 | Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation defined. REST routes exist for all except CommandStation |
-| WebSocket endpoint | 🟡 | Still in the Python backend, echoing messages. The web UI no longer uses it, and the desktop app has no WebSocket |
-| Redis | 🟡 | Runs in Docker and is configured. Not used in code |
+| WebSocket | ⬜ | Removed. Nothing uses it; the core answers requests directly |
+| Redis | ⬜ | Not used. Only `docker-compose.yml` still starts it |
 | Frontend state (Zustand) | 🟡 | Store exists. Only some panels read from it |
 | Layout Editor | 🧪 | Drawing, placement, curved flex track with handles, joins, rotation, rename and delete, open-end markers, AnyRail import (matches the Python importer on a real file). Browser-tested with Playwright |
 | Switchboard | 🟡 | Lists the first five blocks. No turnout or occupancy view yet |
 | Route Manager | 🟡 | Routes can be created and edited. Run does nothing yet, because route execution is not built |
 | Electron wrapper | ⬜ | Superseded by the Tauri desktop app. The `electron/` folder is an unused scaffold to remove |
-| Backend tests | ✅ | 241 tests in `backend/tests/`, with PostgreSQL running |
+| Core tests | ✅ | 52 Rust tests in `src-tauri/` (`cargo test`), including the web server and the fake Z21 |
 | Frontend tests | ✅ | 60 tests (`npm test`) |
 | Desktop core tests | ✅ | 46 Rust tests (`cargo test` in `src-tauri/`) |
-| Mock Z21 for testing | ✅ | UDP responder in `backend/tests/conftest.py`. The Rust tests use a fake Z21 on localhost |
+| Mock Z21 for testing | ✅ | A fake Z21 on localhost in `src-tauri/src/tests/z21_link.rs` |
 
 ---
 
@@ -47,11 +47,10 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 - **Canvas/Drawing**: Konva.js or Fabric.js for the layout editor (not yet used)
 
 ### Backend
-- **Core**: Rust. It serves the desktop app in-process and the web UI over local HTTP. It replaces the Python backend once the web UI runs on it
-- **Database**: SQLite in the core. PostgreSQL (via SQLAlchemy) stays only in the Python backend until it is retired
-- **Python backend** (current web server): Python 3.12 and FastAPI, retired in the move to the core
-- **Real-time**: WebSocket infrastructure in the Python backend only. The core does not use it
-- **Cache**: Redis (real-time state, not yet used)
+- **Core**: Rust. It serves the desktop app in-process and the web UI over local HTTP (`trainlink-server`)
+- **Database**: SQLite, one file per app
+- **Real-time**: none. Clients ask for state; the core does not push
+- **Cache**: none
 
 ### Hardware Communication
 - **Command station (current)**: Roco Z21
@@ -61,9 +60,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 - **Later, once Z21 is fully functional**: Märklin 6051/P50x, Lenz Intellibox, Digitrax LocoNet (see Phase 7). Roco/Fleischmann ECoS is also a candidate
 
 ### Architecture Pattern
-- **Client-Server**: The core owns layout state. The desktop app calls it in-process, and browsers call it over local HTTP. The Electron scaffold is removed
+- **Client-Server**: The core owns layout state. The desktop app calls it in-process, and browsers call it over local HTTP. The Electron scaffold is to be removed
 - **Publish-Subscribe**: WebSocket events for live updates
-- **Driver layer**: The Z21 driver is isolated behind a service so the rest of the backend does not speak UDP directly. Additional command stations plug in through the same base driver interface (Phase 7)
+- **Driver layer**: The Z21 driver is isolated in `z21/` so the rest of the core does not speak UDP directly. Additional command stations plug in through the same base driver interface (Phase 7)
 
 ---
 
@@ -73,16 +72,16 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 **Goal**: Core architecture and basic UI
 
 1. **Project Setup** ✅
-   - Monorepo with `backend/`, `frontend/`, `electron/`
-   - Docker Compose for PostgreSQL and Redis
-   - Database models defined
+   - Monorepo with `src-tauri/` (Rust core), `frontend/`, `electron/` (to be removed)
+   - Docker Compose for PostgreSQL and Redis (now unused by the app; kept for the old data)
+   - Database models defined in SQLite
 
 2. **Backend Foundation** 🟡
-   - ✅ FastAPI app with CORS and health check
-   - 🟡 WebSocket endpoint (echo only, no authentication)
+   - ✅ Rust core with the API, and a health check
+   - ⬜ WebSocket endpoint (removed; nothing used it)
    - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation. REST routes exist for Locomotive, Block, Signal, and Route only
    - 🟡 REST API: Z21, locomotives, blocks, signals, routes, feedbacks, layouts, track library. Command stations still need routes
-   - ⬜ State management in Redis
+   - ⬜ State management (not needed: the core holds state in memory and SQLite)
 
 3. **Frontend Foundation** 🟡
    - ✅ Layout editor (drawing, placement, import, zoom, save and load)
@@ -91,10 +90,10 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Settings UI (Z21 host and port), shared with the Control page
 
 4. **Testing Infrastructure** 🟡
-   - ✅ Backend tests (`backend/tests/`, 192 passing)
+   - ✅ Core tests (`src-tauri/`, 52 passing with `cargo test`)
    - ✅ Frontend unit tests (`npm test`, 42 passing)
    - 🟡 Integration tests (driver tests run against the mock; browser tests run from a scratch Playwright script, not yet in the repo)
-   - ✅ Mock Z21 UDP responder for testing (`backend/tests/conftest.py`)
+   - ✅ Fake Z21 on localhost for testing (`src-tauri/src/tests/z21_link.rs`)
    - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13. Real hardware test still pending
 
 ### Phase 2: Core Features (3-4 weeks)
@@ -344,7 +343,7 @@ Entry criteria:
 
 1. ✅ **Test locomotive control against a real Z21.** Done: a train ran under TrainLink control (user test). Still to confirm on hardware: short-circuit detection, track power resume, and feedback. Connect, set speed and direction, emergency stop, and confirm the status heartbeat. Record results in `IMPLEMENTATION_SUMMARY.md`. Frame bytes have been checked against the Z21 LAN Protocol Specification v1.13.
 2. ✅ Mock Z21 UDP responder (done)
-3. ✅ Backend unit tests for the Z21 packet builder and the speed and direction logic (done; 192 backend tests now)
+3. ✅ Unit tests for the Z21 packet builder and the speed and direction logic (done; now in the Rust core)
 4. ✅ REST routes for locomotives, blocks, signals, routes, feedbacks, layouts, and the track library. Command stations still need routes.
 5. 🟡 Z21 R-BUS feedback parsing and `GET /api/z21/feedback` done. Still to do: link feedback inputs to blocks, and verify on hardware. **Next.**
 6. ✅ DCC turnout control: turnouts take a DCC address, and the Operate panel switches them. Spec v1.13 commands. Not yet tried on hardware
@@ -399,15 +398,15 @@ Feedback
 
 ## Critical Components
 
-### Backend Modules
-1. **Layout Manager**: Load, save, validate layouts. 🟡 (REST routes, track validation, AnyRail import)
-2. **Block Controller**: Track occupancy, manage blocks. ⬜
-3. **Signal Controller**: Manage signal states from block state. ⬜
+### Core Modules
+1. **Layout Manager**: Load, save, validate layouts. 🧪 (REST routes, track validation, AnyRail import, rename and delete)
+2. **Block Controller**: Track occupancy, manage blocks. 🟡 (blocks stored and set by hand; no occupancy from the Z21 yet)
+3. **Signal Controller**: Manage signal states from block state. 🟡 (signals stored and set by hand)
 4. **Route Engine**: Execute routes, handle automation. ⬜
-5. **Locomotive Manager**: Control trains, track state. 🧪 (Z21 speed and direction, roster, multi-select)
+5. **Locomotive Manager**: Control trains, track state. 🧪 (Z21 speed and direction, functions, roster, multi-select)
 6. **Z21 Driver**: Abstract the Z21 UDP link. 🧪
-7. **WebSocket Server**: Real-time multi-client communication. 🟡
-8. **State Synchronizer**: Keep state consistent across clients. ⬜
+7. **Web Server**: Serves the API and the web UI on one address. 🧪
+8. **State Synchronizer**: Keep state consistent across devices. ⬜ (planned: Supabase)
 
 ### Frontend Components
 1. **Layout Editor**: Draw and configure the layout. 🧪 (drawing, placement, AnyRail import, zoom, save/load; browser-tested with Playwright)
@@ -427,72 +426,46 @@ Current layout of the repository. Items marked ⬜ are planned.
 
 ```
 trainlink/
-├── backend/
-│   ├── app/
-│   │   ├── main.py                       # ✅ FastAPI app, routers, WebSocket endpoint
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── models/                       # SQLAlchemy models (block, command_station, feedback, layout, locomotive, route, signal)
-│   │   ├── schemas/                      # Pydantic schemas (same entities, plus AnyRail import request)
-│   │   ├── api/
-│   │   │   ├── z21.py                    # ✅ Z21 routes: connection, status, locomotives, track power, turnouts, feedback
-│   │   │   ├── locomotives.py            # ✅
-│   │   │   ├── blocks.py                 # ✅
-│   │   │   ├── signals.py                # ✅
-│   │   │   ├── routes.py                 # ✅
-│   │   │   ├── feedbacks.py              # ✅
-│   │   │   ├── layouts.py                # ✅ Layouts, track validation, AnyRail import preview
-│   │   │   └── track_library.py          # ✅
-│   │   ├── ws/
-│   │   │   └── connection_manager.py     # 🟡
-│   │   ├── services/
-│   │   │   ├── track_library.py          # ✅ Loads the track library from data/track_library
-│   │   │   ├── anyrail_import.py         # 🧪 AnyRail (JMRI XML) import
-│   │   │   ├── anyrail_geometry.py       # 🧪 Geometry for the import
-│   │   │   ├── layout_service.py         # ⬜
-│   │   │   ├── block_service.py          # ⬜
-│   │   │   ├── route_service.py          # ⬜
-│   │   │   └── locomotive_service.py     # ⬜
-│   │   └── drivers/
-│   │       ├── z21_driver.py             # 🧪 UDP, status, speed, feedback, turnout replies
-│   │       ├── z21_turnouts.py           # 🧪 Turnout command frames and throw sequence
-│   │       ├── base_driver.py            # ⬜ Interface for future adapters (Phase 7)
-│   │       ├── marklin_p50x.py           # ⬜ Phase 7
-│   │       ├── lenz_intellibox.py        # ⬜ Phase 7
-│   │       └── loconet_driver.py         # ⬜ Phase 7
-│   ├── data/track_library/               # ✅ PECO N gauge and custom curve
-│   ├── tests/                            # ✅ 192 tests
-│   └── requirements.txt
+├── src-tauri/                            # Rust core and desktop shell
+│   ├── src/
+│   │   ├── lib.rs                        # ✅ Desktop app, and the trainlink:// protocol
+│   │   ├── bin/server.rs                 # ✅ trainlink-server: API and web UI on one address
+│   │   ├── server.rs                     # ✅ HTTP server, request limits, static files
+│   │   ├── api/                          # ✅ REST routes, with the validation rules
+│   │   │   ├── layouts.rs, locomotives.rs, trackside.rs, library.rs, z21.rs, multipart.rs
+│   │   ├── db/                           # ✅ SQLite tables and queries
+│   │   ├── z21/                          # 🧪 Frames, commands, replies, connection
+│   │   ├── anyrail/                      # 🧪 AnyRail (JMRI XML) import and geometry
+│   │   ├── library.rs                    # ✅ Track library, loaded from library/*.json
+│   │   ├── moving_time.rs                # 🧪 Time each locomotive moves
+│   │   ├── state.rs, fields.rs, http.rs  # ✅ Shared state, request bodies, replies
+│   │   └── tests/                        # ✅ 52 tests, with fixtures from the old Python importer
+│   ├── library/                          # ✅ PECO N gauge and custom curve
+│   ├── Cargo.toml
+│   └── tauri.conf.json
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── control/
-│   │   │   │   ├── ControlView.jsx       # 🧪 Control page: connection, track state, panels
-│   │   │   │   ├── LocomotiveRoster.jsx  # 🧪 Roster with multi-select speed and direction
-│   │   │   │   └── OperatePanel.jsx      # 🧪 Layout in operate mode
+│   │   │   ├── shell/                    # 🧪 Top bar, side navigation, page list
+│   │   │   ├── control/                  # 🧪 Control page: roster, operate layout, function panel
 │   │   │   ├── layout/                   # 🧪 Canvas, toolbar, properties, track picker, AnyRail import
+│   │   │   ├── locomotives/              # 🧪 Roster setup and pictures
 │   │   │   ├── LayoutEditor.jsx          # 🧪
 │   │   │   ├── SystemSettings.jsx        # ✅
 │   │   │   ├── Switchboard.jsx           # 🟡
 │   │   │   └── RouteManager.jsx          # 🟡
-│   │   ├── hooks/
-│   │   │   ├── useLayoutEditor.js        # 🧪
-│   │   │   ├── useTurnoutControl.js      # 🧪 Turnout polling and switching
-│   │   │   ├── useZ21Connection.js       # ✅ Connect, disconnect, shared address
-│   │   │   ├── useZ21Status.js           # ✅
-│   │   │   └── useWebSocket.js           # 🟡
+│   │   ├── hooks/                        # 🧪 Z21 connection, status, turnouts, layout editor
 │   │   ├── layout/                       # 🧪 Track geometry and layout model
-│   │   ├── services/                     # 🧪 api.js, layoutApi.js, locomotiveApi.js
-│   │   ├── store/
-│   │   │   └── index.js                  # 🟡 Zustand
-│   │   ├── App.jsx
-│   │   └── main.jsx
+│   │   ├── services/                     # 🧪 api.js (base address), layoutApi.js, locomotiveApi.js
+│   │   ├── store/                        # 🟡 Zustand
+│   │   └── App.jsx
 │   └── package.json
-├── electron/                             # 🟡 Scaffold
-│   ├── main.js
-│   ├── preload.js
-│   └── package.json
-├── docker-compose.yml                    # ✅ PostgreSQL + Redis
+├── electron/                             # ⬜ Unused scaffold, to be removed
+├── docs/
+│   └── desktop-plan.md                   # ✅ Desktop, sync, and mobile plan
+├── docker-compose.yml                    # ✅ PostgreSQL and Redis for the old data; the app does not use them
+├── README.md
+├── QUICKSTART.md
 ├── IMPLEMENTATION_SUMMARY.md
 └── iTrain_Implementation_Plan.md
 ```
@@ -529,11 +502,11 @@ trainlink/
 
 ## Getting Started Checklist
 
-- [x] Choose backend framework (FastAPI)
+- [x] Choose backend framework (FastAPI; later replaced by the Rust core)
 - [x] Set up project repository with monorepo structure
-- [x] Design database schema (PostgreSQL)
+- [x] Design database schema (now SQLite)
 - [ ] Create basic Electron app shell (scaffold only)
-- [x] Implement WebSocket server (echo only)
+- [x] Implement WebSocket server (echo only; later removed)
 - [x] Build layout editor component (placeholder)
 - [x] Create locomotive control UI
 - [x] Test locomotive control against real Z21
@@ -551,9 +524,8 @@ trainlink/
 - Z21 default address: UDP port 21105
 
 ### Libraries
-- **Python**: FastAPI, SQLAlchemy, Pydantic, uvicorn
-- **Frontend**: React, Vite, Zustand, Tailwind CSS
-- **To evaluate**: Konva.js or Fabric.js (layout editor), python-socketio (if WebSocket needs rooms)
+- **Rust**: Tauri 2, rusqlite (SQLite), roxmltree (AnyRail XML)
+- **Frontend**: React, Vite, Zustand, Tailwind CSS, react-konva (layout canvas)
 - **Electron**: electron-builder or electron-forge (packaging)
 
 ---
