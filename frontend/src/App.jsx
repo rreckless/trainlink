@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore } from './store'
 import { useZ21StatusPolling } from './hooks/useZ21Status'
 import { useSyncedSettings } from './hooks/useSyncedSettings'
+import { useGoogleReturn } from './hooks/useGoogleReturn'
 import TopBar from './components/shell/TopBar'
 import SideNav from './components/shell/SideNav'
 import { PAGES } from './components/shell/navigation'
@@ -28,6 +29,7 @@ function App() {
   const setActiveTab = useStore((state) => state.setActiveTab)
   const [collapsed, setCollapsed] = useState(false)
   const [account, setAccount] = useState({ loading: true, signedIn: false, email: '' })
+  const [returnError, setReturnError] = useState('')
   useZ21StatusPolling()
   useSyncedSettings(account.signedIn)
 
@@ -44,6 +46,9 @@ function App() {
     loadAccount()
   }, [loadAccount])
 
+  // Google returns to the Android app through its link, which finishes the sign-in
+  useGoogleReturn(loadAccount, setReturnError)
+
   const signOut = async () => {
     await authApi.signOut()
     setAccount({ loading: false, signedIn: false, email: '' })
@@ -53,7 +58,7 @@ function App() {
     return <div className="h-screen bg-slate-900" />
   }
   if (!account.signedIn) {
-    return <SignIn onSignedIn={loadAccount} />
+    return <SignIn onSignedIn={loadAccount} initialError={returnError} />
   }
 
   const page = PAGES.find((item) => item.id === activeTab) ?? PAGES[0]
