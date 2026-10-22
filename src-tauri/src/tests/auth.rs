@@ -201,7 +201,6 @@ fn real_sign_in() {
 #[test]
 fn the_session_file_is_owner_only_and_round_trips() {
     use crate::auth::store::{FileStore, SessionStore};
-    use std::os::unix::fs::PermissionsExt;
     let folder = std::env::temp_dir().join(format!("trainlink-session-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
     let store = FileStore::new(&folder.join("session.json"));
@@ -214,8 +213,12 @@ fn the_session_file_is_owner_only_and_round_trips() {
     };
     store.save(&session).unwrap();
     assert_eq!(store.load().unwrap(), session);
-    let mode = std::fs::metadata(folder.join("session.json")).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o600, "only the owner can read the session");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(folder.join("session.json")).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "only the owner can read the session");
+    }
     store.clear();
     assert!(store.load().is_none());
 }

@@ -1,7 +1,9 @@
-// The desktop app answers API calls from its own core at trainlink://localhost
+// The desktop app answers API calls from its own core. WebView2 on Windows reaches a custom scheme as an http address
 export const IS_DESKTOP = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+const DESKTOP_BASE = IS_WINDOWS ? 'http://trainlink.localhost' : 'trainlink://localhost'
 // In the browser the API is the server the page came from. Development sets VITE_API_BASE to reach it
-export const BASE_URL = IS_DESKTOP ? 'trainlink://localhost' : (import.meta.env.VITE_API_BASE ?? window.location.origin)
+export const BASE_URL = IS_DESKTOP ? DESKTOP_BASE : (import.meta.env.VITE_API_BASE ?? window.location.origin)
 
 // The reply's JSON, or null for no content. An error reply throws with the server's detail message
 export async function readReply(response) {
