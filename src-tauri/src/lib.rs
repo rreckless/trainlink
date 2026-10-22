@@ -9,6 +9,7 @@ pub mod fields;
 pub mod http;
 pub mod library;
 pub mod moving_time;
+pub mod server;
 pub mod state;
 pub mod z21;
 

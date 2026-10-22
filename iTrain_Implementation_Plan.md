@@ -47,10 +47,10 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 - **Canvas/Drawing**: Konva.js or Fabric.js for the layout editor (not yet used)
 
 ### Backend
-- **Language**: Python 3.12
-- **Framework**: FastAPI
-- **Real-time**: WebSocket for multi-client sync (infrastructure only)
-- **Database**: PostgreSQL (relational data, via SQLAlchemy)
+- **Core**: Rust. It serves the desktop app in-process and the web UI over local HTTP. It replaces the Python backend once the web UI runs on it
+- **Database**: SQLite in the core. PostgreSQL (via SQLAlchemy) stays only in the Python backend until it is retired
+- **Python backend** (current web server): Python 3.12 and FastAPI, retired in the move to the core
+- **Real-time**: WebSocket infrastructure in the Python backend only. The core does not use it
 - **Cache**: Redis (real-time state, not yet used)
 
 ### Hardware Communication
@@ -61,7 +61,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 - **Later, once Z21 is fully functional**: Märklin 6051/P50x, Lenz Intellibox, Digitrax LocoNet (see Phase 7). Roco/Fleischmann ECoS is also a candidate
 
 ### Architecture Pattern
-- **Client-Server**: Central FastAPI server owns layout state. Browsers and Electron connect as clients
+- **Client-Server**: The core owns layout state. The desktop app calls it in-process, and browsers call it over local HTTP. The Electron scaffold is removed
 - **Publish-Subscribe**: WebSocket events for live updates
 - **Driver layer**: The Z21 driver is isolated behind a service so the rest of the backend does not speak UDP directly. Additional command stations plug in through the same base driver interface (Phase 7)
 
