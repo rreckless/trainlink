@@ -62,12 +62,12 @@ Plan for sign-in and cloud storage, so a person sees the same layouts, locomotiv
 
 ## Phases
 
-1. **Supabase project and schema.** Create the project in Europe, define the tables with UUIDs and row-level security, and write the two-account tests. You create the project and send me its URL and public key.
-2. **Mac app: sign-in and sync.** Sign-in screens, keychain storage, outbox, pull and merge, and the import of your data. Verify with two Mac copies and an offline test.
-3. **Local web on the same sync.** The browser signs in through the local server, and the core syncs.
-4. **Windows.** The same core and sign-in, using Credential Manager.
-5. **Android, then iOS.** Native sign-in, keychain or keystore storage, and the same sync. iOS waits for the Apple Developer account.
-6. **Hosted web (later).** A static site that signs in and works on data only.
+1. **Supabase project and schema.** Done. The project is in Europe, with UUID tables, row-level security and the two-account tests.
+2. **Mac app: sign-in and sync.** Done, with two devices tested live. The session is kept in a file rather than the keychain, because unsigned builds were asked for the keychain password on every build. The first sign-in claims the device's existing data. Outstanding: the offline test.
+3. **Local web on the same sync.** Done: the browser signs in through the server, and the core syncs. The server on a network address needs a token, and devices sign in with it once.
+4. **Windows.** Done, with the same file-based session as the Mac, not Credential Manager. The Windows installer shows synced data.
+5. **Android, then iOS.** Partly done. Android sign-in works with email and Google, through the system browser and an app link, and sync works. Sign-in on the iPad was reported working. Outstanding: Sign in with Apple, which is required once the Apple Developer Program is enrolled. Session storage on Android and iOS is the file, not the keystore or keychain.
+6. **Hosted web (later).** Not started.
 
 Phases 1 to 3 can be reviewed and tested before any mobile work starts.
 
@@ -82,7 +82,6 @@ Phases 1 to 3 can be reviewed and tested before any mobile work starts.
 
 ## Open items
 
-- Create the Supabase project (Europe) and send me its URL and public key.
-- Decide the Google sign-in setup: I can create the OAuth client with you.
-- Enrol in the Apple Developer programme when ready.
+- Done: the Supabase project, the Google sign-in setup, and rotating the secret key that was pasted into chat.
+- Enrol in the Apple Developer Program when ready. This unlocks TestFlight, the App Store, Sign in with Apple, and signing that doesn't expire.
 - Confirm the email sender for confirmation emails. The Supabase default is limited, so a custom sender may be needed later.

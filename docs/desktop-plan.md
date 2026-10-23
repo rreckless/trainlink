@@ -53,30 +53,32 @@ Sync is the largest new piece, so it gets its own design.
 
 ## Phases
 
-**Phase 0: Spike (about 2 days, when started).**
+Status is marked after each phase. Done means built and checked on the devices named; anything not yet checked is listed under Outstanding.
+
+**Phase 0: Spike (about 2 days, when started).** Done. The Z21 connects from the Mac, Windows, Android and iPad. Not separately recorded: the iOS Local Network permission prompt.
 - Confirm the existing UI runs in a Tauri window on Mac, and that the canvas works in WebKit.
 - Send a UDP packet to the Z21 from the Rust core, and see what macOS Local Network permission asks for.
 - Check whether iOS needs a special entitlement for UDP broadcast. Z21 discovery depends on it.
 - Try a Supabase project with one table, syncing from two test copies of the app.
 
-**Phase 1: Mac app, local only.**
+**Phase 1: Mac app, local only.** Done, except signing and notarising (needs the Apple Developer Program) and the Tauri updater, which isn't added. The importer is in Rust rather than TypeScript, and checked against the Python output.
 - Build the Rust core: Z21 link, SQLite store, pictures.
 - Port the control commands and the locomotive, turnout, and roster routes to Tauri commands, checked against the existing tests.
 - Port the AnyRail importer to TypeScript and check it on your file.
 - Use the Tauri file dialog for the import, so errors name the file.
 - Sign and notarize, package as DMG, add the Tauri updater.
 
-**Phase 2: Sync.** Add the sync client to the Rust core, the sign-in, and the conflict rules above. Test two Mac copies against each other, including offline edits. Test moving time across devices.
+**Phase 2: Sync.** Done. The sync client, sign-in and conflict rules are in place, and settings sync too. Tested between devices, including a two-device live test of settings. Not yet tested: offline edits, and moving time across devices (unit tests only).
 
-**Phase 3: Windows.** Same core, WebView2, UDP firewall rule, and a code-signing certificate to avoid SmartScreen warnings.
+**Phase 3: Windows.** Done, apart from code signing. The NSIS installer, the firewall rule and WebView2 are in place, and the installer runs on a Windows PC, shows synced data and connects to the Z21. The code-signing certificate to avoid SmartScreen warnings isn't bought.
 
-**Phase 4: Web on the core, Python retired.** Done: the web UI runs on the core and the Python backend is removed. Postgres and Docker remain until the data move. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
+**Phase 4: Web on the core, Python retired.** Mostly done: the web UI runs on the core and the Python backend is removed. Outstanding: Postgres and Docker remain until the data move. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
 
-**Phase 5: Android, all features.** Phone and tablet layouts for every feature, including the layout editor. The editor needs touch controls: larger handles, pinch to zoom, and a bigger hit area for track ends. Emergency Stop must always be reachable, including after a dropped connection. Android needs the Wi-Fi and local network permissions. Sideloading the APK needs no account; a Play Store listing needs a one-time developer fee.
+**Phase 5: Android, all features.** Partly done: the app runs on a Chromebook, with sign-in (email and Google), the Z21 connection, layouts and locomotives. Outstanding: phone and tablet layouts for every feature, including the layout editor. The editor needs touch controls: larger handles, pinch to zoom, and a bigger hit area for track ends. Emergency Stop must always be reachable, including after a dropped connection. Android needs the Wi-Fi and local network permissions. Sideloading the APK needs no account; a Play Store listing needs a one-time developer fee.
 
-**Phase 6: iOS, all features.** Starts when the Apple Developer account is enrolled. Same screens as Android, plus the iOS Local Network permission.
+**Phase 6: iOS, all features.** Partly done: the iPad app builds, runs in development and as a standalone release, signed with a free Apple ID. Free signing expires after about 7 days, so the build has to be renewed. Outstanding: enrolment in the Apple Developer Program (for TestFlight and the App Store), the iOS Local Network permission check, and Sign in with Apple. Phones aren't built yet.
 
-**Phase 7: Store releases.** Mac and Windows by download, Android through Play, iOS through TestFlight and the App Store. CI on GitHub Actions with macOS, Windows, and Linux runners.
+**Phase 7: Store releases.** Partly done: GitHub Actions workflows build the Windows installer, the Android APK and the macOS DMG, each run by hand. Outstanding: release signing for all three, Play Store, TestFlight and the App Store listings.
 
 ## Risks
 
@@ -108,28 +110,24 @@ These come from the review against the other app (see the implementation plan, P
 
 Sync (above) also covers the new data: consists, route definitions, and decoder profiles sync like the roster.
 
-## Status: Mac app built
+## Status
 
-**Built (uncommitted, on branch `desktop-mac`):**
-- `src-tauri/`: a Rust core inside Tauri. It holds the database (SQLite in the app data folder), the Z21 link, the full API the web UI uses, the track library, moving time, and the AnyRail importer.
-- The UI calls the core at `trainlink://localhost` when it runs in the app. The browser build calls the core's web server (see the README).
-- Release bundles: `TrainLink.app` and `TrainLink_0.1.0_aarch64.dmg`. They are not signed or notarised, since that needs an Apple Developer account, so the first launch needs right-click, Open.
+**Built:** the Rust core inside Tauri, with the database, the Z21 link, the API, the track library, moving time, the AnyRail importer, sign-in, sync, and settings sync. The apps: the Mac app and DMG, the Windows installer, the Android APK, and the iPad app. The web version runs on the same core. Each platform's build is run by hand from GitHub Actions for Windows, Android and the Mac, or locally for the Mac and iPad.
 
 **Checked:**
-- 46 Rust tests: API contracts, Z21 command bytes and replies, moving time, and the importer against the Python output for five AnyRail fixtures.
-- Your AnyRail file: the Rust importer gives the same 97 pieces and the same positions as the Python importer.
-- The web UI run against the Rust core through a development bridge: control 15 of 15, import 11 of 11, bend 5 of 5, drag 4 of 4, length 3 of 3, drop 2 of 2, pan 3 of 3, setup 8 of 8.
-- The Z21 link was tested against a fake Z21 on this Mac. Nothing was sent to the real command station.
+- Rust tests: 91 pass (2 ignored). Frontend tests: 60 pass.
+- The web UI through the browser: control, setup, import, bend, drag, length, drop and pan suites, with the pan test flaky on both the old and new builds.
+- Z21 on hardware: the connection, track state, locomotive control and turnout colours follow the Z21, from the desktop app, the web version and Android. The iPad was reported working.
+- Sign-in: email and Google, from the desktop, the web version and Android. Sign-in on the iPad was reported working, but the Google route on the iPad hasn't been recorded.
+- Sync: between two devices, live, in both directions.
 
-**Not checked yet:**
-- The app window itself. Screen capture was blocked in the test session, so the first launch needs a visual check.
-- The custom `trainlink://` address inside the app's web view.
-- The free-placement UI script. It's out of date (it still expects the old bend points) and fails at the same step on the Python backend.
+**Outstanding:**
+- Signing and notarising the Mac app, and adding the Tauri updater.
+- Code signing for the Windows installer, to avoid SmartScreen warnings.
+- Android: the layout editor on phones and tablets, with touch controls, and Emergency Stop reachable after a dropped connection.
+- iOS: Apple Developer Program enrolment, the Local Network permission check, Sign in with Apple, and phone layouts.
+- Sync: offline edits and moving time across devices are not yet tested live.
+- The data move from Postgres and Docker, and removing them.
+- Store releases.
+- Route running, live occupancy, consists and multi-throttle, controller support, decoder programming, and cab view. None is started.
 
-**Bugs found and fixed during the port:**
-- The Python importer mapped slip and three-way ends to the wrong legs when their order was scrambled. A scrambled slip came out with gaps of more than 150 mm. Fixed in the Python importer too, and the importer tests still pass.
-- Picture uploads from the browser are multipart forms, which the Rust core did not accept. Fixed.
-
-**Left in place on purpose:** Postgres and Docker, until the data move. The old Python backend's data folder (pictures and the track library) was moved out of the repository to `~/trainlink-python-backup`. The track library JSON lives in `src-tauri/library`.
-
-**Not started:** sync (needs a Supabase project and credentials), Windows, iOS, and Android.
