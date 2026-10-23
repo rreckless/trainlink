@@ -145,9 +145,6 @@ export default function SignIn({ onSignedIn, initialError = '' }) {
             Continue with Google
           </button>
         )}
-        <p className="text-xs text-slate-500 text-center mt-4">
-          Your layouts and locomotives belong to your account. Sync between devices is coming next.
-        </p>
       </div>
     </div>
   )
