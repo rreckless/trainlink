@@ -33,7 +33,6 @@ The plan is in [docs/desktop-plan.md](docs/desktop-plan.md).
 | `frontend/` | The React interface, used by the desktop apps and the web version |
 | `supabase/` | The cloud database schema and its row-level security tests |
 | `docs/` | The desktop, sync, and mobile plan, and the login plan |
-| `docker-compose.yml` | PostgreSQL and Redis. Not used by the app. Kept for the data move from the old backend |
 
 ## Requirements
 
