@@ -36,8 +36,15 @@ jobs:
         working-directory: frontend/src-tauri
         run: cargo test
 
+      # "-" signs the app ad-hoc. It is not a Developer ID, so Gatekeeper still asks once, but the app is no longer "damaged"
       - name: Build the app and disk image
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
         run: node_modules/.bin/tauri build --bundles app,dmg
+
+      - name: Check the signature
+        run: codesign --verify --deep --strict --verbose=2 target/release/bundle/macos/TrainLink.app
+        working-directory: frontend/src-tauri
 
       - uses: actions/upload-artifact@v4
         with:
