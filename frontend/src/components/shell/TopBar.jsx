@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertOctagon, Search, Zap } from 'lucide-react'
+import { AlertOctagon, Search } from 'lucide-react'
 import { useStore } from '../../store'
 import { locomotiveApi } from '../../services/locomotiveApi'
 import { PAGES, describeTrack } from './navigation'
@@ -114,9 +114,7 @@ export default function TopBar({ onOpen, email, onSignOut }) {
   return (
     <header className="h-14 flex-shrink-0 flex items-center gap-4 px-4 bg-slate-950 border-b border-slate-800">
       <div className="flex items-center gap-2 min-w-[10rem]">
-        <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center" aria-hidden="true">
-          <Zap className="w-5 h-5 text-slate-950" />
-        </div>
+        <img src="/favicon.png" alt="" className="w-8 h-8" />
         <span className="font-semibold tracking-tight">TrainLink</span>
       </div>
       <div className="flex-1 flex justify-center">

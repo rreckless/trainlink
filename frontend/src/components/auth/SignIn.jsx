@@ -96,7 +96,7 @@ export default function SignIn({ onSignedIn, initialError = '' }) {
     <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white p-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 mb-6 justify-center">
-          <div className="w-9 h-9 rounded-lg bg-green-500" aria-hidden="true" />
+          <img src="/favicon.png" alt="" className="w-9 h-9" />
           <span className="text-xl font-semibold">TrainLink</span>
         </div>
         <form onSubmit={submit} className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
