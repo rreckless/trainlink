@@ -459,6 +459,22 @@ Entry criteria:
 
 **Not yet reviewed in LocoLink** (add when seen): Macros, Shuttles, Drivers, Freight & switching, Command Truth, Projects' Save as and Export, and the Experience, Systems, Data and Demo settings.
 
+### Phase 10f: Design Direction (from the LocoLink review)
+**Goal**: Change how TrainLink is organised and presented, so that a new user sees what to do next and an experienced user can find things quickly. The pages stay in one codebase across platforms.
+
+**Done**
+1. ✅ **Project health check.** `GET /api/overview/health` lists blocks without a sensor and turnouts without a DCC address, with counts. The Health page under System shows them, with buttons to the Switchboard and the Layout Editor
+2. ✅ **Turnout list.** `GET /api/overview/turnouts` lists every turnout on every layout. The Turnouts page under Layout has filters (all, with address, no address), search, and the layout each turnout is on
+3. ✅ **Consists as their own page** under Drive (done earlier, branch `consist-address`)
+
+**Not yet done**
+4. ⬜ **Basic and Advanced sidebar.** Group the pages into Basics and Advanced, with the rest collapsed, as LocoLink does
+5. ⬜ **Guided setup checklist.** A Setup page with numbered steps (command station, locomotives, track plan, blocks and sensors, turnouts, routes), each showing done or to do
+6. ⬜ **Summary cards and filters** on the Locomotives and Blocks pages, as on the Turnouts page
+7. ⬜ **Item editing in one form with a live preview**, for new items first (turnouts, blocks, locomotives), then converting the existing inline forms
+8. ⬜ **Import review list** after an AnyRail import: turnouts without an address, turnouts without a link, and blocks without a sensor (see Phase 10a item 3)
+9. ⬜ **Empty states with a next action** on every page, replacing plain text
+
 ---
 
 ## Immediate Priorities

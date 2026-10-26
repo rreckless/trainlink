@@ -7,6 +7,7 @@ pub mod layouts;
 pub mod library;
 pub mod locomotives;
 pub mod multipart;
+pub mod overview;
 pub mod settings;
 pub mod sync;
 pub mod trackside;
@@ -79,6 +80,7 @@ fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {
         ["api", "layouts", rest @ ..] => layouts::route(app, call, rest),
         ["api", "locomotives", rest @ ..] => locomotives::route(app, call, rest),
         ["api", "consists", rest @ ..] => consists::route(app, call, rest),
+        ["api", "overview", rest @ ..] => overview::route(app, call, rest),
         ["api", "blocks", rest @ ..] => trackside::blocks(app, call, rest),
         ["api", "signals", rest @ ..] => trackside::signals(app, call, rest),
         ["api", "feedbacks", rest @ ..] => trackside::feedbacks(app, call, rest),
