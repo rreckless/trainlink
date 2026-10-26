@@ -360,3 +360,21 @@ fn the_feedback_monitor_shows_128_addresses_and_the_latest_reports() {
     assert_eq!(reports[1]["occupied"], true);
     assert_eq!(reports[1]["feedback"]["name"], "Platform sensor");
 }
+
+#[test]
+fn connecting_and_disconnecting_are_written_to_the_connection_log() {
+    let fake = fake_z21();
+    let app = app();
+    assert!(z21::connect(&app, "127.0.0.1", fake.port));
+    fake.say(&central_state(0x00));
+    assert!(wait_until(|| track_state(&app) == "ready"));
+    // The watchdog writes track state changes once a second; the test does the same step directly
+    app.inner.lock().unwrap().z21.note_track_state();
+    app.inner.lock().unwrap().z21.disconnect();
+    let (_, log) = send(&app, "GET", "/api/overview/log", None);
+    let messages: Vec<String> = log.as_array().unwrap().iter().map(|entry| entry["message"].as_str().unwrap().to_string()).collect();
+    assert!(messages.contains(&"Connected to the Z21".to_string()), "{messages:?}");
+    assert!(messages.iter().any(|message| message == "Track state is now ready"), "{messages:?}");
+    assert_eq!(messages.last().map(String::as_str), Some("Disconnected from the Z21"), "{messages:?}");
+    assert!(log.as_array().unwrap().iter().all(|entry| !entry["message"].as_str().unwrap().contains("127.0.0.1")), "no addresses in the log");
+}

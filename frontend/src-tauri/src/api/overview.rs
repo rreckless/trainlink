@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 
 use super::Call;
-use crate::db::layouts as layouts_db;
+use crate::db::{self, layouts as layouts_db};
 use crate::http::{ApiError, Out, Reply};
 use crate::library::library;
 use crate::state::{AppState, Inner};
@@ -19,9 +19,21 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", ["turnouts"]) => turnouts(app),
         ("GET", ["health"]) => health(app),
+        ("GET", ["log"]) => connection_log(app),
+        ("GET", ["support"]) => support(app),
         ("GET", ["setup"]) => setup(app),
         _ => Err(ApiError::new(405, "Method not allowed")),
     }
+}
+
+/// One health category: ok, needs attention, or not built yet
+fn category(id: &str, label: &str, ok: bool, detail: String) -> Value {
+    let status = if ok { "ok" } else { "attention" };
+    json!({ "id": id, "label": label, "status": status, "detail": detail })
+}
+
+fn not_built(id: &str, label: &str) -> Value {
+    json!({ "id": id, "label": label, "status": "not_built", "detail": "Not built yet" })
 }
 
 /// The setup checklist: each step is done when the data for it exists, and names the page where it is done
@@ -117,6 +129,11 @@ fn turnouts(app: &Arc<AppState>) -> Out {
 
 fn health(app: &Arc<AppState>) -> Out {
     let inner = lock(app);
+    Ok(Reply::json(200, health_report(&inner)?))
+}
+
+/// The health report: what is missing, the counts, and the score and categories. Shared with the support package
+fn health_report(inner: &Inner) -> Result<Value, ApiError> {
     let blocks: Vec<Value> = {
         let mut statement = inner.db.prepare(
             "SELECT id, name FROM blocks WHERE id NOT IN (SELECT block_id FROM block_feedbacks) ORDER BY name",
@@ -143,17 +160,76 @@ fn health(app: &Arc<AppState>) -> Out {
     }
     let blocks_total: i64 = inner.db.query_row("SELECT COUNT(*) FROM blocks", [], |row| row.get(0))?;
     let turnouts_total = turnout_rows(&inner)?.len();
-    Ok(Reply::json(
-        200,
-        json!({
-            "blocks_without_sensor": blocks,
-            "turnouts_without_address": turnouts,
-            "legs_without_track": legs,
-            "counts": {
-                "blocks": blocks_total,
-                "turnouts": turnouts_total,
-                "missing": blocks.len() + turnouts.len() + legs.len(),
-            },
-        }),
-    ))
+    let stations: i64 = inner.db.query_row("SELECT COUNT(*) FROM command_stations", [], |row| row.get(0))?;
+    let locomotives: i64 = inner.db.query_row("SELECT COUNT(*) FROM locomotives", [], |row| row.get(0))?;
+    let routes: i64 = inner.db.query_row("SELECT COUNT(*) FROM routes", [], |row| row.get(0))?;
+    let categories = vec![
+        category("command_stations", "Command stations", stations > 0, format!("{stations} command station(s)")),
+        category("locomotives", "Locomotives", locomotives > 0, format!("{locomotives} locomotive(s)")),
+        category("track", "Track", legs.is_empty(), format!("{} turnout leg(s) with no track", legs.len())),
+        category("turnouts", "Turnouts", turnouts.is_empty(), format!("{} without an address", turnouts.len())),
+        category("blocks", "Blocks", blocks.is_empty(), format!("{} without a sensor", blocks.len())),
+        category("routes", "Routes", routes > 0, format!("{routes} route(s)")),
+        not_built("cameras", "Cameras"),
+        not_built("recovery", "Recovery"),
+    ];
+    // Categories that are not built yet are left out of the score, so they cannot lower it
+    let scored: Vec<&Value> = categories.iter().filter(|item| item["status"] != "not_built").collect();
+    let fine = scored.iter().filter(|item| item["status"] == "ok").count();
+    let score = if scored.is_empty() { 0 } else { fine * 100 / scored.len() };
+    Ok(json!({
+        "blocks_without_sensor": blocks,
+        "turnouts_without_address": turnouts,
+        "legs_without_track": legs,
+        "counts": {
+            "blocks": blocks_total,
+            "turnouts": turnouts_total,
+            "missing": blocks.len() + turnouts.len() + legs.len(),
+        },
+        "score": score,
+        "categories": categories,
+    }))
+}
+
+/// The connection log, oldest first
+fn connection_log(app: &Arc<AppState>) -> Out {
+    let inner = lock(app);
+    let entries: Vec<Value> = inner.z21.log.iter().map(|entry| json!({ "at": entry.at, "message": entry.message })).collect();
+    Ok(Reply::json(200, json!(entries)))
+}
+
+/// A plain text package to send with a support request. It has counts, statuses and the recent log, and leaves out
+/// names, addresses and the IP address of the Z21
+fn support(app: &Arc<AppState>) -> Out {
+    let inner = lock(app);
+    let report = health_report(&inner)?;
+    let layouts: i64 = inner.db.query_row("SELECT COUNT(*) FROM layouts", [], |row| row.get(0))?;
+    let locomotives: i64 = inner.db.query_row("SELECT COUNT(*) FROM locomotives", [], |row| row.get(0))?;
+    let z21 = &inner.z21;
+    let mut lines = vec![
+        "TrainLink support package".to_string(),
+        "Names, addresses and the IP address of the Z21 are left out.".to_string(),
+        format!("Created: {}", db::now()),
+        format!("App version: {}", env!("CARGO_PKG_VERSION")),
+        format!("Z21 connected: {}", if z21.connected { "yes" } else { "no" }),
+        format!("Track state: {}", z21.track_state()),
+    ];
+    if let Some(hardware) = &z21.hardware {
+        let model = hardware.model().unwrap_or("unknown model");
+        lines.push(format!("Z21 hardware: {model}, firmware {}", hardware.firmware_text()));
+    }
+    if let Some(version) = &z21.version {
+        lines.push(format!("X-Bus version: {}, station ID {}", version.xbus, version.station_id));
+    }
+    lines.push(format!("Layouts: {layouts}, locomotives: {locomotives}, blocks: {}", report["counts"]["blocks"]));
+    lines.push(format!("Health score: {}%", report["score"]));
+    for category in report["categories"].as_array().into_iter().flatten() {
+        lines.push(format!("  {}: {} ({})", category["label"].as_str().unwrap_or_default(), category["status"].as_str().unwrap_or_default(), category["detail"].as_str().unwrap_or_default()));
+    }
+    lines.push("Recent connection log:".to_string());
+    let recent: Vec<_> = z21.log.iter().rev().take(100).collect();
+    for entry in recent.iter().rev() {
+        lines.push(format!("  {} {}", entry.at, entry.message));
+    }
+    Ok(Reply::json(200, json!({ "text": lines.join("\n") })))
 }
