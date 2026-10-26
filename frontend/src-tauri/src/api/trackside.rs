@@ -13,6 +13,8 @@ use crate::http::{ApiError, Out, Reply};
 use crate::occupancy;
 use crate::state::{AppState, Inner};
 
+const GROUP_MAX: usize = 40;
+const SENSOR_ROLES: [&str; 3] = ["entry", "middle", "exit"];
 const BLOCK_STATES: [&str; 3] = ["free", "occupied", "reserved"];
 const SIGNAL_TYPES: [&str; 2] = ["main", "warning"];
 const SIGNAL_ASPECTS: [&str; 3] = ["stop", "caution", "go"];
@@ -109,6 +111,19 @@ fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
         block.occupied = state == "occupied";
         block.state = state;
     }
+    if let Some(group) = body.get("group_name") {
+        block.group_name = match group {
+            Value::Null => None,
+            Value::String(text) => {
+                let trimmed = text.trim();
+                if trimmed.chars().count() > GROUP_MAX {
+                    return Err(ApiError::unprocessable(format!("A group name can be at most {GROUP_MAX} characters")));
+                }
+                (!trimmed.is_empty()).then(|| trimmed.to_string())
+            }
+            _ => return Err(ApiError::unprocessable("group_name must be text or null")),
+        };
+    }
     if let Some(next) = body.get("next_block_id") {
         block.next_block_id = match next {
             Value::Null => None,
@@ -128,6 +143,26 @@ fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     if let Some(feedback_ids) = int_list(&changes, "feedback_ids")? {
         check_feedbacks(&inner.db, &feedback_ids, block.layout_id)?;
         trackside::set_block_feedbacks(&inner.db, id, &feedback_ids)?;
+    }
+    // Roles are read from the body, because null clears one. They are checked against the block's sensors after the change above
+    if let Some(roles) = body.get("feedback_roles") {
+        let map = roles.as_object().ok_or_else(|| ApiError::unprocessable("feedback_roles must be an object"))?;
+        let current = trackside::block(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Block", id))?;
+        let mut pairs = Vec::new();
+        for (key, value) in map {
+            let feedback_id: i64 = key.parse().map_err(|_| ApiError::unprocessable("feedback_roles keys must be feedback ids"))?;
+            if !current.feedback_ids.contains(&feedback_id) {
+                return Err(ApiError::unprocessable("Only a sensor the block reads from can have a role"));
+            }
+            let role = match value {
+                Value::Null => None,
+                Value::String(text) if SENSOR_ROLES.contains(&text.as_str()) => Some(text.clone()),
+                Value::String(_) => return Err(ApiError::unprocessable("Sensor role must be one of: entry, middle, exit")),
+                _ => return Err(ApiError::unprocessable("Each sensor role must be text or null")),
+            };
+            pairs.push((feedback_id, role));
+        }
+        trackside::set_feedback_roles(&inner.db, id, &pairs)?;
     }
     if let Some(signal_ids) = int_list(&changes, "signal_ids")? {
         check_signals(&inner.db, &signal_ids, block.layout_id)?;

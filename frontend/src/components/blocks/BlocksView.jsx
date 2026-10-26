@@ -9,6 +9,30 @@ const STATES = [
   { id: 'reserved', label: 'Reserved' },
 ]
 
+// The Blocks page filters. Problems are blocks with no sensor linked to them, the same blocks the Health page lists
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'occupied', label: 'Occupied' },
+  { id: 'reserved', label: 'Reserved' },
+  { id: 'free', label: 'Free' },
+  { id: 'problems', label: 'Problems' },
+]
+
+const matchesFilter = (block, filter) => {
+  switch (filter) {
+    case 'occupied':
+      return block.occupied_now
+    case 'reserved':
+      return !block.occupied_now && block.state === 'reserved'
+    case 'free':
+      return !block.occupied_now && block.state !== 'reserved'
+    case 'problems':
+      return block.feedback_ids.length === 0
+    default:
+      return true
+  }
+}
+
 // Blocks: their properties, the block after each one, and the feedbacks and signals they are linked to
 export default function BlocksView() {
   const [blocks, setBlocks] = useState([])
@@ -19,6 +43,7 @@ export default function BlocksView() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [filter, setFilter] = useState('all')
 
   const refresh = () =>
     Promise.all([tracksideApi.blocks(), tracksideApi.feedbacks(), tracksideApi.signals()])
@@ -45,6 +70,8 @@ export default function BlocksView() {
     setDraft({
       name: selected.name,
       max_speed: selected.max_speed,
+      group_name: selected.group_name ?? '',
+      feedback_roles: { ...selected.feedback_roles },
       state: selected.state,
       next_block_id: selected.next_block_id ?? '',
       feedback_ids: selected.feedback_ids,
@@ -82,6 +109,11 @@ export default function BlocksView() {
       await tracksideApi.updateBlock(selected.id, {
         name: draft.name.trim(),
         max_speed: Number(draft.max_speed),
+        group_name: draft.group_name.trim(),
+        // Only sensors that are still linked can have a role. A cleared role is sent as null
+        feedback_roles: Object.fromEntries(
+          draft.feedback_ids.filter((id) => String(id) in draft.feedback_roles).map((id) => [id, draft.feedback_roles[id]])
+        ),
         state: draft.state,
         next_block_id: draft.next_block_id === '' ? null : Number(draft.next_block_id),
         feedback_ids: draft.feedback_ids,
@@ -104,23 +136,50 @@ export default function BlocksView() {
         {blocks.length === 0 ? (
           <p className="text-sm text-slate-400">No blocks yet. Add them in the Layout Editor.</p>
         ) : (
-          <ul className="space-y-1">
-            {blocks.map((block) => (
-              <li key={block.id}>
-                <button
-                  onClick={() => setSelectedId(block.id)}
-                  className={`w-full text-left px-3 py-2 rounded flex justify-between ${
-                    block.id === selectedId ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-                  }`}
-                >
-                  <span>{block.name}</span>
-                  <span className={block.occupied_now ? 'text-red-300' : 'text-green-300'}>
-                    {block.occupied_now ? 'Occupied' : 'Free'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="flex flex-wrap gap-1">
+              {FILTERS.map((item) => {
+                const count = blocks.filter((block) => matchesFilter(block, item.id)).length
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setFilter(item.id)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      filter === item.id ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
+                    }`}
+                  >
+                    {item.label} ({count})
+                  </button>
+                )
+              })}
+            </div>
+            {blocks.filter((block) => matchesFilter(block, filter)).length === 0 ? (
+              <p className="text-sm text-slate-400">No blocks match this filter.</p>
+            ) : (
+              <ul className="space-y-1">
+                {blocks
+                  .filter((block) => matchesFilter(block, filter))
+                  .map((block) => (
+                    <li key={block.id}>
+                      <button
+                        onClick={() => setSelectedId(block.id)}
+                        className={`w-full text-left px-3 py-2 rounded flex justify-between ${
+                          block.id === selectedId ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
+                        }`}
+                      >
+                        <span>
+                          {block.name}
+                          {block.group_name && <span className="ml-2 text-xs text-slate-400">{block.group_name}</span>}
+                        </span>
+                        <span className={block.occupied_now ? 'text-red-300' : 'text-green-300'}>
+                          {block.occupied_now ? 'Occupied' : 'Free'}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
 
@@ -150,6 +209,16 @@ export default function BlocksView() {
             <input
               value={draft.name}
               onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
+            Group (optional)
+            <input
+              value={draft.group_name}
+              maxLength={40}
+              onChange={(event) => setDraft({ ...draft, group_name: event.target.value })}
               disabled={busy}
               className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
             />
@@ -213,6 +282,22 @@ export default function BlocksView() {
                   disabled={busy}
                 />
                 {feedback.name} <span className="text-xs text-slate-400">feedback {feedback.feedback_number}</span>
+                {draft.feedback_ids.includes(feedback.id) && (
+                  <select
+                    value={draft.feedback_roles[feedback.id] ?? ''}
+                    onChange={(event) =>
+                      setDraft({ ...draft, feedback_roles: { ...draft.feedback_roles, [feedback.id]: event.target.value || null } })
+                    }
+                    disabled={busy}
+                    aria-label={`Role of ${feedback.name}`}
+                    className="ml-auto px-2 py-1 bg-slate-700 rounded border border-slate-600 text-white text-xs"
+                  >
+                    <option value="">No role</option>
+                    <option value="entry">Entry</option>
+                    <option value="middle">Middle</option>
+                    <option value="exit">Exit</option>
+                  </select>
+                )}
               </label>
             ))
           )}

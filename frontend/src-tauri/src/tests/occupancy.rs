@@ -142,6 +142,7 @@ fn a_block_links_to_its_next_block_and_a_main_signal_shows_caution() {
 fn a_database_from_before_next_blocks_gets_the_column() {
     let conn = rusqlite::Connection::open_in_memory().expect("in-memory database");
     conn.execute_batch("CREATE TABLE blocks (id INTEGER PRIMARY KEY, layout_id INTEGER, name TEXT NOT NULL);
+        CREATE TABLE block_feedbacks (block_id INTEGER NOT NULL, feedback_id INTEGER NOT NULL, PRIMARY KEY (block_id, feedback_id));
         INSERT INTO blocks (layout_id, name) VALUES (1, 'Old');")
         .expect("old table");
     crate::db::trackside::migrate(&conn).expect("migrate");
