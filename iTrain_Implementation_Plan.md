@@ -109,20 +109,20 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Emergency stop. Verified on hardware (not yet confirmed separately)
    - 🧪 Track state from Z21 (short circuit, track power off), with locomotive commands blocked until ready and a Resume Track Power action. Reconnect in Settings
 
-2. **Block System** ⬜
-   - 🟡 Block model and REST routes exist
-   - ⬜ Block definition and visualization
-   - ⬜ Block occupancy detection via Z21 feedback
-   - ⬜ Block linking to signals
-   - ⬜ Automatic signal management
+2. **Block System** 🟡
+   - ✅ Block model and REST routes, with links to feedbacks and signals (set with `feedback_ids` and `signal_ids` on a block)
+   - 🟡 Block definition and visualization. Blocks are listed on the Switchboard; the layout canvas does not show them yet
+   - 🧪 Block occupancy detection via Z21 feedback. A block is occupied when any linked feedback reports it, and falls back to its own state when nothing has reported. Tested against the fake Z21, not yet on hardware
+   - 🧪 Block linking to signals (API, `signal_ids` and `block_ids`). No screen for linking yet
+   - 🧪 Automatic signal management: a linked signal shows stop when a block it protects is occupied, and go otherwise
    - ⬜ Block properties UI
-   - ⬜ Live occupancy on the Switchboard and in the layout editor. The Z21 feedback is read, but no screen shows it yet
+   - 🟡 Live occupancy on the Switchboard, refreshed every two seconds. Not yet in the layout editor. Block links are not synced between devices yet
 
-3. **Signal Control** ⬜
-   - 🟡 Signal model and REST routes exist
-   - ⬜ Main signal aspects (Stop, Caution, Go)
+3. **Signal Control** 🟡
+   - ✅ Signal model and REST routes exist
+   - 🟡 Main signal aspects: stop and go come from the blocks. Caution needs the order of blocks, which comes with routes (Phase 3). Aspects are not sent to any hardware yet
    - ⬜ Warning signals
-   - ⬜ Automatic signal assignment from block state
+   - 🧪 Automatic signal assignment from block state (signals that protect blocks follow them; manual aspects are refused while linked)
    - ⬜ Signal visualization on layout
 
 4. **Layout Drawing** 🧪
@@ -145,7 +145,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Save and load layouts (layout width and height are saved with the track)
    - 🧪 Drag-and-drop editing
    - 🧪 Snap-to-grid (20 unit grid)
-   - ⬜ Signals and feedbacks are placed but have no link to automation or hardware yet
+   - 🟡 Signals and feedbacks are linked to blocks, which drive stop and go. Signal aspects are not yet sent to hardware
 
 ### Phase 3: Automation & Routes (3-4 weeks)
 **Goal**: Route-based automation

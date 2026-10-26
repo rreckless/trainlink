@@ -383,3 +383,36 @@ pub fn delete_route(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM routes WHERE id = ?1", [id])?;
     Ok(())
 }
+
+/// Replace the feedbacks a block reads its occupancy from
+pub fn set_block_feedbacks(conn: &Connection, block_id: i64, feedback_ids: &[i64]) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM block_feedbacks WHERE block_id = ?1", [block_id])?;
+    for feedback_id in feedback_ids {
+        conn.execute(
+            "INSERT INTO block_feedbacks (block_id, feedback_id) VALUES (?1, ?2)",
+            params![block_id, feedback_id],
+        )?;
+    }
+    sync::mark_changed(conn, "blocks", block_id)?;
+    Ok(())
+}
+
+/// Replace the signals that show the aspect of a block
+pub fn set_block_signals(conn: &Connection, block_id: i64, signal_ids: &[i64]) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM block_signals WHERE block_id = ?1", [block_id])?;
+    for signal_id in signal_ids {
+        conn.execute("INSERT INTO block_signals (block_id, signal_id) VALUES (?1, ?2)", params![block_id, signal_id])?;
+    }
+    sync::mark_changed(conn, "blocks", block_id)?;
+    Ok(())
+}
+
+/// Replace the blocks a signal protects
+pub fn set_signal_blocks(conn: &Connection, signal_id: i64, block_ids: &[i64]) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM block_signals WHERE signal_id = ?1", [signal_id])?;
+    for block_id in block_ids {
+        conn.execute("INSERT INTO block_signals (block_id, signal_id) VALUES (?1, ?2)", params![block_id, signal_id])?;
+    }
+    sync::mark_changed(conn, "signals", signal_id)?;
+    Ok(())
+}
