@@ -167,14 +167,16 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Speed management: each block's speed from the route's speed profile, or the block's maximum speed
    - 🧪 Stop at destinations: a run stops at the last block of its route, or turns round with auto-return
    - 🧪 Route completion handling: a route that completes is no longer running. A run that was not started in this session is stopped at start-up
-   - ⬜ Waiting for a busy block, with a configurable time (the run does not yet check whether the next block is free before it moves)
+   - 🧪 Waiting for a busy block: a run holds at speed 0 until the block ahead is free, and the Route Manager shows what it waits for. No configurable time yet
    - **Open:** check on a real layout. Collision avoidance (item 3) must come before runs on a shared layout
 
-3. **Collision Avoidance** ⬜
-   - ⬜ Block occupancy tracking
-   - ⬜ Train detection via Z21 feedback
-   - ⬜ Automatic signal management to prevent collisions
-   - ⬜ Deadlock prevention
+3. **Collision Avoidance** 🧪
+   - ✅ Block occupancy tracking: a block is occupied when a linked feedback reports it, or by its own state where nothing has reported
+   - 🧪 Train detection via Z21 feedback: the feedback sets a block's occupancy, which runs and signals read. Tested with the fake Z21. **Open:** check on a real detector
+   - 🧪 Automatic signal management to prevent collisions: a run never enters an occupied block, and signals show stop for an occupied block, so both agree. Caution comes from the next block
+   - 🧪 Deadlock prevention: a run holds the block it is in and claims the block ahead before moving. A cycle of runs waiting on each other is broken by stopping the newer run, with a notice. Tested with the fake Z21
+   - 🧪 A block that is occupied but not claimed by a run (a train no run expects) holds the runs that want it. **Open:** no alarm for unexpected trains yet
+   - **Open:** check on a real layout with two runs sharing a block
 
 4. **Turnouts** 🧪
    - 🧪 Z21 turnout commands (LAN_X_SET_TURNOUT, queued, activate then deactivate), frames checked against the spec. Not yet tried on a turnout

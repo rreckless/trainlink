@@ -13,6 +13,7 @@ mod z21_link;
 mod moving;
 mod anyrail;
 mod automation;
+mod collision;
 mod auth;
 mod server;
 mod sync;

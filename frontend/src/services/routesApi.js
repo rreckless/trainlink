@@ -10,4 +10,6 @@ export const routesApi = {
   // Start a route with a locomotive in its first block, or stop it
   run: (id, locomotiveId) => request('POST', `/api/routes/${id}/run`, { locomotive_id: locomotiveId }),
   stop: (id) => request('POST', `/api/routes/${id}/stop`),
+  // What the automation has done that matters: stops made to avoid a collision or a crash, newest last
+  notices: () => request('GET', '/api/routes/notices'),
 }

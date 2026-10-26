@@ -285,10 +285,14 @@ fn update_feedback(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
 
 pub fn routes(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
+        ("GET", ["notices"]) => {
+            let inner = lock(app);
+            Ok(Reply::json(200, json!(inner.notices)))
+        }
         ("GET", []) => {
             let inner = lock(app);
             let routes = trackside::routes(&inner.db, optional_layout_id(call)?)?;
-            let values = routes.iter().map(|route| route_value(&inner.db, route)).collect::<rusqlite::Result<Vec<_>>>()?;
+            let values = routes.iter().map(|route| route_value(&inner, route)).collect::<rusqlite::Result<Vec<_>>>()?;
             Ok(Reply::json(200, json!(values)))
         }
         ("POST", []) => create_route(app, call),
@@ -296,7 +300,7 @@ pub fn routes(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             let id = super::id_segment(id)?;
             let inner = lock(app);
             let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
-            Ok(Reply::json(200, route_value(&inner.db, &route)?))
+            Ok(Reply::json(200, route_value(&inner, &route)?))
         }
         ("PATCH", [id]) => update_route(app, super::id_segment(id)?, call),
         ("POST", [id, "run"]) => run_route(app, super::id_segment(id)?, call),
@@ -350,10 +354,11 @@ fn unlinked_steps(db: &rusqlite::Connection, sequence: &[i64]) -> rusqlite::Resu
     Ok(steps)
 }
 
-/// A route as the API shows it: the stored fields, and the steps that are not linked
-fn route_value(db: &rusqlite::Connection, route: &trackside::Route) -> rusqlite::Result<Value> {
+/// A route as the API shows it: the stored fields, the steps that are not linked, and the block a run is waiting for
+fn route_value(inner: &Inner, route: &trackside::Route) -> rusqlite::Result<Value> {
     let mut value = json!(route);
-    value["unlinked_steps"] = json!(unlinked_steps(db, &route.block_sequence)?);
+    value["unlinked_steps"] = json!(unlinked_steps(&inner.db, &route.block_sequence)?);
+    value["waiting_for_block"] = json!(inner.runs.get(&route.id).and_then(|run| run.waiting_for));
     Ok(value)
 }
 
@@ -391,7 +396,7 @@ fn create_route(app: &Arc<AppState>, call: &Call) -> Out {
         },
     )?;
     let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::internal("Route was not saved"))?;
-    Ok(Reply::json(201, route_value(&inner.db, &route)?))
+    Ok(Reply::json(201, route_value(&inner, &route)?))
 }
 
 /// Start a route with a locomotive, which is in the route's first block. The Z21 must be ready
@@ -402,14 +407,14 @@ fn run_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     super::z21::ready_check(&inner, "Route")?;
     crate::automation::start(&mut inner, id, locomotive_id, std::time::Instant::now())?;
     let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
-    Ok(Reply::json(200, route_value(&inner.db, &route)?))
+    Ok(Reply::json(200, route_value(&inner, &route)?))
 }
 
 fn stop_route(app: &Arc<AppState>, id: i64) -> Out {
     let mut inner = lock(app);
     crate::automation::stop(&mut inner, id, std::time::Instant::now())?;
     let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
-    Ok(Reply::json(200, route_value(&inner.db, &route)?))
+    Ok(Reply::json(200, route_value(&inner, &route)?))
 }
 
 /// A list with one entry per block of a route: each entry is null, meaning the block's own setting, or a value
@@ -473,7 +478,7 @@ fn update_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     }
     trackside::save_route(&inner.db, &route)?;
     let saved = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::internal("Route was not saved"))?;
-    Ok(Reply::json(200, route_value(&inner.db, &saved)?))
+    Ok(Reply::json(200, route_value(&inner, &saved)?))
 }
 
 /// A list of whole-number ids from a request, or None if the request did not give the list

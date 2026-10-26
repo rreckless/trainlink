@@ -17,6 +17,11 @@ pub struct Inner {
     pub moving: MovingTime,
     /// Route runs started in this session, by route id. Not stored: a run that is not here is stopped at start-up
     pub runs: std::collections::HashMap<i64, crate::automation::Run>,
+    /// Blocks reserved by a running route, by block id: the route that holds the block. A route holds the block it is in
+    /// and the block it is about to enter. Not stored, like the runs
+    pub claims: std::collections::HashMap<i64, i64>,
+    /// What the automation has done that someone should know about, newest last, kept to the last 20
+    pub notices: Vec<String>,
 }
 
 pub struct AppState {
@@ -38,7 +43,7 @@ impl AppState {
 
     pub fn with_auth(db: Connection, images: PathBuf, auth: Auth) -> AppState {
         AppState {
-            inner: Mutex::new(Inner { db, z21: Z21::new(), moving: MovingTime::new(), runs: Default::default() }),
+            inner: Mutex::new(Inner { db, z21: Z21::new(), moving: MovingTime::new(), runs: Default::default(), claims: Default::default(), notices: Vec::new() }),
             images,
             auth,
             sync: Mutex::new(SyncStatus::default()),

@@ -58,6 +58,7 @@ export default function RouteManager() {
   const [layoutId, setLayoutId] = useState(null)
   const [blocks, setBlocks] = useState([])
   const [routes, setRoutes] = useState([])
+  const [notices, setNotices] = useState([])
   const [locomotives, setLocomotives] = useState([])
   const [runLocomotive, setRunLocomotive] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -90,7 +91,10 @@ export default function RouteManager() {
 
   const refreshRoutes = (id) =>
     routesApi
-      .list(id)
+      .notices()
+      .then(setNotices)
+      .catch(() => {})
+      .then(() => routesApi.list(id))
       .then((list) => {
         setRoutes(list)
         return list
@@ -298,6 +302,7 @@ export default function RouteManager() {
                     {route.unlinked_steps.length > 0 && ` · ${route.unlinked_steps.length} not linked`}
                     {!route.enabled && ' · disabled'}
                     {route.is_running && ' · running'}
+                    {route.waiting_for_block && ' · waiting for a block'}
                   </span>
                 </button>
               </li>
@@ -305,6 +310,17 @@ export default function RouteManager() {
           </ul>
         )}
       </div>
+
+      {notices.length > 0 && (
+        <div className="xl:col-span-3 bg-slate-800 rounded-lg p-3">
+          <h4 className="font-semibold text-sm mb-1">Automation notices</h4>
+          <ul className="text-sm text-amber-200 list-disc pl-5">
+            {notices.map((text, index) => (
+              <li key={index}>{text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="xl:col-span-2 bg-slate-800 rounded-lg p-4 space-y-4">
         {error && (
@@ -541,6 +557,9 @@ export default function RouteManager() {
                 {running ? (
                   <p className="text-sm">
                     Running: the train is in step {selectedRoute.current_block_index + 1} of {selectedRoute.block_sequence.length}
+                    {selectedRoute.waiting_for_block && (
+                      <span className="text-amber-300"> · waiting for {blockById[selectedRoute.waiting_for_block]?.name ?? 'a block'} to be free</span>
+                    )}
                   </p>
                 ) : (
                   <p className="text-sm text-slate-400">
