@@ -297,3 +297,23 @@ fn a_pom_read_is_refused_on_firmware_older_than_1_22() {
     // Past the firmware check, the read stops at the track state, because this test has no ready track
     assert_eq!(send(&app, "POST", "/api/programming/pom/read", Some(json!({ "locomotive_id": 1, "cv": 29 }))).0, 503);
 }
+
+#[test]
+fn a_locomotive_limits_its_speed_and_is_driven_the_other_way_when_reversed() {
+    let fake = fake_z21();
+    let app = app();
+    assert!(z21::connect(&app, "127.0.0.1", fake.port));
+    fake.say(&central_state(0x00));
+    assert!(wait_until(|| track_state(&app) == "ready"));
+
+    let body = json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel", "max_speed": 40, "reverse_direction": true });
+    assert_eq!(send(&app, "POST", "/api/locomotives", Some(body)).0, 201);
+
+    // Forward at 50 is capped to 40, and sent as reverse because the locomotive is fitted the other way round
+    let (status, value) = send(&app, "POST", "/api/z21/loco/speed", Some(json!({ "address": 3, "speed": 50, "direction": true })));
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["speed"], 40);
+    assert_eq!(value["direction"], "forward");
+    let sent = commands::loco_drive(3, 40, false).unwrap();
+    assert!(fake.wait_for(&sent), "capped and reversed drive");
+}

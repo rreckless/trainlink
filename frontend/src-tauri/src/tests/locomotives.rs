@@ -125,3 +125,86 @@ fn delete_locomotive_and_missing_is_404() {
     assert_eq!(send(&app, "GET", &format!("/api/locomotives/{id}"), None).0, 404);
     assert_eq!(send(&app, "DELETE", "/api/locomotives/999", None).0, 404);
 }
+
+#[test]
+fn type_is_one_of_the_known_kinds() {
+    let app = app();
+    assert_eq!(send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Tram", "dcc_address": 3, "locomotive_type": "tram" }))).0, 201);
+    let (status, value) = send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Boat", "dcc_address": 4, "locomotive_type": "boat" })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "Locomotive type must be one of: steam, diesel, electric, multiple unit, tram, shunt, museum, other");
+    let (_, created) = send(&app, "POST", "/api/locomotives", Some(loco("Class 37", 5)));
+    let id = created["id"].as_i64().unwrap();
+    assert_eq!(send(&app, "PATCH", &format!("/api/locomotives/{id}"), Some(json!({ "locomotive_type": "boat" }))).0, 422);
+}
+
+#[test]
+fn group_max_speed_and_colour_are_saved_and_can_be_cleared() {
+    let app = app();
+    let body = json!({
+        "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel",
+        "group_name": " Freight ", "max_speed": 60, "colour": "#1E40AF", "reverse_direction": true,
+    });
+    let (status, created) = send(&app, "POST", "/api/locomotives", Some(body));
+    assert_eq!(status, 201, "{created}");
+    assert_eq!(created["group_name"], "Freight");
+    assert_eq!(created["max_speed"], 60);
+    assert_eq!(created["colour"], "#1e40af", "stored in lower case");
+    assert_eq!(created["reverse_direction"], true);
+    let id = created["id"].as_i64().unwrap();
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/locomotives/{id}"), Some(json!({ "group_name": null, "max_speed": null, "colour": "" })));
+    assert_eq!(status, 200, "{value}");
+    assert!(value["group_name"].is_null());
+    assert!(value["max_speed"].is_null());
+    assert!(value["colour"].is_null());
+    assert_eq!(value["reverse_direction"], true, "not in this change, so kept");
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/locomotives/{id}"), Some(json!({ "reverse_direction": false })));
+    assert_eq!(status, 200);
+    assert_eq!(value["reverse_direction"], false);
+}
+
+#[test]
+fn max_speed_and_colour_are_checked() {
+    let app = app();
+    let (_, created) = send(&app, "POST", "/api/locomotives", Some(loco("Class 37", 3)));
+    let id = created["id"].as_i64().unwrap();
+    for bad in [json!({ "max_speed": 0 }), json!({ "max_speed": 127 })] {
+        let (status, value) = send(&app, "PATCH", &format!("/api/locomotives/{id}"), Some(bad));
+        assert_eq!(status, 422, "{value}");
+        assert_eq!(detail(&value), "Maximum speed must be a speed step from 1 to 126");
+    }
+    for bad in ["blue", "#12345", "#1234567", "#gggggg", "123456"] {
+        let (status, value) = send(&app, "PATCH", &format!("/api/locomotives/{id}"), Some(json!({ "colour": bad })));
+        assert_eq!(status, 422, "{bad}: {value}");
+        assert_eq!(detail(&value), "Colour must be a hex colour such as #1e40af");
+    }
+}
+
+#[test]
+fn picture_may_be_up_to_16_mb() {
+    let app = app();
+    let (_, created) = send(&app, "POST", "/api/locomotives", Some(loco("Class 37", 3)));
+    let id = created["id"].as_i64().unwrap();
+    let jpeg = |size: usize| {
+        let mut data = b"\xff\xd8\xff".to_vec();
+        data.resize(size, 0);
+        data
+    };
+    let upload = |data: Vec<u8>| {
+        let reply = crate::api::handle(&app, &crate::api::Call {
+            method: "POST",
+            path: &format!("/api/locomotives/{id}/image"),
+            query: "",
+            body: &data,
+            content_type: "image/jpeg",
+        });
+        (reply.status, serde_json::from_slice::<serde_json::Value>(&reply.body).unwrap_or_default())
+    };
+    let (status, _) = upload(jpeg(5 * 1024 * 1024));
+    assert_eq!(status, 200, "5 MB is over the old 2 MB limit and must now be kept");
+    let (status, value) = upload(jpeg(16 * 1024 * 1024 + 1));
+    assert_eq!(status, 413, "{value}");
+    assert_eq!(detail(&value), "Picture must be 16 MB or smaller");
+}

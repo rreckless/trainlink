@@ -12,7 +12,7 @@ use crate::http::Reply;
 use crate::state::AppState;
 
 /// Largest request body: a layout XML file is up to 5 million characters, and JSON escapes make it larger
-pub const MAX_BODY: usize = 16 * 1024 * 1024;
+pub const MAX_BODY: usize = 20 * 1024 * 1024;
 const MAX_HEADER_LINE: usize = 8 * 1024;
 const MAX_HEADERS: usize = 100;
 const READ_TIMEOUT: Duration = Duration::from_secs(15);

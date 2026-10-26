@@ -6,14 +6,14 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 
 use super::{multipart, Call};
-use crate::db::locomotives::{self, Locomotive, NewLocomotive, FUNCTION_BUTTONS};
+use crate::db::locomotives::{self, Locomotive, NewLocomotive, FUNCTION_BUTTONS, LOCOMOTIVE_TYPES, MAX_SPEED_STEP};
 use crate::db::is_unique_violation;
 use crate::fields::{self, Body};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::AppState;
 
-const CHANGES: [&str; 8] = ["name", "dcc_address", "locomotive_type", "length", "speed", "direction", "functions", "function_labels"];
-const IMAGE_MAX_BYTES: usize = 2 * 1024 * 1024;
+const CHANGES: [&str; 9] = ["name", "dcc_address", "locomotive_type", "length", "speed", "direction", "functions", "function_labels", "reverse_direction"];
+const IMAGE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const FUNCTION_LABEL_MAX: usize = 24;
 const MIN_ADDRESS: i64 = 1;
 const MAX_ADDRESS: i64 = 9999;
@@ -37,6 +37,54 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         ("GET", [id, "image"]) => get_image(app, super::id_segment(id)?),
         ("DELETE", [id, "image"]) => delete_image(app, super::id_segment(id)?),
         _ => Err(ApiError::new(405, "Method not allowed")),
+    }
+}
+
+fn check_type(kind: &str) -> Result<(), ApiError> {
+    if !LOCOMOTIVE_TYPES.contains(&kind) {
+        return Err(ApiError::unprocessable(format!("Locomotive type must be one of: {}", LOCOMOTIVE_TYPES.join(", "))));
+    }
+    Ok(())
+}
+
+fn check_max_speed(speed: Option<i64>) -> Result<(), ApiError> {
+    match speed {
+        Some(step) if !(1..=MAX_SPEED_STEP).contains(&step) => {
+            Err(ApiError::unprocessable(format!("Maximum speed must be a speed step from 1 to {MAX_SPEED_STEP}")))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// A colour as #rrggbb, lower case. Empty text is no colour
+fn check_colour(text: &str) -> Result<String, ApiError> {
+    let hex = text.strip_prefix('#').filter(|hex| hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()));
+    hex.map(|hex| format!("#{}", hex.to_ascii_lowercase()))
+        .ok_or_else(|| ApiError::unprocessable("Colour must be a hex colour such as #1e40af"))
+}
+
+/// A text field that can be cleared with null. Absent leaves it alone (None), null clears it (Some(None)), and blank text
+/// also clears it
+fn clearable_text(body: &Body, key: &str) -> Result<Option<Option<String>>, ApiError> {
+    match body.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(value) => {
+            let text = value.as_str().ok_or_else(|| ApiError::unprocessable(format!("{key} must be text or null")))?.trim();
+            Ok(Some((!text.is_empty()).then(|| text.to_string())))
+        }
+    }
+}
+
+/// A number field that can be cleared with null, read the same way as clearable_text
+fn clearable_int(body: &Body, key: &str) -> Result<Option<Option<i64>>, ApiError> {
+    match body.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(value) => {
+            let number = value.as_i64().ok_or_else(|| ApiError::unprocessable(format!("{key} must be a whole number or null")))?;
+            Ok(Some(Some(number)))
+        }
     }
 }
 
@@ -86,7 +134,13 @@ fn create(app: &Arc<AppState>, call: &Call) -> Out {
     let kind = fields::required_str(&body, "locomotive_type")?;
     let command_station_id = fields::optional_int(&body, "command_station_id")?;
     let length = fields::optional_float(&body, "length")?;
+    let group = clearable_text(&body, "group_name")?.flatten();
+    let max_speed = clearable_int(&body, "max_speed")?.flatten();
+    let reverse = fields::optional_bool(&body, "reverse_direction")?.unwrap_or(false);
+    let colour = clearable_text(&body, "colour")?.flatten().map(|text| check_colour(&text)).transpose()?;
     check_address(address)?;
+    check_type(&kind)?;
+    check_max_speed(max_speed)?;
 
     let inner = lock(app);
     check_address_free(&inner.db, address, command_station_id, None)?;
@@ -105,6 +159,10 @@ fn create(app: &Arc<AppState>, call: &Call) -> Out {
         locomotive_type: &kind,
         length,
         command_station_id,
+        group_name: group.as_deref(),
+        max_speed,
+        reverse_direction: reverse,
+        colour: colour.as_deref(),
     };
     let id = locomotives::insert(&inner.db, &new).map_err(|error| {
         if is_unique_violation(&error) {
@@ -166,6 +224,21 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let functions = fields::optional_int(&changes, "functions")?;
     let address = fields::optional_int(&changes, "dcc_address")?;
     let labels = changes.get("function_labels").map(parse_labels).transpose()?;
+    let reverse = fields::optional_bool(&changes, "reverse_direction")?;
+    let group = clearable_text(&body, "group_name")?;
+    let max_speed = clearable_int(&body, "max_speed")?;
+    let colour = clearable_text(&body, "colour")?;
+    if let Some(kind) = &kind {
+        check_type(kind)?;
+    }
+    if let Some(Some(step)) = max_speed {
+        check_max_speed(Some(step))?;
+    }
+    let colour = match colour {
+        None => None,
+        Some(None) => Some(None),
+        Some(Some(text)) => Some(Some(check_colour(&text)?)),
+    };
     // The profile is read from the body, not the changes, because null clears it
     let profile = match body.get("decoder_profile_id") {
         None => None,
@@ -189,6 +262,18 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     }
     if length.is_some() {
         locomotive.length = length;
+    }
+    if let Some(reverse) = reverse {
+        locomotive.reverse_direction = reverse;
+    }
+    if let Some(group) = group {
+        locomotive.group_name = group;
+    }
+    if let Some(max_speed) = max_speed {
+        locomotive.max_speed = max_speed;
+    }
+    if let Some(colour) = colour {
+        locomotive.colour = colour;
     }
     if let Some(functions) = functions {
         locomotive.functions = functions;
@@ -253,7 +338,7 @@ fn upload_image(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
         )));
     };
     if data.len() > IMAGE_MAX_BYTES {
-        return Err(ApiError::new(413, "Picture must be 2 MB or smaller"));
+        return Err(ApiError::new(413, "Picture must be 16 MB or smaller"));
     }
     let webp_ok = content_type != "image/webp" || data.get(8..12) == Some(b"WEBP");
     if !data.starts_with(signature) || !webp_ok {

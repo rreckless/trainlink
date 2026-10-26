@@ -219,7 +219,15 @@ pub(crate) fn locomotives_migrate(conn: &Connection) -> rusqlite::Result<()> {
         rebuild_locomotives_without_global_address(conn)?;
     }
     let columns = table_columns(conn, "locomotives")?;
-    for (column, definition) in [("decoder_profile_id", "INTEGER REFERENCES decoder_profiles(id)"), ("pending_command_station", "TEXT")] {
+    let added = [
+        ("decoder_profile_id", "INTEGER REFERENCES decoder_profiles(id)"),
+        ("pending_command_station", "TEXT"),
+        ("group_name", "TEXT"),
+        ("max_speed", "INTEGER"),
+        ("reverse_direction", "INTEGER NOT NULL DEFAULT 0"),
+        ("colour", "TEXT"),
+    ];
+    for (column, definition) in added {
         if !columns.iter().any(|known| known == column) {
             conn.execute_batch(&format!("ALTER TABLE locomotives ADD COLUMN {column} {definition};"))?;
         }

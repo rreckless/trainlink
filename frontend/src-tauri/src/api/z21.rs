@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
-use crate::db::{command_stations, layouts};
+use crate::db::{command_stations, layouts, locomotives};
 use crate::drivers::{Driver, DriverError};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
@@ -267,7 +267,12 @@ fn set_speed(app: &Arc<AppState>, call: &Call) -> Out {
     if !(1..=MAX_ADDRESS).contains(&address) {
         return Err(ApiError::bad_request("Address must be 1-9999"));
     }
-    Driver::drive(&mut inner.z21, address, speed, forward).map_err(|error| driver_error(error, "Failed to set locomotive speed"))?;
+    // A locomotive's maximum speed caps the step sent, and its reverse setting flips the direction sent to the decoder
+    let (speed, sent_forward) = match locomotives::by_address(&inner.db, address)? {
+        Some(loco) => (loco.max_speed.map_or(speed, |max| speed.min(max)), forward != loco.reverse_direction),
+        None => (speed, forward),
+    };
+    Driver::drive(&mut inner.z21, address, speed, sent_forward).map_err(|error| driver_error(error, "Failed to set locomotive speed"))?;
     let inner = &mut *inner;
     let Inner { db, moving, .. } = inner;
     moving.observe(db, address, Some(speed), std::time::Instant::now());

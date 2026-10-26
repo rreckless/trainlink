@@ -244,3 +244,28 @@ test('a selected curve shows its own radius and angle, not the defaults', async 
   await expect(page.getByLabel('Radius (mm)')).toHaveValue('250')
   await expect(page.getByLabel('Angle (1 to 90°)')).toHaveValue('60')
 })
+
+test('a locomotive keeps its type, group, speed limit, colour and reverse setting', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Locomotives', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Add locomotive' }).click()
+  await page.getByLabel('Name', { exact: true }).fill('Class 47')
+  await page.getByLabel('DCC address', { exact: false }).fill('47')
+  await page.locator('#locomotive-form select').selectOption('multiple unit')
+  await page.getByLabel('Group (optional)').fill('Freight')
+  await page.getByLabel('Maximum speed', { exact: false }).fill('60')
+  await page.getByLabel('Colour').fill('#1e40af')
+  await page.getByLabel('Reverse direction', { exact: false }).check()
+  await page.getByRole('button', { name: 'Save locomotive' }).click()
+
+  await expect(page.getByText('Saved Class 47')).toBeVisible()
+  const listed = await (await page.request.get('/api/locomotives')).json()
+  const loco = listed.find((item) => item.name === 'Class 47')
+  expect(loco).toMatchObject({
+    locomotive_type: 'multiple unit',
+    group_name: 'Freight',
+    max_speed: 60,
+    colour: '#1e40af',
+    reverse_direction: true,
+  })
+})

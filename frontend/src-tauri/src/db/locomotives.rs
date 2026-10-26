@@ -9,6 +9,12 @@ use super::{now, sync};
 /// The 20 function buttons, with F0 labelled as the light
 pub const FUNCTION_BUTTONS: usize = 20;
 
+/// The kinds of locomotive a roster entry can be
+pub const LOCOMOTIVE_TYPES: [&str; 8] = ["steam", "diesel", "electric", "multiple unit", "tram", "shunt", "museum", "other"];
+
+/// The highest speed step DCC uses
+pub const MAX_SPEED_STEP: i64 = 126;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Locomotive {
     pub id: i64,
@@ -29,6 +35,14 @@ pub struct Locomotive {
     pub command_station_id: Option<i64>,
     /// The decoder profile this locomotive's decoder follows, if one is chosen
     pub decoder_profile_id: Option<i64>,
+    /// The group the locomotive belongs to on the roster, if any
+    pub group_name: Option<String>,
+    /// The highest speed step the locomotive may be driven at, if it is limited
+    pub max_speed: Option<i64>,
+    /// True when forward on the roster is sent to the decoder as reverse, for a locomotive fitted the other way round
+    pub reverse_direction: bool,
+    /// The colour shown for the locomotive, as #rrggbb
+    pub colour: Option<String>,
 }
 
 /// Labels for a locomotive that has none: Light, then F1 to F19
@@ -74,7 +88,8 @@ pub fn address_user(conn: &Connection, address: i64, command_station_id: Option<
 }
 
 const COLUMNS: &str = "id, name, dcc_address, locomotive_type, length, speed, direction, functions,
-    function_labels, image_file, travelled_time, travelled_distance, command_station_id, decoder_profile_id, created_at";
+    function_labels, image_file, travelled_time, travelled_distance, command_station_id, decoder_profile_id, created_at,
+    group_name, max_speed, reverse_direction, colour";
 
 fn from_row(row: &Row) -> rusqlite::Result<Locomotive> {
     let id: i64 = row.get("id")?;
@@ -101,6 +116,10 @@ fn from_row(row: &Row) -> rusqlite::Result<Locomotive> {
         image_file,
         command_station_id: row.get("command_station_id")?,
         decoder_profile_id: row.get("decoder_profile_id")?,
+        group_name: row.get("group_name")?,
+        max_speed: row.get("max_speed")?,
+        reverse_direction: row.get("reverse_direction")?,
+        colour: row.get("colour")?,
     })
 }
 
@@ -131,19 +150,28 @@ pub struct NewLocomotive<'a> {
     pub locomotive_type: &'a str,
     pub length: Option<f64>,
     pub command_station_id: Option<i64>,
+    pub group_name: Option<&'a str>,
+    pub max_speed: Option<i64>,
+    pub reverse_direction: bool,
+    pub colour: Option<&'a str>,
 }
 
 pub fn insert(conn: &Connection, locomotive: &NewLocomotive) -> rusqlite::Result<i64> {
     let stamp = now();
     conn.execute(
-        "INSERT INTO locomotives (name, dcc_address, locomotive_type, length, command_station_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        "INSERT INTO locomotives (name, dcc_address, locomotive_type, length, command_station_id, group_name, max_speed,
+             reverse_direction, colour, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
         params![
             locomotive.name,
             locomotive.dcc_address,
             locomotive.locomotive_type,
             locomotive.length,
             locomotive.command_station_id,
+            locomotive.group_name,
+            locomotive.max_speed,
+            locomotive.reverse_direction,
+            locomotive.colour,
             stamp
         ],
     )?;
@@ -162,7 +190,8 @@ pub fn save(conn: &Connection, locomotive: &Locomotive) -> rusqlite::Result<()> 
     conn.execute(
         "UPDATE locomotives SET name = ?2, dcc_address = ?3, locomotive_type = ?4, length = ?5,
              functions = ?6, function_labels = ?7, image_file = ?8, travelled_time = ?9,
-             travelled_distance = ?10, decoder_profile_id = ?12, updated_at = ?11 WHERE id = ?1",
+             travelled_distance = ?10, decoder_profile_id = ?12, group_name = ?13, max_speed = ?14,
+             reverse_direction = ?15, colour = ?16, updated_at = ?11 WHERE id = ?1",
         params![
             locomotive.id,
             locomotive.name,
@@ -175,7 +204,11 @@ pub fn save(conn: &Connection, locomotive: &Locomotive) -> rusqlite::Result<()> 
             locomotive.travelled_time,
             locomotive.travelled_distance,
             now(),
-            locomotive.decoder_profile_id
+            locomotive.decoder_profile_id,
+            locomotive.group_name,
+            locomotive.max_speed,
+            locomotive.reverse_direction,
+            locomotive.colour
         ],
     )?;
     sync::mark_changed(conn, "locomotives", locomotive.id)?;
