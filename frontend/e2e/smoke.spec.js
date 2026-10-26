@@ -177,3 +177,34 @@ test('draw track: two clicks make a track, and Save keeps it', async ({ page }) 
   const saved = await (await page.request.get(`/api/layouts/${id}`)).json()
   expect(saved.elements.tracks).toHaveLength(1)
 })
+
+test('a flex track curved to a radius and angle takes its chord length and curve', async ({ page }) => {
+  const name = `Curve ${Date.now()}`
+  const created = await page.request.post('/api/layouts', { data: { name, width: 1200, height: 800, scale: 'N' } })
+  const id = (await created.json()).id
+  const saved = await page.request.patch(`/api/layouts/${id}`, {
+    data: { elements: { track_system: 'Code 55', track_pieces: [{ id: 'f1', piece_id: 'peco-n-sl-300f', x: 100, y: 100, rotation: 0, flip: false }] } },
+  })
+  expect(saved.status()).toBe(200)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Layout Editor', exact: true }).first().click()
+  await page.getByRole('tab', { name }).click()
+  await page.waitForLoadState('networkidle')
+  const box = await page.locator('canvas').first().boundingBox()
+  await page.mouse.click(box.x + 300, box.y + 100)
+  await expect(page.getByText('Curve from radius and angle')).toBeVisible()
+
+  await page.getByLabel('Radius (mm)').fill('300')
+  await page.getByLabel('Angle (1 to 90°)').fill('90')
+  await expect(page.getByText('Ends 424.26 mm apart')).toBeVisible()
+  await page.getByRole('button', { name: 'Apply curve' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+  const after = await (await page.request.get(`/api/layouts/${id}`)).json()
+  const piece = after.elements.track_pieces[0]
+  expect(piece.length).toBe(424.26)
+  expect(piece.handles).toHaveLength(2)
+  expect(piece.handles[0].y).toBeLessThan(0)
+})

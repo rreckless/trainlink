@@ -23,7 +23,7 @@ import {
   rotatedPiecePlacement,
 } from '../layout/track'
 import { useTurnoutControl } from './useTurnoutControl'
-import { smoothHandles } from '../layout/curves'
+import { arcCurve, smoothHandles } from '../layout/curves'
 
 const KINDS = Object.keys(ENTITY_KINDS)
 
@@ -466,6 +466,27 @@ export function useLayoutEditor() {
     setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, length } : piece)))
   }, [])
 
+  // Curve a flex track to a radius and an angle. Its ends become the chord of that arc, and the handles follow the arc
+  const setCurveFromArc = useCallback(
+    (id, { radius, angle, side }) => {
+      const piece = pieces.find((item) => item.id === id)
+      const maxLength = piece ? libraryById[piece.piece_id]?.length : null
+      let curve
+      try {
+        curve = arcCurve(radius, angle, side)
+      } catch (err) {
+        return setError(err.message)
+      }
+      if (curve.length < 10) return setError(`That curve has ends only ${curve.length} mm apart. A curve needs them at least 10 mm apart`)
+      if (maxLength && curve.length > maxLength) {
+        return setError(`That curve has ends ${curve.length} mm apart, more than this piece's ${maxLength} mm. Use a smaller radius or angle`)
+      }
+      setError('')
+      setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, length: curve.length, handles: curve.handles } : piece)))
+    },
+    [pieces, libraryById]
+  )
+
   // Smooth a curved flex track: the handles that make the curve fairest, keeping both ends' angles and length
   const smoothCurve = useCallback(
     (id) => {
@@ -544,6 +565,7 @@ export function useLayoutEditor() {
     rotatePiece,
     setPlacedLength,
     smoothCurve,
+    setCurveFromArc,
     freePlace,
     setFreePlace,
     switchLayout,

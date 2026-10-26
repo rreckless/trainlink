@@ -250,6 +250,7 @@ export default function LayoutEditor() {
                 onStraighten={() => editor.straighten(editor.selectedPlaced.id)}
                 onSetLength={(length) => editor.setPlacedLength(editor.selectedPlaced.id, length)}
                 onSmooth={() => editor.smoothCurve(editor.selectedPlaced.id)}
+                onArc={(curve) => editor.setCurveFromArc(editor.selectedPlaced.id, curve)}
                 onRotate={(degrees) => editor.rotatePiece(editor.selectedPlaced.id, degrees)}
                 onDelete={editor.deleteSelected}
               />
