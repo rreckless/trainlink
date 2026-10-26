@@ -72,7 +72,7 @@ Status is marked after each phase. Done means built and checked on the devices n
 
 **Phase 3: Windows.** Done, apart from code signing. The NSIS installer, the firewall rule and WebView2 are in place, and the installer runs on a Windows PC, shows synced data and connects to the Z21. The code-signing certificate to avoid SmartScreen warnings isn't bought.
 
-**Phase 4: Web on the core, Python retired.** Mostly done: the web UI runs on the core and the Python backend is removed. Outstanding: Postgres and Docker remain until the data move. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
+**Phase 4: Web on the core, Python retired.** Mostly done: the web UI runs on the core and the Python backend is removed. Outstanding: Postgres remains until the data move. Your current data is moved to the sync service and to a local SQLite file first. The migration keeps Erinburgh (layout 3) and Class 08 Shunter (locomotive 3) intact, and your main database is not changed without asking.
 
 **Phase 5: Android, all features.** Partly done: the app runs on a Chromebook, with sign-in (email and Google), the Z21 connection, layouts and locomotives. Outstanding: phone and tablet layouts for every feature, including the layout editor. The editor needs touch controls: larger handles, pinch to zoom, and a bigger hit area for track ends. Emergency Stop must always be reachable, including after a dropped connection. Android needs the Wi-Fi and local network permissions. Sideloading the APK needs no account; a Play Store listing needs a one-time developer fee.
 
@@ -103,7 +103,7 @@ These come from the review against the other app (see the implementation plan, P
 
 - **Live occupancy:** the core already reads the Z21 feedback. It needs a feedback event to the UI, and the Switchboard and layout editor need to show it.
 - **Route running:** needs automatic driving in the core before the Run button can work.
-- **Consists and multi-throttle:** the core sends the commands; the UI shows the consist and each throttle.
+- **Multi-throttle:** the core sends the commands; the UI shows each throttle. Consists are built (see Status).
 - **Controller support:** the input layer differs per platform (gamepad input in the web view on desktop, separate handling on phones). Emergency stop stays on a fixed button.
 - **Decoder programming:** new Z21 programming commands in the Rust core. Writes need the same confirmation and read-back as the web version.
 - **Cab view:** deferred until a camera or video source is chosen.
@@ -112,10 +112,10 @@ Sync (above) also covers the new data: consists, route definitions, and decoder 
 
 ## Status
 
-**Built:** the Rust core inside Tauri, with the database, the Z21 link, the API, the track library, moving time, the AnyRail importer, sign-in, sync, and settings sync. The apps: the Mac app and DMG, the Windows installer, the Android APK, and the iPad app. The web version runs on the same core. Each platform's build is run by hand from GitHub Actions for Windows, Android and the Mac, or locally for the Mac and iPad.
+**Built:** the Rust core inside Tauri, with the database, the Z21 link, the API, the track library, moving time, the AnyRail importer, sign-in, sync, settings sync, and consists (saved on each device, not yet synced). The apps: the Mac app and DMG, the Windows installer, the Android APK, and the iPad app. The web version runs on the same core. Each platform's build is run by hand from GitHub Actions for Windows, Android and the Mac, or locally for the Mac and iPad.
 
 **Checked:**
-- Rust tests: 91 pass (2 ignored). Frontend tests: 60 pass.
+- Rust tests: 99 pass (2 ignored). Frontend tests: 60 pass.
 - The web UI through the browser: control, setup, import, bend, drag, length, drop and pan suites, with the pan test flaky on both the old and new builds.
 - Z21 on hardware: the connection, track state, locomotive control and turnout colours follow the Z21, from the desktop app, the web version and Android. The iPad was reported working.
 - Sign-in: email and Google, from the desktop, the web version and Android. Sign-in on the iPad was reported working, but the Google route on the iPad hasn't been recorded.
@@ -127,7 +127,8 @@ Sync (above) also covers the new data: consists, route definitions, and decoder 
 - Android: the layout editor on phones and tablets, with touch controls, and Emergency Stop reachable after a dropped connection.
 - iOS: Apple Developer Program enrolment, the Local Network permission check, Sign in with Apple, and phone layouts.
 - Sync: offline edits and moving time across devices are not yet tested live.
-- The data move from Postgres and Docker, and removing them.
+- The data move from Postgres. The Docker Compose file is already removed.
 - Store releases.
-- Route running, live occupancy, consists and multi-throttle, controller support, decoder programming, and cab view. None is started.
+- Consists: sync between devices, and a run on a real Z21. Built, but not yet tested on hardware.
+- Route running, live occupancy, multi-throttle, controller support, decoder programming, and cab view. None is started.
 

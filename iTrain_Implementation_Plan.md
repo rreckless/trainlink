@@ -13,9 +13,10 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Project setup: Rust core, Tauri desktop shell, React frontend | ✅ | Renamed to TrainLink. `docker-compose.yml` is kept for the old PostgreSQL data; the app does not use it |
+| Project setup: Rust core, Tauri desktop shell, React frontend | ✅ | Renamed to TrainLink. The old `docker-compose.yml` is removed. The PostgreSQL data move is still outstanding |
 | Z21 UDP driver and API routes | ✅ | Connect, speed, direction, emergency stop, status, track power resume. Speed, direction, and emergency stop verified on hardware. Turnout commands and R-BUS feedback not yet tried on hardware |
 | Locomotive control and roster | 🧪 | Multi-select speed and direction, emergency stop, 20 function buttons with labels and momentary buttons, pictures, moving time. Browser-tested with the Z21 stubbed. Functions and moving time not yet verified on hardware |
+| Consists | 🧪 | Link locomotives, drive the group with a direction per member, and switch functions for the whole consist. Saved on each device, not synced. Not yet run on a Z21 |
 | Z21 state (locomotive replies, track state) | 🧪 | Replies parsed for speed, direction, and functions, and shown on the roster. Short circuit and track power off block commands. Tested against a fake Z21 in the Rust tests |
 | Control page (operate layout, Z21 connection) | 🧪 | Layout in operate mode, turnout throws, Z21 connection at the top. Browser-tested with the Z21 stubbed |
 | Web app shell | ✅ | Top bar with page search, track power state, and emergency stop. Grouped navigation with a collapse toggle. Connection card |
@@ -23,15 +24,14 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 | Desktop app (Mac) | 🧪 | Tauri app with a Rust core: the same API, database, Z21 link, and importer. Release DMG built. Window and Control page checked. Pull request #12. Not yet run against the real Z21 |
 | Database models and schemas | 🟡 | Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation defined. REST routes exist for all except CommandStation |
 | WebSocket | ⬜ | Removed. Nothing uses it; the core answers requests directly |
-| Redis | ⬜ | Not used. Only `docker-compose.yml` still starts it |
+| Redis | ⬜ | Not used. The `docker-compose.yml` that started it is removed |
 | Frontend state (Zustand) | 🟡 | Store exists. Only some panels read from it |
 | Layout Editor | 🧪 | Drawing, placement, curved flex track with handles, joins, rotation, rename and delete, open-end markers, AnyRail import (matches the Python importer on a real file). Browser-tested with Playwright |
 | Switchboard | 🟡 | Lists the first five blocks. No turnout or occupancy view yet |
 | Route Manager | 🟡 | Routes can be created and edited. Run does nothing yet, because route execution is not built |
 | Electron wrapper | ⬜ | Superseded by the Tauri desktop app. The `electron/` folder is an unused scaffold to remove |
-| Core tests | ✅ | 52 Rust tests in `src-tauri/` (`cargo test`), including the web server and the fake Z21 |
+| Rust tests | ✅ | 99 pass, 2 ignored (`cargo test` in `src-tauri/`), including consists, the web server, and the fake Z21 |
 | Frontend tests | ✅ | 60 tests (`npm test`) |
-| Desktop core tests | ✅ | 46 Rust tests (`cargo test` in `src-tauri/`) |
 | Mock Z21 for testing | ✅ | A fake Z21 on localhost in `src-tauri/src/tests/z21_link.rs` |
 
 ---
@@ -103,9 +103,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Speed control (0–126 steps). Verified on hardware
    - ✅ Several locomotives at once: tick the roster to send one speed or direction to all of them
    - ✅ Direction (Forward / Reverse / Stop). Verified on hardware
-   - ⬜ Function buttons (lights, sounds). Z21 function commands not implemented
-   - ⬜ Travelled time and distance tracking
-   - ⬜ Real-time speed feedback from Z21
+   - 🧪 Function buttons (lights, sounds). 20 buttons with labels and momentary buttons. Not yet verified on hardware
+   - 🟡 Travelled time is recorded and shown on the roster. Distance is not tracked yet
+   - 🧪 Real-time speed feedback from Z21. Replies are parsed and shown on the roster. Not yet verified on hardware
    - ✅ Emergency stop. Verified on hardware (not yet confirmed separately)
    - 🧪 Track state from Z21 (short circuit, track power off), with locomotive commands blocked until ready and a Resume Track Power action. Reconnect in Settings
 
@@ -220,7 +220,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 
 2. **Z21 Feature Support** ⬜
    - 🟡 Query Z21 system state (version not queried)
-   - ⬜ Query locomotive info (speed, direction, functions). Request is sent, reply not parsed
+   - 🧪 Query locomotive info (speed, direction, functions). Replies are parsed. Not yet verified on hardware
    - 🟡 Track power on, with resume after a short circuit. Track power off not built
    - ⬜ Feature detection
 
@@ -302,11 +302,11 @@ Entry criteria:
 ### Phase 8: Driver Tools (2-3 weeks)
 **Goal**: Drive more than one locomotive at a time, and use more than the keyboard and mouse
 
-1. **Consists** ⬜
-   - ⬜ Link locomotives into a consist with a lead locomotive, which drives all of them
-   - ⬜ Check the Z21 spec v1.13 for consist commands. If it has none, send speed and direction to each member
-   - ⬜ Consists saved with the roster, with a direction per member
-   - ⬜ Functions chosen per member, or sent to the whole consist
+1. **Consists** 🟡
+   - 🧪 Link locomotives into a consist with a lead locomotive, which drives all of them. Built in PR #45. Not yet run on a Z21
+   - ⬜ Check the Z21 spec v1.13 for consist commands. The build sends speed and direction to each member, since the spec has not been checked
+   - 🧪 Consists saved on each device, with a direction per member. Not synced between devices yet
+   - 🧪 Functions sent to the whole consist. Functions chosen per member: ⬜
 
 2. **Multi-Throttle** ⬜
    - ⬜ Several locomotives on screen at once, each with its own speed, direction, and functions
