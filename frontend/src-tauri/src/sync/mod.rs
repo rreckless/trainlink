@@ -40,6 +40,8 @@ pub struct SyncStatus {
 pub struct Report {
     pub pulled: usize,
     pub pushed: usize,
+    /// Locomotives from the cloud that were not applied, with the reason. This device keeps its own
+    pub skipped: Vec<String>,
 }
 
 /// One row to send, and the local stamp it had when it was read, so it is only marked clean if unchanged since
@@ -140,7 +142,7 @@ pub fn run(app: &AppState, cloud: &dyn Cloud, images: &Path) -> Result<Report, A
             for row in remote[table].iter().filter(|row| row.get("deleted_at").is_none_or(Value::is_null)) {
                 let applied = match table {
                     "layouts" => map::apply_layout(db, row)?,
-                    "locomotives" => map::apply_locomotive(db, row, images, &mut downloads)?,
+                    "locomotives" => map::apply_locomotive(db, row, images, &mut downloads, &mut report.skipped)?,
                     "blocks" => trackside::apply_block(db, row)?,
                     "signals" => trackside::apply_signal(db, row)?,
                     "feedbacks" => trackside::apply_feedback(db, row)?,

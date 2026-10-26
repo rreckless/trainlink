@@ -18,6 +18,7 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             if let Ok(report) = result {
                 body["pulled"] = json!(report.pulled);
                 body["pushed"] = json!(report.pushed);
+                body["skipped"] = json!(report.skipped);
             }
             Ok(Reply::json(200, body))
         }
