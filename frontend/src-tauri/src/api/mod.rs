@@ -2,6 +2,7 @@
 //! so the frontend's calls work unchanged
 
 pub mod auth;
+pub mod consists;
 pub mod layouts;
 pub mod library;
 pub mod locomotives;
@@ -77,6 +78,7 @@ fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {
         ["api", "settings", rest @ ..] => settings::route(app, call, rest),
         ["api", "layouts", rest @ ..] => layouts::route(app, call, rest),
         ["api", "locomotives", rest @ ..] => locomotives::route(app, call, rest),
+        ["api", "consists", rest @ ..] => consists::route(app, call, rest),
         ["api", "blocks", rest @ ..] => trackside::blocks(app, call, rest),
         ["api", "signals", rest @ ..] => trackside::signals(app, call, rest),
         ["api", "feedbacks", rest @ ..] => trackside::feedbacks(app, call, rest),
