@@ -6,6 +6,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
+use crate::db::layouts;
 use crate::drivers::{Driver, DriverError};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
@@ -14,7 +15,6 @@ use crate::z21::{self, commands, frames::MAX_ADDRESS, Z21};
 const MIN_TURNOUT: i64 = 1;
 const MAX_TURNOUT: i64 = 2048;
 /// How long a turnout output stays active before it is switched off, as the spec's example does
-const THROW: Duration = Duration::from_millis(150);
 /// How long a turnout read waits for the Z21's answers. The Z21 answers on the LAN within milliseconds
 const TURNOUT_REPLY_WAIT: Duration = Duration::from_millis(150);
 
@@ -77,6 +77,18 @@ fn feedback(app: &Arc<AppState>) -> Out {
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
 }
 
+/// How long the turnout with this number takes to throw: the switching time set on its placed piece, on any layout
+fn throw_time(inner: &Inner, turnout: i64) -> Result<Duration, ApiError> {
+    for layout in layouts::list(&inner.db)? {
+        let pieces = layout.elements.get("track_pieces").and_then(Value::as_array).cloned().unwrap_or_default();
+        if let Some(placed) = pieces.iter().find(|placed| placed.get("dcc_address").and_then(Value::as_i64) == Some(turnout)) {
+            let settings = layouts::turnout_settings(placed);
+            return Ok(Duration::from_millis(settings["throw_ms"].as_u64().unwrap_or(layouts::DEFAULT_THROW_MS as u64)));
+        }
+    }
+    Ok(Duration::from_millis(layouts::DEFAULT_THROW_MS as u64))
+}
+
 /// The answer for a command the driver did not send. `failure` says what went wrong when the command could not be sent
 pub(super) fn driver_error(error: DriverError, failure: &str) -> ApiError {
     match error {
@@ -103,7 +115,7 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
     if !(0..=1).contains(&output) {
         return Err(ApiError::unprocessable("output must be 0 or 1"));
     }
-    {
+    let switching = {
         let mut inner = lock(app);
         if !inner.z21.connected {
             return Err(ApiError::new(503, "Z21 not connected"));
@@ -116,8 +128,9 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
             return Err(ApiError::bad_request(format!("Turnout must be {MIN_TURNOUT}-{MAX_TURNOUT}")));
         }
         Driver::throw_turnout(&mut inner.z21, turnout, output as u8, true).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
-    }
-    std::thread::sleep(THROW);
+        throw_time(&inner, turnout)?
+    };
+    std::thread::sleep(switching);
     Driver::throw_turnout(&mut lock(app).z21, turnout, output as u8, false).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
     Ok(Reply::json(200, json!({ "status": "throw_sent", "turnout": turnout, "output": output })))
 }

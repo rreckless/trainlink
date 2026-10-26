@@ -355,12 +355,12 @@ Entry criteria:
 **Goal**: Cover the features seen in LocoLink 2.0.9, built from our own design. Nothing is copied from LocoLink's code, text, icons or images. The full comparison, with what was seen on screen, is in `~/Documents/TrainLink/locolink-vs-trainlink.md`. Not started. Items are grouped by the phase they most depend on, and the order is still to be decided.
 
 **10a. Z21 basics (no new hardware)**
-1. **Turnouts** ⬜
-   - ⬜ Standalone turnout list with search, filters for straight and diverging, and a "no address" warning
-   - ⬜ Turnout types: straight, left, right, three-way, Y, curved left and right, double-slip, single-slip, crossing
-   - ⬜ Manual turnout (no motor) flag, and a per-turnout switching time (default 300 ms, replacing the fixed 150 ms)
-   - ⬜ Per-turnout group, command station and notes
-   - ⬜ Position feedback toggle per turnout
+1. **Turnouts** 🟡
+   - 🧪 Standalone turnout list with search, a filter for turnouts with no address, and the warning. **Open:** the straight and diverging filter. The library only records left and right hand, so the filter needs a decision on what it means
+   - ⬜ Turnout types: straight, left, right, three-way, Y, curved left and right, double-slip, single-slip, crossing. **Open:** the library has left and right only, so the other types need library data
+   - 🧪 Manual turnout (no motor) flag, and a per-turnout switching time (default 300 ms, replacing the fixed 150 ms). The throw uses the turnout's own time. Set in the turnouts view
+   - 🧪 Per-turnout group and notes. **Open:** the command station per turnout, which needs station selection (Phase 7)
+   - 🧪 Position feedback toggle per turnout. It is saved, and it does not yet change what the app reads. **Open:** wire it to the feedback reads
 2. **Locomotives** ⬜
    - ⬜ Decoder type (DCC 128 and others) and command station per locomotive
    - ⬜ Locomotive types: steam, diesel, electric, multiple unit, tram, shunt, museum and other

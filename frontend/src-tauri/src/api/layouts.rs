@@ -24,9 +24,74 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         ("POST", ["anyrail-import"]) => import(call),
         ("GET", [id]) => get(app, super::id_segment(id)?),
         ("PATCH", [id]) => update(app, super::id_segment(id)?, call),
+        ("PATCH", [id, "turnouts", placed]) => update_turnout(app, super::id_segment(id)?, placed, call),
         ("DELETE", [id]) => delete(app, super::id_segment(id)?),
         _ => Err(ApiError::new(405, "Method not allowed")),
     }
+}
+
+/// The settings a turnout can have, with their limits
+const THROW_MS_RANGE: std::ops::RangeInclusive<i64> = 50..=5000;
+const GROUP_MAX: usize = 40;
+const NOTES_MAX: usize = 500;
+
+/// Change a turnout's settings on a layout: its switching time, whether it is manual, its position feedback, its group
+/// and its notes. Only the settings sent are changed
+fn update_turnout(app: &Arc<AppState>, layout_id: i64, placed_id: &str, call: &Call) -> Out {
+    let body = call.json_body()?;
+    let throw_ms = fields::optional_int(&body, "throw_ms")?;
+    if let Some(ms) = throw_ms {
+        if !THROW_MS_RANGE.contains(&ms) {
+            return Err(ApiError::unprocessable(format!("Switching time must be {} to {} ms", THROW_MS_RANGE.start(), THROW_MS_RANGE.end())));
+        }
+    }
+    let manual = fields::optional_bool(&body, "manual")?;
+    let feedback = fields::optional_bool(&body, "feedback")?;
+    let group = fields::optional_str(&body, "group")?.map(|text| text.trim().to_string());
+    if group.as_ref().is_some_and(|text| text.chars().count() > GROUP_MAX) {
+        return Err(ApiError::unprocessable(format!("Group must be at most {GROUP_MAX} characters")));
+    }
+    let notes = fields::optional_str(&body, "notes")?;
+    if notes.as_ref().is_some_and(|text| text.chars().count() > NOTES_MAX) {
+        return Err(ApiError::unprocessable(format!("Notes must be at most {NOTES_MAX} characters")));
+    }
+
+    let inner = lock(app);
+    let mut layout = layouts::get(&inner.db, layout_id)?.ok_or_else(|| ApiError::not_found("Layout", layout_id))?;
+    let placed = layout
+        .elements
+        .get_mut("track_pieces")
+        .and_then(Value::as_array_mut)
+        .and_then(|pieces| {
+            pieces.iter_mut().find(|piece| {
+                piece.get("id").and_then(Value::as_str) == Some(placed_id)
+                    && piece.get("piece_id").and_then(Value::as_str).and_then(|id| library().get(id)).is_some_and(|part| part.get("type").and_then(Value::as_str) == Some("turnout"))
+            })
+        })
+        .ok_or_else(|| ApiError::not_found_message(format!("Turnout {placed_id} is not on this layout")))?;
+    let object = placed.as_object_mut().ok_or_else(|| ApiError::internal("A placed turnout is not an object"))?;
+    if let Some(ms) = throw_ms {
+        object.insert("throw_ms".into(), json!(ms));
+    }
+    if let Some(manual) = manual {
+        object.insert("manual".into(), json!(manual));
+    }
+    if let Some(feedback) = feedback {
+        object.insert("feedback".into(), json!(feedback));
+    }
+    if let Some(group) = group {
+        object.insert("group".into(), json!(group));
+    }
+    if let Some(notes) = notes {
+        object.insert("notes".into(), json!(notes.trim()));
+    }
+    let settings = layouts::turnout_settings(placed);
+    layouts::save(&inner.db, &layout)?;
+    Ok(Reply::json(200, json!({ "layout_id": layout_id, "placed_id": placed_id, "settings": settings })))
+}
+
+fn lock(app: &Arc<AppState>) -> std::sync::MutexGuard<'_, crate::state::Inner> {
+    app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn list(app: &Arc<AppState>) -> Out {

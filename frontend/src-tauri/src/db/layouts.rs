@@ -118,3 +118,17 @@ pub fn contents(conn: &Connection, id: i64) -> rusqlite::Result<Vec<&'static str
     }
     Ok(found)
 }
+
+/// How long a turnout takes to throw, when its placed piece does not say otherwise
+pub const DEFAULT_THROW_MS: i64 = 300;
+
+/// What a turnout's placed piece keeps about it. A setting the piece does not have takes its default
+pub fn turnout_settings(placed: &Value) -> Value {
+    json!({
+        "throw_ms": placed.get("throw_ms").and_then(Value::as_i64).unwrap_or(DEFAULT_THROW_MS),
+        "manual": placed.get("manual").and_then(Value::as_bool).unwrap_or(false),
+        "feedback": placed.get("feedback").and_then(Value::as_bool).unwrap_or(false),
+        "group": placed.get("group").and_then(Value::as_str).unwrap_or(""),
+        "notes": placed.get("notes").and_then(Value::as_str).unwrap_or(""),
+    })
+}

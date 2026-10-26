@@ -39,11 +39,13 @@ fn turnout_rows(inner: &Inner) -> Result<Vec<Value>, ApiError> {
             rows.push(json!({
                 "layout_id": layout.id,
                 "layout_name": layout.name,
+                "placed_id": placed.get("id").and_then(Value::as_str),
                 "piece_id": piece_id,
                 "name": piece.get("name").and_then(Value::as_str).unwrap_or(piece_id),
                 "dcc_address": address,
                 "dcc_output_straight": straight,
                 "has_address": address.is_some(),
+                "settings": layouts_db::turnout_settings(&placed),
             }));
         }
     }

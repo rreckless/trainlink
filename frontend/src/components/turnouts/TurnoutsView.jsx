@@ -2,6 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store'
 import { overviewApi } from '../../services/overviewApi'
 
+// The settings a turnout keeps, as the editor shows them. Limits match the server
+const THROW_MS_MIN = 50
+const THROW_MS_MAX = 5000
+const GROUP_MAX = 40
+const NOTES_MAX = 500
+
+const draftFrom = (settings) => ({
+  throw_ms: settings.throw_ms,
+  manual: settings.manual,
+  feedback: settings.feedback,
+  group: settings.group,
+  notes: settings.notes,
+})
+
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'addressed', label: 'With an address' },
@@ -15,13 +29,51 @@ export default function TurnoutsView() {
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [draft, setDraft] = useState(null)
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
+  const load = () =>
     overviewApi
       .turnouts()
       .then(setTurnouts)
       .catch((err) => setError(`Could not load the turnouts: ${err.message}`))
+
+  useEffect(() => {
+    load()
   }, [])
+
+  const key = (turnout) => `${turnout.layout_id}/${turnout.placed_id}`
+
+  const openEditor = (turnout) => {
+    setError('')
+    setEditing(key(turnout))
+    setDraft(draftFrom(turnout.settings))
+  }
+
+  const closeEditor = () => {
+    setEditing(null)
+    setDraft(null)
+  }
+
+  const save = async (turnout) => {
+    setSaving(true)
+    setError('')
+    try {
+      await overviewApi.updateTurnout(turnout.layout_id, turnout.placed_id, {
+        ...draft,
+        throw_ms: Number(draft.throw_ms),
+      })
+      await load()
+      closeEditor()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const throwMsValid = Number.isInteger(Number(draft?.throw_ms)) && Number(draft?.throw_ms) >= THROW_MS_MIN && Number(draft?.throw_ms) <= THROW_MS_MAX
 
   const counts = useMemo(
     () => ({
@@ -86,15 +138,97 @@ export default function TurnoutsView() {
         ) : (
           <ul className="space-y-2">
             {shown.map((turnout, index) => (
-              <li key={`${turnout.layout_id}-${index}`} className="flex items-center gap-3 bg-slate-700 rounded px-3 py-2">
-                <div className="flex-1">
-                  <p className="font-semibold">{turnout.name}</p>
-                  <p className="text-xs text-slate-400">{turnout.layout_name}</p>
+              <li key={`${turnout.layout_id}-${index}`} className="bg-slate-700 rounded px-3 py-2 space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <p className="font-semibold">{turnout.name}</p>
+                    <p className="text-xs text-slate-400">
+                      {turnout.layout_name}
+                      {turnout.settings.group && ` · ${turnout.settings.group}`}
+                      {` · ${turnout.settings.throw_ms} ms`}
+                      {turnout.settings.manual && ' · manual'}
+                      {turnout.settings.feedback && ' · feedback'}
+                    </p>
+                  </div>
+                  {turnout.has_address ? (
+                    <span className="text-sm text-green-300">Address {turnout.dcc_address}</span>
+                  ) : (
+                    <span className="text-sm text-amber-300">No address</span>
+                  )}
+                  <button
+                    onClick={() => (editing === key(turnout) ? closeEditor() : openEditor(turnout))}
+                    className="px-2 py-1 text-xs bg-slate-600 rounded hover:bg-slate-500"
+                  >
+                    {editing === key(turnout) ? 'Close' : 'Settings'}
+                  </button>
                 </div>
-                {turnout.has_address ? (
-                  <span className="text-sm text-green-300">Address {turnout.dcc_address}</span>
-                ) : (
-                  <span className="text-sm text-amber-300">No address</span>
+
+                {editing === key(turnout) && draft && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-800 rounded p-3">
+                    <label className="space-y-1 text-sm text-slate-300">
+                      Switching time (ms, {THROW_MS_MIN} to {THROW_MS_MAX})
+                      <input
+                        type="number"
+                        min={THROW_MS_MIN}
+                        max={THROW_MS_MAX}
+                        value={draft.throw_ms}
+                        onChange={(event) => setDraft({ ...draft, throw_ms: event.target.value })}
+                        disabled={saving}
+                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-300">
+                      Group
+                      <input
+                        value={draft.group}
+                        maxLength={GROUP_MAX}
+                        onChange={(event) => setDraft({ ...draft, group: event.target.value })}
+                        disabled={saving}
+                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-300 md:col-span-2">
+                      Notes
+                      <textarea
+                        value={draft.notes}
+                        maxLength={NOTES_MAX}
+                        onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+                        disabled={saving}
+                        rows={2}
+                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={draft.manual}
+                        onChange={(event) => setDraft({ ...draft, manual: event.target.checked })}
+                        disabled={saving}
+                      />
+                      Manual turnout (no motor)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={draft.feedback}
+                        onChange={(event) => setDraft({ ...draft, feedback: event.target.checked })}
+                        disabled={saving}
+                      />
+                      Position feedback
+                    </label>
+                    <div className="md:col-span-2 flex gap-2">
+                      <button
+                        onClick={() => save(turnout)}
+                        disabled={saving || !throwMsValid}
+                        className="px-3 py-1 bg-blue-600 rounded text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {saving ? 'Saving…' : 'Save settings'}
+                      </button>
+                      <button onClick={closeEditor} disabled={saving} className="px-3 py-1 bg-slate-700 rounded text-sm hover:bg-slate-600 disabled:opacity-50">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 )}
               </li>
             ))}
