@@ -12,6 +12,7 @@ pub mod http;
 pub mod import_file;
 pub mod library;
 pub mod moving_time;
+pub mod occupancy;
 pub mod server;
 pub mod sync;
 pub mod state;

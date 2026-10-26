@@ -1,5 +1,6 @@
 //! Blocks, signals, feedbacks, and routes. Occupancy and aspects are set by hand until the hardware links exist
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{json, Value};
@@ -9,7 +10,8 @@ use crate::db::layouts;
 use crate::db::trackside::{self, NewBlock, NewRoute};
 use crate::fields::{self, Body};
 use crate::http::{ApiError, Out, Reply};
-use crate::state::AppState;
+use crate::occupancy;
+use crate::state::{AppState, Inner};
 
 const BLOCK_STATES: [&str; 3] = ["free", "occupied", "reserved"];
 const SIGNAL_TYPES: [&str; 2] = ["main", "warning"];
@@ -41,14 +43,14 @@ pub fn blocks(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", []) => {
             let inner = lock(app);
-            Ok(Reply::json(200, json!(trackside::blocks(&inner.db, optional_layout_id(call)?)?)))
+            Ok(Reply::json(200, json!(live_blocks(&inner, trackside::blocks(&inner.db, optional_layout_id(call)?)?)?)))
         }
         ("POST", []) => create_block(app, call),
         ("GET", [id]) => {
             let id = super::id_segment(id)?;
             let inner = lock(app);
             let block = trackside::block(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Block", id))?;
-            Ok(Reply::json(200, json!(block)))
+            Ok(Reply::json(200, json!(live_blocks(&inner, vec![block])?.remove(0))))
         }
         ("PATCH", [id]) => update_block(app, super::id_segment(id)?, call),
         ("DELETE", [id]) => {
@@ -83,7 +85,7 @@ fn create_block(app: &Arc<AppState>, call: &Call) -> Out {
 
 fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let body = call.json_body()?;
-    let changes: Body = fields::changes(&body, &["name", "x", "y", "max_speed", "state"]);
+    let changes: Body = fields::changes(&body, &["name", "x", "y", "max_speed", "state", "feedback_ids", "signal_ids"]);
     fields::reject_nulls(&changes)?;
     if let Some(state) = fields::optional_str(&changes, "state")? {
         check_choice(&state, &BLOCK_STATES, "State")?;
@@ -107,23 +109,31 @@ fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
         block.occupied = state == "occupied";
         block.state = state;
     }
+    if let Some(feedback_ids) = int_list(&changes, "feedback_ids")? {
+        check_feedbacks(&inner.db, &feedback_ids, block.layout_id)?;
+        trackside::set_block_feedbacks(&inner.db, id, &feedback_ids)?;
+    }
+    if let Some(signal_ids) = int_list(&changes, "signal_ids")? {
+        check_signals(&inner.db, &signal_ids, block.layout_id)?;
+        trackside::set_block_signals(&inner.db, id, &signal_ids)?;
+    }
     trackside::save_block(&inner.db, &block)?;
     let saved = trackside::block(&inner.db, id)?.ok_or_else(|| ApiError::internal("Block was not saved"))?;
-    Ok(Reply::json(200, json!(saved)))
+    Ok(Reply::json(200, json!(live_blocks(&inner, vec![saved])?.remove(0))))
 }
 
 pub fn signals(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", []) => {
             let inner = lock(app);
-            Ok(Reply::json(200, json!(trackside::signals(&inner.db, optional_layout_id(call)?)?)))
+            Ok(Reply::json(200, json!(live_signals(&inner, trackside::signals(&inner.db, optional_layout_id(call)?)?)?)))
         }
         ("POST", []) => create_signal(app, call),
         ("GET", [id]) => {
             let id = super::id_segment(id)?;
             let inner = lock(app);
             let signal = trackside::signal(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Signal", id))?;
-            Ok(Reply::json(200, json!(signal)))
+            Ok(Reply::json(200, json!(live_signals(&inner, vec![signal])?.remove(0))))
         }
         ("PATCH", [id]) => update_signal(app, super::id_segment(id)?, call),
         ("DELETE", [id]) => {
@@ -155,7 +165,7 @@ fn create_signal(app: &Arc<AppState>, call: &Call) -> Out {
 
 fn update_signal(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let body = call.json_body()?;
-    let changes: Body = fields::changes(&body, &["name", "x", "y", "aspect"]);
+    let changes: Body = fields::changes(&body, &["name", "x", "y", "aspect", "block_ids"]);
     fields::reject_nulls(&changes)?;
     if let Some(aspect) = fields::optional_str(&changes, "aspect")? {
         check_choice(&aspect, &SIGNAL_ASPECTS, "Aspect")?;
@@ -172,12 +182,25 @@ fn update_signal(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     if let Some(y) = fields::optional_float(&changes, "y")? {
         signal.y = y;
     }
+    let block_ids = int_list(&changes, "block_ids")?;
+    let linked = match &block_ids {
+        Some(ids) => !ids.is_empty(),
+        None => !signal.block_ids.is_empty(),
+    };
+    if changes.contains_key("aspect") && linked {
+        return Err(ApiError::conflict("This signal's aspect follows the blocks it protects. Unlink the blocks to set it by hand"));
+    }
     if let Some(aspect) = fields::optional_str(&changes, "aspect")? {
         signal.aspect = aspect;
     }
+    if let Some(block_ids) = block_ids {
+        check_blocks(&inner.db, &block_ids, signal.layout_id)?;
+        trackside::set_signal_blocks(&inner.db, id, &block_ids)?;
+        signal.block_ids = block_ids;
+    }
     trackside::save_signal(&inner.db, &signal)?;
     let saved = trackside::signal(&inner.db, id)?.ok_or_else(|| ApiError::internal("Signal was not saved"))?;
-    Ok(Reply::json(200, json!(saved)))
+    Ok(Reply::json(200, json!(live_signals(&inner, vec![saved])?.remove(0))))
 }
 
 pub fn feedbacks(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
@@ -353,4 +376,94 @@ fn update_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     trackside::save_route(&inner.db, &route)?;
     let saved = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::internal("Route was not saved"))?;
     Ok(Reply::json(200, json!(saved)))
+}
+
+/// A list of whole-number ids from a request, or None if the request did not give the list
+fn int_list(changes: &Body, key: &str) -> Result<Option<Vec<i64>>, ApiError> {
+    let Some(value) = changes.get(key) else { return Ok(None) };
+    let items = value.as_array().ok_or_else(|| ApiError::unprocessable(format!("{key} must be a list of ids")))?;
+    items
+        .iter()
+        .map(|item| item.as_i64().ok_or_else(|| ApiError::unprocessable(format!("{key} must be whole numbers"))))
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
+/// Each id must be a feedback on the same layout as the block that uses it
+fn check_feedbacks(db: &rusqlite::Connection, ids: &[i64], layout_id: i64) -> Result<(), ApiError> {
+    for id in ids {
+        let feedback = trackside::feedback(db, *id)?.ok_or_else(|| ApiError::not_found("Feedback", *id))?;
+        if feedback.layout_id != layout_id {
+            return Err(ApiError::bad_request("A feedback must be on the same layout as its block"));
+        }
+    }
+    Ok(())
+}
+
+/// Each id must be a signal on the same layout as the block that uses it
+fn check_signals(db: &rusqlite::Connection, ids: &[i64], layout_id: i64) -> Result<(), ApiError> {
+    for id in ids {
+        let signal = trackside::signal(db, *id)?.ok_or_else(|| ApiError::not_found("Signal", *id))?;
+        if signal.layout_id != layout_id {
+            return Err(ApiError::bad_request("A signal must be on the same layout as its block"));
+        }
+    }
+    Ok(())
+}
+
+/// Each id must be a block on the same layout as the signal that protects it
+fn check_blocks(db: &rusqlite::Connection, ids: &[i64], layout_id: i64) -> Result<(), ApiError> {
+    for id in ids {
+        let block = trackside::block(db, *id)?.ok_or_else(|| ApiError::not_found("Block", *id))?;
+        if block.layout_id != layout_id {
+            return Err(ApiError::bad_request("A block must be on the same layout as its signal"));
+        }
+    }
+    Ok(())
+}
+
+/// Whether each block is occupied now: its detected state, or its own state where nothing is reported
+fn occupied_map(inner: &Inner) -> rusqlite::Result<HashMap<i64, bool>> {
+    let detected = occupancy::detected(&inner.db, &inner.z21.feedback)?;
+    let mut map = HashMap::new();
+    for block in trackside::blocks(&inner.db, None)? {
+        map.insert(block.id, detected.get(&block.id).copied().unwrap_or(block.occupied));
+    }
+    Ok(map)
+}
+
+/// Blocks with their detected occupancy (null where no feedback has reported) and whether they are occupied now
+fn live_blocks(inner: &Inner, blocks: Vec<trackside::Block>) -> rusqlite::Result<Vec<Value>> {
+    let detected = occupancy::detected(&inner.db, &inner.z21.feedback)?;
+    Ok(blocks
+        .into_iter()
+        .map(|block| {
+            let found = detected.get(&block.id).copied();
+            let mut value = json!(block);
+            value["detected"] = json!(found);
+            value["occupied_now"] = json!(found.unwrap_or(block.occupied));
+            value
+        })
+        .collect())
+}
+
+/// Signals with the aspect they show. A signal that protects blocks shows stop or go from them; one without shows the
+/// aspect it was set to
+fn live_signals(inner: &Inner, signals: Vec<trackside::Signal>) -> rusqlite::Result<Vec<Value>> {
+    let occupied = occupied_map(inner)?;
+    Ok(signals
+        .into_iter()
+        .map(|signal| {
+            let mut value = json!(signal);
+            if signal.block_ids.is_empty() {
+                value["aspect_source"] = json!("manual");
+            } else {
+                value["aspect_source"] = json!("blocks");
+                value["aspect"] = json!(occupancy::aspect(
+                    signal.block_ids.iter().map(|id| occupied.get(id).copied().unwrap_or(false))
+                ));
+            }
+            value
+        })
+        .collect())
 }
