@@ -432,6 +432,11 @@ Entry criteria:
     - ⬜ Interface translation (LocoLink ships English, Dutch, German, French and others)
 27. **Recovery** ⬜
     - ⬜ Recovery snapshot after an interruption, with a decision per item to keep occupied or release
+28. **Analog mode (DC)** ⬜ (needs a DCC-EX driver, per item 22)
+    - ⬜ Run DC locomotives on a separate track section, through a DCC-EX command station. The Z21 cannot do this
+    - ⬜ Set a DCC-EX output to DC for the analog section, and link a DC profile to make it drivable
+    - ⬜ Switch track power off before every change between DCC and analog mode
+    - ⬜ TrackManager, profiles, replay and shuttle, and precision settings: not yet reviewed in detail
 
 **Not yet reviewed in LocoLink** (add when seen): Macros, Shuttles, Drivers, Freight & switching, the Consists tab on Wagons & trains, Command Truth, Projects' Save as and Export, and the Experience, Systems, Data and Demo settings.
 
