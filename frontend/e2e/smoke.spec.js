@@ -32,3 +32,26 @@ test('a consist made from two locomotives appears in the consist list', async ({
   await expect(page.getByText('Created Pair')).toBeVisible()
   await expect(page.getByLabel('Consist address for Pair')).toHaveValue('1')
 })
+
+test('the switchboard lists a block with its live state and a signal with its aspect', async ({ page }) => {
+  const layouts = await page.request.post('/api/layouts', {
+    data: { name: 'Switchboard test', width: 800, height: 600, scale: 'N' },
+  })
+  expect(layouts.status()).toBe(201)
+  const layoutId = (await layouts.json()).id
+  const block = await (await page.request.post('/api/blocks', {
+    data: { layout_id: layoutId, name: 'Platform 9', x: 0, y: 0 },
+  })).json()
+  await page.request.post('/api/signals', {
+    data: { layout_id: layoutId, name: 'Home 9', x: 5, y: 5, signal_type: 'main' },
+  })
+  const signals = await (await page.request.get('/api/signals')).json()
+  const signal = signals.find((item) => item.name === 'Home 9')
+  await page.request.patch(`/api/signals/${signal.id}`, { data: { block_ids: [block.id] } })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Switchboard', exact: true }).first().click()
+  await expect(page.getByText('Platform 9')).toBeVisible()
+  await expect(page.getByText('Home 9')).toBeVisible()
+  await expect(page.getByText('go', { exact: true })).toBeVisible()
+})
