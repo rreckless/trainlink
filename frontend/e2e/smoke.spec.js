@@ -1,10 +1,18 @@
 import { test, expect } from '@playwright/test'
 
-test('the side menu lists the pages under Drive, Layout and System', async ({ page }) => {
+test('the side menu groups its pages as LocoLink does, with the less common pages folded away', async ({ page }) => {
   await page.goto('/')
-  for (const name of ['Control', 'Consists', 'Turnouts', 'Health', 'Settings']) {
+  for (const section of ['Basics', 'Advanced', 'More advanced features']) {
+    await expect(page.getByRole('button', { name: section, exact: false }).first()).toBeVisible()
+  }
+  for (const name of ['Control', 'Turnouts', 'Blocks', 'Health', 'Settings']) {
     await expect(page.getByRole('button', { name, exact: true }).first()).toBeVisible()
   }
+  // The app opens on Switchboard, which sits under More basic features, so that group opens by itself. Toggling it closes it
+  const menu = page.getByRole('navigation', { name: 'Main' })
+  await expect(menu.getByRole('button', { name: 'Consists', exact: true })).toBeVisible()
+  await menu.getByRole('button', { name: /More basic features/ }).click()
+  await expect(menu.getByRole('button', { name: 'Consists', exact: true })).toHaveCount(0)
 })
 
 test('the health page opens and reports on the project', async ({ page }) => {
@@ -24,6 +32,7 @@ test('a consist made from two locomotives appears in the consist list', async ({
 
   await page.goto('/')
   await page.getByRole('button', { name: 'Consists', exact: true }).first().click()
+  await page.getByRole('button', { name: 'New consist' }).click()
   await page.getByLabel('Class 37').check()
   await page.getByLabel('Class 08').check()
   await page.getByPlaceholder('Consist name').fill('Pair')

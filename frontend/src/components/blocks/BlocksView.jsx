@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Boxes } from 'lucide-react'
+import EditDialog from '../shell/EditDialog'
 import { tracksideApi } from '../../services/tracksideApi'
 
 const STATES = [
@@ -122,122 +124,120 @@ export default function BlocksView() {
         )}
       </div>
 
-      <div className="xl:col-span-2 bg-slate-800 rounded-lg p-4 space-y-4">
-        {error && (
-          <div className="bg-red-900 border border-red-700 rounded p-3">
-            <p className="text-red-200 text-sm">{error}</p>
-          </div>
-        )}
-        {!selected || !draft ? (
-          <p className="text-sm text-slate-400">Choose a block to see and change its properties.</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="space-y-1 text-sm text-slate-300">
-                Name
+      {selected && draft && (
+        <EditDialog
+          title={selected.name}
+          subtitle="Block"
+          icon={Boxes}
+          accent="bg-cyan-500"
+          busy={busy}
+          error={error}
+          onClose={() => setSelectedId(null)}
+          footer={
+            <button
+              onClick={save}
+              disabled={busy || draft.name.trim() === ''}
+              className="px-4 py-2 bg-green-600 rounded text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+            >
+              Save block
+            </button>
+          }
+        >
+          {message && <p className="text-sm text-green-300">{message}</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="space-y-1 text-sm text-slate-300">
+            Name
+            <input
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
+            Maximum speed
+            <input
+              type="number"
+              min="0"
+              max="126"
+              value={draft.max_speed}
+              onChange={(event) => setDraft({ ...draft, max_speed: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
+            State, set by hand
+            <select
+              value={draft.state}
+              onChange={(event) => setDraft({ ...draft, state: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            >
+              {STATES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
+            Next block
+            <select
+              value={draft.next_block_id}
+              onChange={(event) => setDraft({ ...draft, next_block_id: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            >
+              <option value="">None</option>
+              {sameLayout.blocks.map((block) => (
+                <option key={block.id} value={block.id}>
+                  {block.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-slate-300 mb-1">Feedbacks that show this block occupied</legend>
+          {sameLayout.feedbacks.length === 0 ? (
+            <p className="text-xs text-slate-400">No feedbacks on this layout yet.</p>
+          ) : (
+            sameLayout.feedbacks.map((feedback) => (
+              <label key={feedback.id} className="flex items-center gap-2 text-sm">
                 <input
-                  value={draft.name}
-                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                  type="checkbox"
+                  checked={draft.feedback_ids.includes(feedback.id)}
+                  onChange={() => toggle('feedback_ids', feedback.id)}
                   disabled={busy}
-                  className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
                 />
+                {feedback.name} <span className="text-xs text-slate-400">feedback {feedback.feedback_number}</span>
               </label>
-              <label className="space-y-1 text-sm text-slate-300">
-                Maximum speed
+            ))
+          )}
+        </fieldset>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-slate-300 mb-1">Signals that show this block&apos;s aspect</legend>
+          {sameLayout.signals.length === 0 ? (
+            <p className="text-xs text-slate-400">No signals on this layout yet.</p>
+          ) : (
+            sameLayout.signals.map((signal) => (
+              <label key={signal.id} className="flex items-center gap-2 text-sm">
                 <input
-                  type="number"
-                  min="0"
-                  max="126"
-                  value={draft.max_speed}
-                  onChange={(event) => setDraft({ ...draft, max_speed: event.target.value })}
+                  type="checkbox"
+                  checked={draft.signal_ids.includes(signal.id)}
+                  onChange={() => toggle('signal_ids', signal.id)}
                   disabled={busy}
-                  className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
                 />
+                {signal.name} <span className="text-xs text-slate-400">{signal.signal_type}</span>
               </label>
-              <label className="space-y-1 text-sm text-slate-300">
-                State, set by hand
-                <select
-                  value={draft.state}
-                  onChange={(event) => setDraft({ ...draft, state: event.target.value })}
-                  disabled={busy}
-                  className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                >
-                  {STATES.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-sm text-slate-300">
-                Next block
-                <select
-                  value={draft.next_block_id}
-                  onChange={(event) => setDraft({ ...draft, next_block_id: event.target.value })}
-                  disabled={busy}
-                  className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                >
-                  <option value="">None</option>
-                  {sameLayout.blocks.map((block) => (
-                    <option key={block.id} value={block.id}>
-                      {block.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <fieldset className="space-y-2">
-              <legend className="text-sm text-slate-300 mb-1">Feedbacks that show this block occupied</legend>
-              {sameLayout.feedbacks.length === 0 ? (
-                <p className="text-xs text-slate-400">No feedbacks on this layout yet.</p>
-              ) : (
-                sameLayout.feedbacks.map((feedback) => (
-                  <label key={feedback.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={draft.feedback_ids.includes(feedback.id)}
-                      onChange={() => toggle('feedback_ids', feedback.id)}
-                      disabled={busy}
-                    />
-                    {feedback.name} <span className="text-xs text-slate-400">feedback {feedback.feedback_number}</span>
-                  </label>
-                ))
-              )}
-            </fieldset>
-
-            <fieldset className="space-y-2">
-              <legend className="text-sm text-slate-300 mb-1">Signals that show this block&apos;s aspect</legend>
-              {sameLayout.signals.length === 0 ? (
-                <p className="text-xs text-slate-400">No signals on this layout yet.</p>
-              ) : (
-                sameLayout.signals.map((signal) => (
-                  <label key={signal.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={draft.signal_ids.includes(signal.id)}
-                      onChange={() => toggle('signal_ids', signal.id)}
-                      disabled={busy}
-                    />
-                    {signal.name} <span className="text-xs text-slate-400">{signal.signal_type}</span>
-                  </label>
-                ))
-              )}
-            </fieldset>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={save}
-                disabled={busy || draft.name.trim() === ''}
-                className="px-4 py-2 bg-green-600 rounded font-semibold hover:bg-green-700 disabled:opacity-50"
-              >
-                Save block
-              </button>
-              {message && <span className="text-sm text-green-300">{message}</span>}
-            </div>
-          </>
-        )}
-      </div>
+            ))
+          )}
+        </fieldset>
+        </EditDialog>
+      )}
     </div>
   )
 }

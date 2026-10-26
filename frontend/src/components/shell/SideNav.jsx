@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useStore } from '../../store'
 import { useZ21Connection } from '../../hooks/useZ21Connection'
-import { NAV_GROUPS, describeTrack } from './navigation'
+import { NAV_SECTIONS, describeTrack } from './navigation'
 
 // One page in the navigation: a coloured icon tile, and a bar on the left when it is open
 function NavItem({ page, active, collapsed, onOpen }) {
@@ -62,35 +63,109 @@ function ConnectionCard({ collapsed }) {
   )
 }
 
+// A section heading that opens and closes its pages. Open unless the user closes it
+function Section({ title, count, open, onToggle, children }) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-2 pb-1 text-xs font-semibold text-slate-300 hover:text-white"
+      >
+        <span>{title}</span>
+        <span className="flex items-center gap-2">
+          {count !== undefined && <span className="text-[11px] text-slate-500">{count}</span>}
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
+        </span>
+      </button>
+      {open && <div className="space-y-0.5">{children}</div>}
+    </div>
+  )
+}
+
+// The pages a section holds beyond its main list. Closed until opened, or until the page open in it is one of them
+function MoreFeatures({ title, items, activeTab, onOpen }) {
+  const holdsActive = items.some((page) => page.id === activeTab)
+  const [open, setOpen] = useState(holdsActive)
+  // Opens when the page open in it becomes active, and the user can close it again after that
+  useEffect(() => {
+    if (holdsActive) setOpen(true)
+  }, [holdsActive])
+  const isOpen = open
+  return (
+    <div className="pt-1">
+      <button
+        onClick={() => setOpen(!isOpen)}
+        aria-expanded={isOpen}
+        className="w-full flex items-center justify-between px-2 pb-1 text-[11px] text-slate-400 hover:text-white"
+      >
+        <span>{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-[11px] text-slate-500">{items.length}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? '' : '-rotate-90'}`} aria-hidden="true" />
+        </span>
+      </button>
+      {isOpen && (
+        <div className="space-y-0.5">
+          {items.map((page) => (
+            <NavItem key={page.id} page={page} active={activeTab === page.id} collapsed={false} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SideNav({ activeTab, onOpen, collapsed, onToggle }) {
+  // Which sections are closed, by id. Every section starts open, as in LocoLink
+  const [closed, setClosed] = useState({})
+
   return (
     <nav
       // The whole menu scrolls, including the connection card at its foot, so the card is reachable when the window is short
       className={`${collapsed ? 'w-16' : 'w-60'} flex-shrink-0 self-stretch min-h-0 overflow-y-auto flex flex-col bg-slate-950 border-r border-slate-800 transition-[width] duration-150`}
       aria-label="Main"
     >
-      <div className={`flex items-center h-11 px-3 ${collapsed ? 'justify-center' : 'justify-end'}`}>
-        <button
-          onClick={onToggle}
-          title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-          className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
-        >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </button>
+      <div className={`flex items-center h-11 px-3 ${collapsed ? 'justify-center' : 'justify-between'}`}>
+        {!collapsed && (
+          <button onClick={onToggle} className="text-xs text-amber-300 hover:text-amber-200" aria-label="Collapse navigation">
+            Collapse navigation
+          </button>
+        )}
+        {collapsed && (
+          <button
+            onClick={onToggle}
+            title="Expand navigation"
+            aria-label="Expand navigation"
+            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="px-2 space-y-4">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.title}>
-            {!collapsed && <p className="px-2 pb-1 text-[11px] uppercase tracking-wider text-slate-500">{group.title}</p>}
-            <div className="space-y-0.5">
-              {group.items.map((page) => (
-                <NavItem key={page.id} page={page} active={activeTab === page.id} collapsed={collapsed} onOpen={onOpen} />
+        {NAV_SECTIONS.map((section) => {
+          // The rail shows every page as an icon, so the sections and their more-features groups fold into one list
+          if (collapsed) {
+            return [...section.items, ...(section.more?.items ?? [])].map((page) => (
+              <NavItem key={page.id} page={page} active={activeTab === page.id} collapsed onOpen={onOpen} />
+            ))
+          }
+          return (
+            <Section
+              key={section.id}
+              title={section.title}
+              open={!closed[section.id]}
+              onToggle={() => setClosed({ ...closed, [section.id]: !closed[section.id] })}
+            >
+              {section.items.map((page) => (
+                <NavItem key={page.id} page={page} active={activeTab === page.id} collapsed={false} onOpen={onOpen} />
               ))}
-            </div>
-          </div>
-        ))}
+              {section.more && <MoreFeatures title={section.more.title} items={section.more.items} activeTab={activeTab} onOpen={onOpen} />}
+            </Section>
+          )
+        })}
       </div>
 
       {/* Under the menu items, with room below it so it clears the window's bottom edge (where the shelf can cover it) */}

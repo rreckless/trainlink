@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { GitBranch } from 'lucide-react'
 import { useStore } from '../../store'
+import EditDialog, { DialogSection } from '../shell/EditDialog'
 import { overviewApi } from '../../services/overviewApi'
 import { commandStationApi } from '../../services/commandStationApi'
 
@@ -65,11 +67,9 @@ export default function TurnoutsView() {
     commandStationApi.list().then(setStations).catch(() => {})
   }, [])
 
-  const key = (turnout) => `${turnout.layout_id}/${turnout.placed_id}`
-
   const openEditor = (turnout) => {
     setError('')
-    setEditing(key(turnout))
+    setEditing(turnout)
     setDraft(draftFrom(turnout.settings))
   }
 
@@ -165,7 +165,7 @@ export default function TurnoutsView() {
         ) : (
           <ul className="space-y-2">
             {shown.map((turnout, index) => (
-              <li key={`${turnout.layout_id}-${index}`} className="bg-slate-700 rounded px-3 py-2 space-y-2">
+              <li key={`${turnout.layout_id}-${index}`} className="bg-slate-700 rounded px-3 py-2">
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
                     <p className="font-semibold">{turnout.name}</p>
@@ -189,117 +189,120 @@ export default function TurnoutsView() {
                   ) : (
                     <span className="text-sm text-amber-300">No address</span>
                   )}
-                  <button
-                    onClick={() => (editing === key(turnout) ? closeEditor() : openEditor(turnout))}
-                    className="px-2 py-1 text-xs bg-slate-600 rounded hover:bg-slate-500"
-                  >
-                    {editing === key(turnout) ? 'Close' : 'Settings'}
+                  <button onClick={() => openEditor(turnout)} className="px-2 py-1 text-xs bg-slate-600 rounded hover:bg-slate-500">
+                    Settings
                   </button>
                 </div>
 
-                {editing === key(turnout) && draft && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-800 rounded p-3">
-                    <label className="space-y-1 text-sm text-slate-300">
-                      Switching time (ms, {THROW_MS_MIN} to {THROW_MS_MAX})
-                      <input
-                        type="number"
-                        min={THROW_MS_MIN}
-                        max={THROW_MS_MAX}
-                        value={draft.throw_ms}
-                        onChange={(event) => setDraft({ ...draft, throw_ms: event.target.value })}
-                        disabled={saving}
-                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                      />
-                    </label>
-                    <label className="space-y-1 text-sm text-slate-300">
-                      Type
-                      <select
-                        value={draft.turnout_type}
-                        onChange={(event) => setDraft({ ...draft, turnout_type: event.target.value })}
-                        disabled={saving}
-                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                      >
-                        {TURNOUT_TYPES.map(([id, label]) => (
-                          <option key={id} value={id}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1 text-sm text-slate-300">
-                      Command station
-                      <select
-                        value={draft.command_station}
-                        onChange={(event) => setDraft({ ...draft, command_station: event.target.value })}
-                        disabled={saving}
-                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                      >
-                        <option value="">None set</option>
-                        {stations.map((station) => (
-                          <option key={station.id} value={station.name}>
-                            {station.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1 text-sm text-slate-300">
-                      Group
-                      <input
-                        value={draft.group}
-                        maxLength={GROUP_MAX}
-                        onChange={(event) => setDraft({ ...draft, group: event.target.value })}
-                        disabled={saving}
-                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                      />
-                    </label>
-                    <label className="space-y-1 text-sm text-slate-300 md:col-span-2">
-                      Notes
-                      <textarea
-                        value={draft.notes}
-                        maxLength={NOTES_MAX}
-                        onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-                        disabled={saving}
-                        rows={2}
-                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                      />
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={draft.manual}
-                        onChange={(event) => setDraft({ ...draft, manual: event.target.checked })}
-                        disabled={saving}
-                      />
-                      Manual turnout (no motor)
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={draft.feedback}
-                        onChange={(event) => setDraft({ ...draft, feedback: event.target.checked })}
-                        disabled={saving}
-                      />
-                      Position feedback
-                    </label>
-                    <div className="md:col-span-2 flex gap-2">
-                      <button
-                        onClick={() => save(turnout)}
-                        disabled={saving || !throwMsValid}
-                        className="px-3 py-1 bg-blue-600 rounded text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
-                      >
-                        {saving ? 'Saving…' : 'Save settings'}
-                      </button>
-                      <button onClick={closeEditor} disabled={saving} className="px-3 py-1 bg-slate-700 rounded text-sm hover:bg-slate-600 disabled:opacity-50">
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
               </li>
             ))}
           </ul>
         )}
       </div>
+      {editing && draft && (
+        <EditDialog
+          title={`${editing.name}`}
+          subtitle={`${editing.layout_name} · ${editing.has_address ? `address ${editing.dcc_address}` : 'no address'}`}
+          icon={GitBranch}
+          accent="bg-blue-500"
+          busy={saving}
+          error={error}
+          onClose={closeEditor}
+          footer={
+            <button
+              onClick={() => save(editing)}
+              disabled={saving || !throwMsValid}
+              className="px-4 py-2 rounded bg-blue-600 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save settings'}
+            </button>
+          }
+        >
+          <DialogSection title="General">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="space-y-1 text-sm text-slate-300">
+                Group
+                <input
+                  value={draft.group}
+                  maxLength={GROUP_MAX}
+                  onChange={(event) => setDraft({ ...draft, group: event.target.value })}
+                  disabled={saving}
+                  className="w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+                />
+              </label>
+              <label className="space-y-1 text-sm text-slate-300">
+                Command station
+                <select
+                  value={draft.command_station}
+                  onChange={(event) => setDraft({ ...draft, command_station: event.target.value })}
+                  disabled={saving}
+                  className="w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+                >
+                  <option value="">None set</option>
+                  {stations.map((station) => (
+                    <option key={station.id} value={station.name}>
+                      {station.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </DialogSection>
+
+          <DialogSection title="Type and drive">
+            <label className="space-y-1 text-sm text-slate-300 block">
+              Turnout type
+              <select
+                value={draft.turnout_type}
+                onChange={(event) => setDraft({ ...draft, turnout_type: event.target.value })}
+                disabled={saving}
+                className="w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+              >
+                {TURNOUT_TYPES.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" checked={draft.manual} onChange={(event) => setDraft({ ...draft, manual: event.target.checked })} disabled={saving} />
+              Manual turnout (no motor)
+            </label>
+          </DialogSection>
+
+          <DialogSection title="Feedback and switching">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" checked={draft.feedback} onChange={(event) => setDraft({ ...draft, feedback: event.target.checked })} disabled={saving} />
+              Position feedback
+            </label>
+            <label className="space-y-1 text-sm text-slate-300 block">
+              Switching time (ms, {THROW_MS_MIN} to {THROW_MS_MAX})
+              <input
+                type="number"
+                min={THROW_MS_MIN}
+                max={THROW_MS_MAX}
+                value={draft.throw_ms}
+                onChange={(event) => setDraft({ ...draft, throw_ms: event.target.value })}
+                disabled={saving}
+                className="w-full md:w-48 px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+              />
+            </label>
+          </DialogSection>
+
+          <DialogSection title="Notes">
+            <textarea
+              value={draft.notes}
+              maxLength={NOTES_MAX}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+              disabled={saving}
+              rows={3}
+              placeholder="Optional notes…"
+              className="w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+            />
+          </DialogSection>
+        </EditDialog>
+      )}
     </div>
   )
 }

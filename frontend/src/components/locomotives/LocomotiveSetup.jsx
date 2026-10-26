@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { confirmAction } from '../../services/dialogs'
 import { locomotiveApi, pictureUrl } from '../../services/locomotiveApi'
 import LocomotiveForm from './LocomotiveForm'
+import EditDialog from '../shell/EditDialog'
+import { TrainFront } from 'lucide-react'
 
 // Add and edit locomotives: name, DCC address, picture, and what each function button does
 export default function LocomotiveSetup() {
@@ -97,14 +99,30 @@ export default function LocomotiveSetup() {
         {message && <p className="text-sm text-green-300">{message}</p>}
 
         {editing && (
-          <LocomotiveForm
-            key={editing === 'new' ? 'new' : editing.id}
-            locomotive={editing === 'new' ? null : editing}
+          <EditDialog
+            title={editing === 'new' ? 'New locomotive' : editing.name}
+            subtitle={editing === 'new' ? 'Name, address, picture and function buttons' : `Address ${editing.dcc_address}`}
+            icon={TrainFront}
+            accent="bg-violet-500"
             busy={busy}
-            onSave={save}
-            onCancel={() => setEditing(null)}
-            onRemovePicture={removePicture}
-          />
+            onClose={() => setEditing(null)}
+            footer={
+              <button type="submit" form="locomotive-form" disabled={busy} className="px-4 py-2 bg-blue-600 rounded text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">
+                {busy ? 'Saving…' : 'Save locomotive'}
+              </button>
+            }
+          >
+            <LocomotiveForm
+              key={editing === 'new' ? 'new' : editing.id}
+              formId="locomotive-form"
+              inDialog
+              locomotive={editing === 'new' ? null : editing}
+              busy={busy}
+              onSave={save}
+              onCancel={() => setEditing(null)}
+              onRemovePicture={removePicture}
+            />
+          </EditDialog>
         )}
 
         {locomotives.length === 0 ? (

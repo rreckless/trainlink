@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Layers } from 'lucide-react'
+import EditDialog from '../shell/EditDialog'
 import { useStore } from '../../store'
 import { confirmAction } from '../../services/dialogs'
 import { consistApi } from '../../services/consistApi'
@@ -27,6 +29,7 @@ export default function ConsistsView() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [creating, setCreating] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -75,6 +78,7 @@ export default function ConsistsView() {
     const members = picked.map((id) => ({ locomotive_id: id, reversed: reversed.has(id) }))
     const created = await run(() => consistApi.create({ name, address, members }), (result) => `Created ${result.name}`)
     if (created) {
+      setCreating(false)
       setName('')
       setAddress(1)
       setPicked([])
@@ -116,11 +120,26 @@ export default function ConsistsView() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-slate-800 rounded-lg p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">New consist</h3>
-          {!controlsEnabled && <span className="text-xs text-amber-300">Connect the Z21 to drive a consist</span>}
-        </div>
+      {creating && (
+      <EditDialog
+        title="New consist"
+        subtitle="Pick at least two locomotives and give the consist a name and address"
+        icon={Layers}
+        accent="bg-purple-500"
+        busy={busy}
+        error={error}
+        onClose={() => setCreating(false)}
+        footer={
+          <button
+            onClick={createConsist}
+            disabled={busy || name.trim() === '' || pickedLocomotives.length < MEMBERS_MIN}
+            className="px-4 py-2 rounded bg-green-600 text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+          >
+            Create consist
+          </button>
+        }
+      >
+        {!controlsEnabled && <p className="text-xs text-amber-300">Connect the Z21 to drive a consist</p>}
         <p className="text-xs text-slate-400">
           A consist needs at least two locomotives. TrainLink drives each one in turn, so the decoders do not follow the
           consist address yet. Their CV19 (multiple-unit address) is not set by TrainLink.
@@ -174,18 +193,12 @@ export default function ConsistsView() {
               className="w-20 px-2 py-1 bg-slate-700 rounded border border-slate-600 text-white"
             />
           </label>
-          <button
-            onClick={createConsist}
-            disabled={busy || name.trim() === '' || pickedLocomotives.length < MEMBERS_MIN}
-            className="px-4 py-1 bg-green-600 rounded font-semibold hover:bg-green-700 disabled:opacity-50"
-          >
-            Create consist
-          </button>
         </div>
         {pickedLocomotives.length > 0 && pickedLocomotives.length < MEMBERS_MIN && (
           <p className="text-xs text-slate-400">Pick one more locomotive</p>
         )}
-      </div>
+      </EditDialog>
+      )}
 
       {error && (
         <div className="bg-red-900 border border-red-700 rounded p-3">
@@ -197,6 +210,9 @@ export default function ConsistsView() {
       <div className="bg-slate-800 rounded-lg p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Consists</h3>
+          <button onClick={() => setCreating(true)} disabled={busy} className="px-3 py-1 rounded bg-green-700 text-sm font-semibold hover:bg-green-600 disabled:opacity-50">
+            New consist
+          </button>
           <label className="flex items-center gap-2 text-sm text-slate-300">
             Function
             <input
