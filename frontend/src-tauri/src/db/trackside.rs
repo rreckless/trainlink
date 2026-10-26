@@ -16,6 +16,8 @@ pub struct Block {
     pub state: String,
     pub occupied: bool,
     pub max_speed: i64,
+    /// The block a train enters after this one, if it is known. Used for caution aspects
+    pub next_block_id: Option<i64>,
     pub signal_ids: Vec<i64>,
     pub feedback_ids: Vec<i64>,
     pub created_at: String,
@@ -81,7 +83,7 @@ fn ids(conn: &Connection, sql: &str, id: i64) -> rusqlite::Result<Vec<i64>> {
 
 // Blocks
 
-const BLOCK_COLUMNS: &str = "id, layout_id, name, x, y, state, occupied, max_speed, length, occupancy_locomotive_id, created_at";
+const BLOCK_COLUMNS: &str = "id, layout_id, name, x, y, state, occupied, max_speed, next_block_id, length, occupancy_locomotive_id, created_at";
 
 fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
     Ok(Block {
@@ -93,6 +95,7 @@ fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
         state: row.get("state")?,
         occupied: row.get("occupied")?,
         max_speed: row.get("max_speed")?,
+        next_block_id: row.get("next_block_id")?,
         signal_ids: Vec::new(),
         feedback_ids: Vec::new(),
         created_at: row.get("created_at")?,
@@ -145,9 +148,9 @@ pub fn insert_block(conn: &Connection, block: &NewBlock) -> rusqlite::Result<i64
 /// Write the editable columns back. `occupied` follows the state
 pub fn save_block(conn: &Connection, block: &Block) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE blocks SET name = ?2, x = ?3, y = ?4, max_speed = ?5, state = ?6, occupied = ?7, updated_at = ?8
+        "UPDATE blocks SET name = ?2, x = ?3, y = ?4, max_speed = ?5, state = ?6, occupied = ?7, next_block_id = ?8, updated_at = ?9
          WHERE id = ?1",
-        params![block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, now()],
+        params![block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, block.next_block_id, now()],
     )?;
     sync::mark_changed(conn, "blocks", block.id)?;
     Ok(())
@@ -409,10 +412,30 @@ pub fn set_block_signals(conn: &Connection, block_id: i64, signal_ids: &[i64]) -
 
 /// Replace the blocks a signal protects
 pub fn set_signal_blocks(conn: &Connection, signal_id: i64, block_ids: &[i64]) -> rusqlite::Result<()> {
+    // The blocks a signal leaves and joins both send their links, so each of them is marked changed
+    let previous: Vec<i64> = conn
+        .prepare("SELECT block_id FROM block_signals WHERE signal_id = ?1")?
+        .query_map([signal_id], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
     conn.execute("DELETE FROM block_signals WHERE signal_id = ?1", [signal_id])?;
     for block_id in block_ids {
         conn.execute("INSERT INTO block_signals (block_id, signal_id) VALUES (?1, ?2)", params![block_id, signal_id])?;
     }
+    for block_id in previous.iter().chain(block_ids) {
+        sync::mark_changed(conn, "blocks", *block_id)?;
+    }
     sync::mark_changed(conn, "signals", signal_id)?;
+    Ok(())
+}
+
+/// Add the columns that newer versions need to a database made before them
+pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+    let columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(blocks)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<_>>()?;
+    if !columns.iter().any(|column| column == "next_block_id") {
+        conn.execute_batch("ALTER TABLE blocks ADD COLUMN next_block_id INTEGER REFERENCES blocks(id);")?;
+    }
     Ok(())
 }

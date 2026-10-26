@@ -104,26 +104,28 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Several locomotives at once: tick the roster to send one speed or direction to all of them
    - ✅ Direction (Forward / Reverse / Stop). Verified on hardware
    - 🧪 Function buttons (lights, sounds). 20 buttons with labels and momentary buttons. Not yet verified on hardware
-   - 🟡 Travelled time is recorded and shown on the roster. Distance is not tracked yet
+   - 🟡 Travelled time is recorded and shown on the roster. Distance is not tracked yet. **Open:** distance needs each locomotive's speed steps converted to real speed, which needs a calibration step and a design decision
    - 🧪 Real-time speed feedback from Z21. Replies are parsed and shown on the roster. Not yet verified on hardware
    - ✅ Emergency stop. Verified on hardware (not yet confirmed separately)
    - 🧪 Track state from Z21 (short circuit, track power off), with locomotive commands blocked until ready and a Resume Track Power action. Reconnect in Settings
 
 2. **Block System** 🟡
-   - ✅ Block model and REST routes, with links to feedbacks and signals (set with `feedback_ids` and `signal_ids` on a block)
-   - 🟡 Block definition and visualization. Blocks are listed on the Switchboard; the layout canvas does not show them yet
-   - 🧪 Block occupancy detection via Z21 feedback. A block is occupied when any linked feedback reports it, and falls back to its own state when nothing has reported. Tested against the fake Z21, not yet on hardware
-   - 🧪 Block linking to signals (API, `signal_ids` and `block_ids`). No screen for linking yet
-   - 🧪 Automatic signal management: a linked signal shows stop when a block it protects is occupied, and go otherwise
-   - ⬜ Block properties UI
-   - 🟡 Live occupancy on the Switchboard, refreshed every two seconds. Not yet in the layout editor. Block links are not synced between devices yet
+   - ✅ Block model and REST routes, with links to feedbacks, signals, and the next block (set with `feedback_ids`, `signal_ids` and `next_block_id` on a block)
+   - ✅ Block definition and visualization: blocks are drawn on the layout canvas, and listed on the Switchboard
+   - 🧪 Block occupancy detection via Z21 feedback. A block is occupied when any linked feedback reports it, and falls back to its own state when nothing has reported. Tested against the fake Z21. **Open:** check on a real Z21 with a detector on the track
+   - ✅ Block linking to signals and feedbacks: a Blocks page under Layout sets the links, the next block, the name, the maximum speed and the state
+   - ✅ Automatic signal management: a linked signal shows stop when a block it protects is occupied, caution when the block after is, and go otherwise
+   - ✅ Block properties UI: the Blocks page
+   - ✅ Live occupancy on the Switchboard, in the layout editor, and in the operate panel on the Control page. Refreshed every two seconds
+   - 🧪 Block links sync between devices: the next block, feedbacks and signals travel with each block. Tested with the in-memory cloud. **Open:** apply `supabase/migrations/20261026100000_block_links.sql` to the project, then check on two real devices
 
-3. **Signal Control** 🟡
+3. **Signal Control** ✅
    - ✅ Signal model and REST routes exist
-   - 🟡 Main signal aspects: stop and go come from the blocks. Caution needs the order of blocks, which comes with routes (Phase 3). Aspects are not sent to any hardware yet
-   - ⬜ Warning signals
-   - 🧪 Automatic signal assignment from block state (signals that protect blocks follow them; manual aspects are refused while linked)
-   - ⬜ Signal visualization on layout
+   - ✅ Main signal aspects: stop, caution and go, from the blocks. Caution uses the next block set on the block, not the route order, so it does not wait for Phase 3
+   - ✅ Warning signals: a warning signal shows caution when a block it protects is occupied, and go otherwise. It never shows stop
+   - ✅ Automatic signal assignment from block state (signals that protect blocks follow them; manual aspects are refused while linked)
+   - ✅ Signal visualization on layout: signals are drawn on the layout canvas, coloured by their live aspect
+   - 🟡 Aspects are not yet sent to hardware. **Open:** the accessory commands for signal decoders, checked on a real signal
 
 4. **Layout Drawing** 🧪
    - ✅ Layout REST routes (track segments stored in layout elements)
@@ -145,7 +147,8 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Save and load layouts (layout width and height are saved with the track)
    - 🧪 Drag-and-drop editing
    - 🧪 Snap-to-grid (20 unit grid)
-   - 🟡 Signals and feedbacks are linked to blocks, which drive stop and go. Signal aspects are not yet sent to hardware
+   - ✅ Signals and feedbacks are linked to blocks, which drive stop, caution and go
+   - 🟡 Signal aspects are not yet sent to hardware (see Signal Control)
 
 ### Phase 3: Automation & Routes (3-4 weeks)
 **Goal**: Route-based automation

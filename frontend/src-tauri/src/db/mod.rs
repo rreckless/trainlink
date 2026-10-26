@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     x REAL NOT NULL,
     y REAL NOT NULL,
     max_speed INTEGER NOT NULL DEFAULT 100,
+    next_block_id INTEGER REFERENCES blocks(id),
     length REAL,
     state TEXT NOT NULL DEFAULT 'free',
     occupied INTEGER NOT NULL DEFAULT 0,
@@ -157,6 +158,7 @@ fn setup(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
     connection.execute_batch(SCHEMA)?;
     consists::migrate(connection)?;
+    trackside::migrate(connection)?;
     sync::migrate(connection)
 }
 

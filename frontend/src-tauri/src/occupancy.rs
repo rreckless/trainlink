@@ -43,10 +43,23 @@ pub fn detected(conn: &Connection, z21: &BTreeMap<(i64, i64), bool>) -> rusqlite
     Ok(result)
 }
 
-/// The aspect a signal shows from the occupancy of the blocks it protects: stop if any is occupied, go otherwise
-pub fn aspect(occupied: impl IntoIterator<Item = bool>) -> &'static str {
-    if occupied.into_iter().any(|value| value) {
+/// One block a signal protects, and whether the block after it is occupied
+pub struct Protected {
+    pub occupied: bool,
+    pub next_occupied: bool,
+}
+
+/// The aspect a signal shows from the blocks it protects.
+/// A main signal shows stop if a protected block is occupied, caution if the block after one is, and go otherwise.
+/// A warning signal shows caution if a protected block is occupied, and go otherwise. It never shows stop
+pub fn signal_aspect(signal_type: &str, protected: &[Protected]) -> &'static str {
+    if signal_type == "warning" {
+        return if protected.iter().any(|block| block.occupied) { "caution" } else { "go" };
+    }
+    if protected.iter().any(|block| block.occupied) {
         "stop"
+    } else if protected.iter().any(|block| block.next_occupied) {
+        "caution"
     } else {
         "go"
     }

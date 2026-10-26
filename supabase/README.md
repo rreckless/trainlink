@@ -22,6 +22,7 @@ A passing run ends with `RLS tests passed`.
 ## Apply to the project
 
 1. In the Supabase dashboard, open the SQL Editor and paste the contents of `migrations/20261022100000_init.sql`. Run it once.
+   Then run each later migration in order. `migrations/20261026100000_block_links.sql` must be run before a version that syncs block links is used, or sync will be refused.
 2. Under Authentication → Users, add two test users with auto-confirm on, and note their emails and passwords.
 3. Run the HTTP tests with the public anon key, not the secret key. Put the settings in a file outside the repository, for example `~/trainlink-test.env`:
 

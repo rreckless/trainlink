@@ -153,6 +153,8 @@ pub fn run(app: &AppState, cloud: &dyn Cloud, images: &Path) -> Result<Report, A
         for row in &remote[EVENTS] {
             report.pulled += usize::from(events::apply(db, row)?);
         }
+        // Block links last, once every block, signal and feedback they refer to is here
+        trackside::relink_blocks(db, &remote["blocks"])?;
 
         // Our own changes: every row gets its cloud id first, so references can be written
         for table in TABLES {

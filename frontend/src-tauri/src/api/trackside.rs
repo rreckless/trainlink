@@ -109,6 +109,22 @@ fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
         block.occupied = state == "occupied";
         block.state = state;
     }
+    if let Some(next) = body.get("next_block_id") {
+        block.next_block_id = match next {
+            Value::Null => None,
+            value => {
+                let next_id = value.as_i64().ok_or_else(|| ApiError::unprocessable("next_block_id must be a whole number or null"))?;
+                if next_id == id {
+                    return Err(ApiError::bad_request("A block cannot be its own next block"));
+                }
+                let next_block = trackside::block(&inner.db, next_id)?.ok_or_else(|| ApiError::not_found("Block", next_id))?;
+                if next_block.layout_id != block.layout_id {
+                    return Err(ApiError::bad_request("The next block must be on the same layout"));
+                }
+                Some(next_id)
+            }
+        };
+    }
     if let Some(feedback_ids) = int_list(&changes, "feedback_ids")? {
         check_feedbacks(&inner.db, &feedback_ids, block.layout_id)?;
         trackside::set_block_feedbacks(&inner.db, id, &feedback_ids)?;
@@ -432,6 +448,14 @@ fn occupied_map(inner: &Inner) -> rusqlite::Result<HashMap<i64, bool>> {
     Ok(map)
 }
 
+/// The block after each block, where it is known
+fn next_map(inner: &Inner) -> rusqlite::Result<HashMap<i64, i64>> {
+    Ok(trackside::blocks(&inner.db, None)?
+        .into_iter()
+        .filter_map(|block| block.next_block_id.map(|next| (block.id, next)))
+        .collect())
+}
+
 /// Blocks with their detected occupancy (null where no feedback has reported) and whether they are occupied now
 fn live_blocks(inner: &Inner, blocks: Vec<trackside::Block>) -> rusqlite::Result<Vec<Value>> {
     let detected = occupancy::detected(&inner.db, &inner.z21.feedback)?;
@@ -451,6 +475,7 @@ fn live_blocks(inner: &Inner, blocks: Vec<trackside::Block>) -> rusqlite::Result
 /// aspect it was set to
 fn live_signals(inner: &Inner, signals: Vec<trackside::Signal>) -> rusqlite::Result<Vec<Value>> {
     let occupied = occupied_map(inner)?;
+    let next = next_map(inner)?;
     Ok(signals
         .into_iter()
         .map(|signal| {
@@ -458,10 +483,16 @@ fn live_signals(inner: &Inner, signals: Vec<trackside::Signal>) -> rusqlite::Res
             if signal.block_ids.is_empty() {
                 value["aspect_source"] = json!("manual");
             } else {
+                let protected: Vec<occupancy::Protected> = signal
+                    .block_ids
+                    .iter()
+                    .map(|id| occupancy::Protected {
+                        occupied: occupied.get(id).copied().unwrap_or(false),
+                        next_occupied: next.get(id).and_then(|next_id| occupied.get(next_id)).copied().unwrap_or(false),
+                    })
+                    .collect();
                 value["aspect_source"] = json!("blocks");
-                value["aspect"] = json!(occupancy::aspect(
-                    signal.block_ids.iter().map(|id| occupied.get(id).copied().unwrap_or(false))
-                ));
+                value["aspect"] = json!(occupancy::signal_aspect(&signal.signal_type, &protected));
             }
             value
         })
