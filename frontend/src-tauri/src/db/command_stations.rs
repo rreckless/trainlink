@@ -65,6 +65,15 @@ pub fn save(conn: &Connection, station: &CommandStation) -> rusqlite::Result<()>
     Ok(())
 }
 
+/// Locomotives that named this station before this device had it are attached to it now
+pub fn claim_pending(conn: &Connection, id: i64, name: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE locomotives SET command_station_id = ?1, pending_command_station = NULL WHERE pending_command_station = ?2",
+        params![id, name],
+    )?;
+    Ok(())
+}
+
 pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM command_stations WHERE id = ?1", [id])?;
     Ok(())

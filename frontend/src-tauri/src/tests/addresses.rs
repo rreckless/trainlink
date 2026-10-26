@@ -74,6 +74,8 @@ fn a_database_from_before_station_addresses_is_rebuilt_and_keeps_its_rows() {
     conn.execute_batch(
         "PRAGMA foreign_keys = ON;
          CREATE TABLE decoder_profiles (id INTEGER PRIMARY KEY);
+         CREATE TABLE command_stations (id INTEGER PRIMARY KEY);
+         INSERT INTO command_stations (id) VALUES (1), (2);
          CREATE TABLE locomotives (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
@@ -106,4 +108,43 @@ fn a_database_from_before_station_addresses_is_rebuilt_and_keeps_its_rows() {
         "the same station still refuses it"
     );
     crate::db::locomotives_migrate(&conn).expect("running it again is harmless");
+}
+
+#[test]
+fn a_database_that_already_has_the_sync_columns_is_rebuilt_and_keeps_them() {
+    let conn = rusqlite::Connection::open_in_memory().expect("in-memory database");
+    conn.execute_batch(
+        "PRAGMA foreign_keys = ON;
+         CREATE TABLE decoder_profiles (id INTEGER PRIMARY KEY);
+         CREATE TABLE command_stations (id INTEGER PRIMARY KEY);
+         INSERT INTO command_stations (id) VALUES (1), (2);
+         CREATE TABLE locomotives (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            dcc_address INTEGER NOT NULL UNIQUE,
+            locomotive_type TEXT NOT NULL,
+            command_station_id INTEGER,
+            decoder_profile_id INTEGER REFERENCES decoder_profiles(id),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            sync_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 1
+         );
+         CREATE UNIQUE INDEX locomotives_sync_id ON locomotives (sync_id);
+         INSERT INTO locomotives (id, name, dcc_address, locomotive_type, created_at, updated_at, sync_id, dirty)
+            VALUES (1, 'Old', 3, 'diesel', 'then', 'then', 'cloud-1', 0);",
+    )
+    .expect("old table");
+
+    crate::db::locomotives_migrate(&conn).expect("migrate");
+    let (sync_id, dirty): (String, i64) = conn
+        .query_row("SELECT sync_id, dirty FROM locomotives WHERE id = 1", [], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("the row keeps its sync columns");
+    assert_eq!((sync_id.as_str(), dirty), ("cloud-1", 0));
+    let sync_index: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'locomotives_sync_id'", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(sync_index, 1);
+    conn.execute("INSERT INTO locomotives (name, dcc_address, locomotive_type, command_station_id, created_at, updated_at) VALUES ('Other', 3, 'diesel', 2, 'now', 'now')", [])
+        .expect("the same address on another station");
 }

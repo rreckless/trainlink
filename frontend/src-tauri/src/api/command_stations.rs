@@ -97,6 +97,7 @@ fn create(app: &Arc<AppState>, call: &Call) -> Out {
             error.into()
         }
     })?;
+    command_stations::claim_pending(&inner.db, id, &name)?;
     Ok(Reply::json(201, json!(load(&inner.db, id)?)))
 }
 
@@ -127,6 +128,7 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     })?;
     if station.name != old_name {
         // Locomotives refer to their station by name, so each one is sent again with the new name
+        command_stations::claim_pending(&inner.db, id, &station.name)?;
         inner.db.execute(
             "UPDATE locomotives SET dirty = 1, updated_at = ?2 WHERE command_station_id = ?1",
             rusqlite::params![id, crate::db::now()],
