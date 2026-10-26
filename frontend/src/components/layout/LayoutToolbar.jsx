@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { Activity, Boxes, Gauge, MousePointer2, Pencil, Plus, Puzzle, Radio, Spline, Trash2, Upload } from 'lucide-react'
+import { Activity, Boxes, Gauge, MousePointer2, Pencil, Plus, Radio, Trash2, Upload } from 'lucide-react'
 import { askText } from '../../services/dialogs'
 import EditDialog, { DialogSection } from '../shell/EditDialog'
 
-// The tools that draw and move track, then the tools that mark what the layout is for
+// The tools for the track plan, then the tools that mark what the layout is for. Pieces are placed by dragging them
+// from the list, so there is no tool for that
 const DRAW_TOOLS = [
   { id: 'select', label: 'Select', icon: MousePointer2 },
-  { id: 'track', label: 'Draw track', icon: Spline },
-  { id: 'piece', label: 'Place piece', icon: Puzzle },
   { id: 'operate', label: 'Operate', icon: Gauge },
 ]
 const MARK_TOOLS = [
@@ -142,7 +141,7 @@ export default function LayoutToolbar({
 
       {layout && (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex flex-wrap gap-1 rounded-lg bg-slate-950 p-1" role="group" aria-label="Drawing tools">
+          <div className="inline-flex flex-wrap gap-1 rounded-lg bg-slate-950 p-1" role="group" aria-label="Tools">
             {DRAW_TOOLS.map((item) => (
               <ToolButton key={item.id} item={item} active={tool === item.id} disabled={busy} onChoose={onChooseTool} />
             ))}

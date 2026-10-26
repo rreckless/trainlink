@@ -43,11 +43,11 @@ export function useLayoutEditor() {
   const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
   const [importReport, setImportReport] = useState(null)
   const [tool, setTool] = useState('select')
-  const [pieceId, setPieceId] = useState(null)
+  // The piece being dragged from the list onto the layout, or null
+  const [pieceToPlace, setPieceToPlace] = useState(null)
   // When on, a piece is placed where it is dropped, without joining to open ends
   const [freePlace, setFreePlace] = useState(false)
   const [selectedKey, setSelectedKey] = useState(null)
-  const [pendingStart, setPendingStart] = useState(null)
   const [cursor, setCursor] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -78,17 +78,26 @@ export function useLayoutEditor() {
     ? pieces.find((piece) => `piece:${piece.id}` === selectedKey) || null
     : null
 
-  // Where a piece would go if clicked now. Null when there is nothing valid to show
+  // Where a piece would go if it were dropped at this point: joined to a nearby open end, or where it is dropped.
+  // An error when it cannot go there at all
+  const placementAt = useCallback(
+    (id, point) => {
+      const piece = libraryById[id]
+      if (!piece || !pieceShape(piece)) return { error: 'This piece is not placeable yet' }
+      if (trackSystem && piece.system !== trackSystem) return { error: `This layout uses ${trackSystem}. Pick a piece from that system` }
+      // Join to a nearby open end, unless placing without connecting
+      const joined = freePlace || pieces.length === 0 ? null : snapPlacement(piece, pieces, libraryById, point)
+      return { piece, placement: joined ?? { ...snapPoint(point), rotation: 0, flip: false } }
+    },
+    [pieces, libraryById, trackSystem, freePlace]
+  )
+
+  // The ghost is what the dragged piece would become if dropped under the pointer. Null when nothing valid is shown
   const ghost = useMemo(() => {
-    if (tool !== 'piece' || !cursor || !pieceId) return null
-    const piece = libraryById[pieceId]
-    if (!piece || !pieceShape(piece)) return null
-    if (trackSystem && piece.system !== trackSystem) return null
-    // Join to a nearby open end, unless placing without connecting. Anywhere else the piece goes where it is dropped
-    const joined = freePlace || pieces.length === 0 ? null : snapPlacement(piece, pieces, libraryById, cursor)
-    const placement = joined ?? { ...snapPoint(cursor), rotation: 0, flip: false }
-    return { piece, placement }
-  }, [tool, cursor, pieceId, pieces, libraryById, trackSystem, freePlace])
+    if (!pieceToPlace || !cursor) return null
+    const result = placementAt(pieceToPlace, cursor)
+    return result.error ? null : result
+  }, [pieceToPlace, cursor, placementAt])
 
   const refreshLayouts = useCallback(async () => {
     try {
@@ -229,11 +238,6 @@ export function useLayoutEditor() {
     }
   }, [layout, openLayout, refreshLayouts])
 
-  const addTrack = useCallback((start, end) => {
-    if (start.x === end.x && start.y === end.y) return
-    setTracks((prev) => [...prev, { id: newId('t'), x1: start.x, y1: start.y, x2: end.x, y2: end.y }])
-  }, [])
-
   const addItem = useCallback(
     (kind, point) => {
       if (!layout) return
@@ -267,29 +271,34 @@ export function useLayoutEditor() {
         setSelectedKey(null)
         return
       }
-      if (tool === 'piece') {
-        if (!pieceId) return setError('Choose a track piece from the list first')
-        if (!ghost) {
-          return setError(
-            trackSystem && libraryById[pieceId]?.system !== trackSystem
-              ? `This layout uses ${trackSystem}. Pick a piece from that system`
-              : 'Move the cursor next to an open track end to place this piece'
-          )
-        }
-        setError('')
-        setPieces((prev) => [...prev, { id: newId('p'), piece_id: ghost.piece.id, ...ghost.placement }])
-        return
-      }
-      const point = snapPoint(rawPoint)
-      if (tool === 'track') {
-        // Each track starts where the last one ended. Escape stops the chain
-        if (pendingStart) addTrack(pendingStart, point)
-        setPendingStart(point)
-        return
-      }
-      addItem(tool, point)
+      addItem(tool, snapPoint(rawPoint))
     },
-    [tool, pieceId, ghost, trackSystem, libraryById, pendingStart, addTrack, addItem]
+    [tool, addItem]
+  )
+
+  // A piece is dragged from the list. Dragging over the layout shows where it would go, and dropping places it
+  const startPieceDrag = useCallback((id) => {
+    setPieceToPlace(id)
+    setCursor(null)
+    setError('')
+  }, [])
+
+  const endPieceDrag = useCallback(() => {
+    setPieceToPlace(null)
+    setCursor(null)
+  }, [])
+
+  const dropPiece = useCallback(
+    (rawPoint) => {
+      if (!pieceToPlace) return
+      const result = placementAt(pieceToPlace, rawPoint)
+      setPieceToPlace(null)
+      setCursor(null)
+      if (result.error) return setError(result.error)
+      setError('')
+      setPieces((prev) => [...prev, { id: newId('p'), piece_id: result.piece.id, ...result.placement }])
+    },
+    [pieceToPlace, placementAt]
   )
 
   const moveItem = useCallback((key, rawPoint) => {
@@ -318,20 +327,12 @@ export function useLayoutEditor() {
     setSelectedKey(null)
   }, [selectedKey])
 
-  const cancelTrack = useCallback(() => setPendingStart(null), [])
-
   const chooseTool = useCallback((next) => {
     setTool(next)
-    setPendingStart(null)
+    setPieceToPlace(null)
     setCursor(null)
   }, [])
 
-  const choosePiece = useCallback((id) => {
-    setPieceId(id)
-    setTool('piece')
-    setPendingStart(null)
-    setError('')
-  }, [])
 
   // Import converts an AnyRail export into track pieces and a layout size. Save keeps them
   const importAnyRail = useCallback(
@@ -532,13 +533,12 @@ export function useLayoutEditor() {
     pieces,
     trackSystem,
     tool,
-    pieceId,
+    pieceToPlace,
     ghost,
     selectedKey,
     selectedItem,
     selectedTrack,
     selectedPlaced,
-    pendingStart,
     cursor,
     dirty,
     busy,
@@ -547,12 +547,13 @@ export function useLayoutEditor() {
     setSelectedKey,
     setCursor,
     chooseTool,
-    choosePiece,
     handleCanvasClick,
+    startPieceDrag,
+    endPieceDrag,
+    dropPiece,
     moveItem,
     renameSelected,
     deleteSelected,
-    cancelTrack,
     importReport,
     turnoutStates,
     throwPlaced,

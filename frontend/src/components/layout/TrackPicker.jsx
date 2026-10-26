@@ -20,7 +20,8 @@ function blockedReason(piece, trackSystem) {
   return null
 }
 
-export default function TrackPicker({ library, trackSystem, pieceId, onPick, freePlace, onToggleFree }) {
+// The pieces to place. A piece is dragged from here onto the layout, and dropped where it should go
+export default function TrackPicker({ library, trackSystem, dragging, onDragStart, onDragEnd, freePlace, onToggleFree }) {
   const [query, setQuery] = useState('')
 
   const groups = useMemo(() => {
@@ -45,7 +46,7 @@ export default function TrackPicker({ library, trackSystem, pieceId, onPick, fre
       <p className="text-xs text-slate-400">
         {library.length === 0
           ? 'Loading the track library...'
-          : `${library[0].manufacturer} ${library[0].gauge} gauge. Dimensions are unverified until you check them against the catalogue.`}
+          : `${library[0].manufacturer} ${library[0].gauge} gauge. Drag a piece onto the layout. Dimensions are unverified until you check them against the catalogue.`}
       </p>
 
       {onToggleFree && (
@@ -69,22 +70,30 @@ export default function TrackPicker({ library, trackSystem, pieceId, onPick, fre
             <div className="space-y-1">
               {pieces.map((piece) => {
                 const reason = blockedReason(piece, trackSystem)
-                const selected = piece.id === pieceId
+                const dragged = dragging === piece.id
                 return (
-                  <button
+                  <div
                     key={piece.id}
-                    onClick={() => onPick(piece.id)}
-                    disabled={Boolean(reason)}
-                    title={reason || undefined}
-                    className={`w-full text-left px-3 py-2 rounded disabled:opacity-40 ${
-                      selected ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-                    }`}
+                    role="button"
+                    tabIndex={reason ? -1 : 0}
+                    draggable={!reason}
+                    aria-disabled={Boolean(reason)}
+                    title={reason || 'Drag onto the layout'}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData('text/plain', piece.id)
+                      event.dataTransfer.effectAllowed = 'copy'
+                      onDragStart(piece.id)
+                    }}
+                    onDragEnd={onDragEnd}
+                    className={`w-full text-left px-3 py-2 rounded select-none ${
+                      reason ? 'opacity-40 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+                    } ${dragged ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}
                   >
                     <span className="font-semibold">{piece.part_number}</span>{' '}
                     <span>{piece.name}</span>
                     <span className="block text-xs text-slate-300">{describe(piece)}</span>
                     {reason && <span className="block text-xs text-amber-300">{reason}</span>}
-                  </button>
+                  </div>
                 )
               })}
             </div>
