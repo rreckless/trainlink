@@ -1,5 +1,6 @@
 //! Consist endpoints: the groups, and driving a whole group through the Z21. A drive command is sent to each member
-//! in turn, with the direction flipped for a member that runs reversed
+//! in turn, with the direction flipped for a member that runs reversed. The consist address is stored here; the
+//! decoders follow it once their CV19 is set, which the app does not do yet
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -7,7 +8,7 @@ use std::time::Instant;
 use serde_json::{json, Value};
 
 use super::Call;
-use crate::db::consists::{self, Consist, MemberInput};
+use crate::db::consists::{self, Consist, MemberInput, ADDRESS_MAX, ADDRESS_MIN};
 use crate::db::is_unique_violation;
 use crate::db::locomotives;
 use crate::fields::{self, Body};
@@ -16,6 +17,8 @@ use crate::state::{AppState, Inner};
 use crate::z21::commands;
 
 const NAME_MAX: usize = 40;
+/// A consist is a group, so it needs at least two locomotives
+const MEMBERS_MIN: usize = 2;
 
 fn lock(app: &Arc<AppState>) -> std::sync::MutexGuard<'_, Inner> {
     app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -57,6 +60,14 @@ fn check_name(name: &str) -> Result<String, ApiError> {
     Ok(trimmed.to_string())
 }
 
+/// The consist address must be a DCC short address
+fn check_address(address: i64) -> Result<i64, ApiError> {
+    if !(ADDRESS_MIN..=ADDRESS_MAX).contains(&address) {
+        return Err(ApiError::unprocessable(format!("Consist address must be {ADDRESS_MIN} to {ADDRESS_MAX}")));
+    }
+    Ok(address)
+}
+
 /// The members in order: each is { "locomotive_id": n, "reversed": bool }. The first is the lead
 fn parse_members(body: &Value) -> Result<Vec<MemberInput>, ApiError> {
     let items = body
@@ -77,8 +88,8 @@ fn parse_members(body: &Value) -> Result<Vec<MemberInput>, ApiError> {
 
 /// Members must exist, appear once, be unique to this consist, and not already be in another consist
 fn check_members(db: &rusqlite::Connection, consist_id: Option<i64>, members: &[MemberInput]) -> Result<(), ApiError> {
-    if members.is_empty() {
-        return Err(ApiError::unprocessable("A consist needs at least one locomotive"));
+    if members.len() < MEMBERS_MIN {
+        return Err(ApiError::unprocessable(format!("A consist needs at least {MEMBERS_MIN} locomotives")));
     }
     for (index, (id, _)) in members.iter().enumerate() {
         if members[..index].iter().any(|(earlier, _)| earlier == id) {
@@ -97,13 +108,27 @@ fn check_members(db: &rusqlite::Connection, consist_id: Option<i64>, members: &[
     Ok(())
 }
 
+/// Refuse an address another consist already uses
+fn check_address_free(db: &rusqlite::Connection, address: i64, consist_id: Option<i64>) -> Result<(), ApiError> {
+    if consists::address_taken(db, address, consist_id)? {
+        return Err(ApiError::conflict("Consist address is already used by another consist"));
+    }
+    Ok(())
+}
+
 fn create(app: &Arc<AppState>, call: &Call) -> Out {
     let body = call.json_body()?;
     let name = check_name(&fields::required_str(&body, "name")?)?;
     let members = parse_members(body.get("members").unwrap_or(&Value::Null))?;
     let mut inner = lock(app);
+    let address = match fields::optional_int(&body, "address")? {
+        Some(address) => check_address(address)?,
+        None => consists::free_address(&inner.db)?
+            .ok_or_else(|| ApiError::conflict("Every consist address is already in use"))?,
+    };
+    check_address_free(&inner.db, address, None)?;
     check_members(&inner.db, None, &members)?;
-    let id = consists::insert(&mut inner.db, &name, &members).map_err(|error| {
+    let id = consists::insert(&mut inner.db, &name, address, &members).map_err(|error| {
         if is_unique_violation(&error) {
             ApiError::conflict("Consist name already exists")
         } else {
@@ -119,16 +144,23 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
         Some(name) => Some(check_name(&name)?),
         None => None,
     };
+    let address = match fields::optional_int(&body, "address")? {
+        Some(address) => Some(check_address(address)?),
+        None => None,
+    };
     let members = match body.get("members") {
         Some(value) => Some(parse_members(value)?),
         None => None,
     };
     let mut inner = lock(app);
     load(&inner.db, id)?;
+    if let Some(address) = address {
+        check_address_free(&inner.db, address, Some(id))?;
+    }
     if let Some(members) = &members {
         check_members(&inner.db, Some(id), members)?;
     }
-    let updated = consists::update(&mut inner.db, id, name.as_deref(), members.as_deref()).map_err(|error| {
+    let updated = consists::update(&mut inner.db, id, name.as_deref(), address, members.as_deref()).map_err(|error| {
         if is_unique_violation(&error) {
             ApiError::conflict("Consist name already exists")
         } else {

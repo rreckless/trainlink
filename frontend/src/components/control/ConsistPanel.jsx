@@ -11,6 +11,8 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
   // What was last sent to each consist this session: { id: { speed, direction } }
   const [commanded, setCommanded] = useState({})
   const [name, setName] = useState('')
+  // The DCC consist address the new consist is given. The server refuses one another consist already uses
+  const [address, setAddress] = useState(1)
   // Members of the consist being made that run reversed, by locomotive id
   const [reversed, setReversed] = useState(new Set())
   const [functionIndex, setFunctionIndex] = useState(0)
@@ -52,13 +54,17 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
 
   const createConsist = () => {
     const members = selectedLocomotives.map((loc) => ({ locomotive_id: loc.id, reversed: reversed.has(loc.id) }))
-    return run(() => consistApi.create({ name, members }), (created) => `Created ${created.name}`).then((created) => {
+    return run(() => consistApi.create({ name, address, members }), (created) => `Created ${created.name}`).then((created) => {
       if (created) {
         setName('')
+        setAddress(1)
         setReversed(new Set())
       }
     })
   }
+
+  const changeAddress = (consist, value) =>
+    run(() => consistApi.update(consist.id, { address: value }), () => `${consist.name} is now address ${value}`)
 
   const toggleMemberReversed = (consist, memberId) => {
     const members = consist.members.map((member) => ({
@@ -91,11 +97,15 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
   return (
     <div className="bg-slate-800 rounded-lg p-4 space-y-4">
       <h3 className="text-lg font-semibold">Consists</h3>
+      <p className="text-xs text-slate-400">
+        A consist needs at least two locomotives. TrainLink drives each one in turn, so the decoders do not follow the
+        consist address yet. Their CV19 (multiple-unit address) is not set by TrainLink.
+      </p>
 
       <div className="space-y-2 bg-slate-700 rounded p-3">
         <p className="text-sm text-slate-300">New consist from the locomotives ticked in the roster</p>
-        {selectedLocomotives.length === 0 ? (
-          <p className="text-xs text-slate-400">Tick two or more locomotives in the roster first</p>
+        {selectedLocomotives.length < 2 ? (
+          <p className="text-xs text-slate-400">Tick at least two locomotives in the roster first</p>
         ) : (
           <ul className="space-y-1">
             {selectedLocomotives.map((loc, index) => (
@@ -121,9 +131,19 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
             disabled={busy}
             className="flex-1 px-3 py-1 bg-slate-800 rounded border border-slate-600 text-white"
           />
+          <input
+            type="number"
+            min="1"
+            max="127"
+            value={address}
+            onChange={(event) => setAddress(Number(event.target.value))}
+            disabled={busy}
+            aria-label="Consist address"
+            className="w-20 px-2 py-1 bg-slate-800 rounded border border-slate-600 text-white"
+          />
           <button
             onClick={createConsist}
-            disabled={busy || name.trim() === '' || selectedLocomotives.length === 0}
+            disabled={busy || name.trim() === '' || selectedLocomotives.length < 2}
             className="px-3 py-1 bg-green-600 rounded font-semibold hover:bg-green-700 disabled:opacity-50"
           >
             Create
@@ -153,6 +173,23 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
               <div key={consist.id} className="bg-slate-700 rounded p-3 space-y-3">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold flex-1">{consist.name}</p>
+                  <label className="flex items-center gap-1 text-xs text-slate-300">
+                    Address
+                    <input
+                      key={consist.address}
+                      type="number"
+                      min="1"
+                      max="127"
+                      defaultValue={consist.address}
+                      onBlur={(event) => {
+                        const value = Number(event.target.value)
+                        if (value !== consist.address) changeAddress(consist, value)
+                      }}
+                      disabled={busy}
+                      aria-label={`Consist address for ${consist.name}`}
+                      className="w-16 px-2 py-1 bg-slate-800 rounded border border-slate-600 text-white"
+                    />
+                  </label>
                   <button
                     onClick={() => removeConsist(consist)}
                     disabled={busy}

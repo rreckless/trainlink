@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS locomotives (
 CREATE TABLE IF NOT EXISTS consists (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
+    address INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -154,6 +155,7 @@ pub fn open_in_memory() -> rusqlite::Result<Connection> {
 fn setup(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
     connection.execute_batch(SCHEMA)?;
+    consists::migrate(connection)?;
     sync::migrate(connection)
 }
 
