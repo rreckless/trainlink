@@ -5,6 +5,7 @@ export const overviewApi = {
   turnouts: () => request('GET', '/api/overview/turnouts'),
   health: () => request('GET', '/api/overview/health'),
   setup: () => request('GET', '/api/overview/setup'),
+  feedbackMonitor: () => request('GET', '/api/z21/feedback/monitor'),
   // A turnout's switching time, manual flag, position feedback, group and notes. Only the fields sent are changed
   updateTurnout: (layoutId, placedId, body) => request('PATCH', `/api/layouts/${layoutId}/turnouts/${placedId}`, body),
 }

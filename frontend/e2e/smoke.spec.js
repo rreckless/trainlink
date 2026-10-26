@@ -354,3 +354,13 @@ test('a block borders its neighbours both ways, and keeps brake and stop points 
   const other = await (await page.request.get(`/api/blocks/${second.id}`)).json()
   expect(other.border_block_ids).toEqual([first.id])
 })
+
+test('the feedback monitor shows all 128 addresses, with unlinked ones marked', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Feedback monitor', exact: true }).first().click()
+  await expect(page.getByText(/128 addresses/)).toBeVisible()
+  await expect(page.getByText('Module 16')).toBeVisible()
+  await expect(page.getByTitle('Feedback 128, not linked')).toBeVisible()
+  await page.getByRole('button', { name: 'Read now' }).click()
+  await expect(page.getByText(/128 addresses/)).toBeVisible()
+})

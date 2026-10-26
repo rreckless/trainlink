@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::fake_z21::fake_z21;
-use super::{app, detail, send};
+use super::{app, detail, layout, send};
 use crate::state::AppState;
 use crate::z21::commands::{self, status_request};
 use crate::z21::{self, frames::build_frame};
@@ -316,4 +316,47 @@ fn a_locomotive_limits_its_speed_and_is_driven_the_other_way_when_reversed() {
     assert_eq!(value["direction"], "forward");
     let sent = commands::loco_drive(3, 40, false).unwrap();
     assert!(fake.wait_for(&sent), "capped and reversed drive");
+}
+
+/// An R-BUS status frame for one group of 8 modules, as the Z21 sends it when a feedback input changes
+fn rbus_frame(group: u8, status: [u8; 10]) -> Vec<u8> {
+    let mut frame = vec![0x0F, 0x00, 0x80, 0x00, group];
+    frame.extend_from_slice(&status);
+    frame
+}
+
+#[test]
+fn the_feedback_monitor_shows_128_addresses_and_the_latest_reports() {
+    let fake = fake_z21();
+    let app = app();
+    assert!(z21::connect(&app, "127.0.0.1", fake.port));
+    fake.say(&central_state(0x00));
+    assert!(wait_until(|| track_state(&app) == "ready"));
+
+    let layout_id = layout(&app, "Main");
+    send(&app, "POST", "/api/feedbacks", Some(json!({ "layout_id": layout_id, "name": "Platform sensor", "x": 1, "y": 1, "feedback_number": 1 })));
+    let (status, value) = send(&app, "GET", "/api/z21/feedback/monitor", None);
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["counts"]["addresses"], 128);
+    assert_eq!(value["counts"]["known"], 0, "nothing reported yet");
+    assert_eq!(value["counts"]["not_linked"], 127, "only number 1 is linked");
+    assert_eq!(value["inputs"][0]["feedback"]["name"], "Platform sensor");
+    assert!(value["inputs"][1]["feedback"].is_null());
+
+    // Module 1, input 1 goes occupied, then clear again
+    fake.say(&rbus_frame(0, [0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+    assert!(wait_until(|| send(&app, "GET", "/api/z21/feedback/monitor", None).1["counts"]["occupied"] == 1));
+    fake.say(&rbus_frame(0, [0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+    assert!(wait_until(|| send(&app, "GET", "/api/z21/feedback/monitor", None).1["counts"]["free"] == 80));
+
+    let (_, value) = send(&app, "GET", "/api/z21/feedback/monitor", None);
+    assert_eq!(value["inputs"][0]["state"], "free");
+    assert_eq!(value["inputs"][1]["state"], "free", "the status frame covers the other inputs of group 0");
+    assert_eq!(value["inputs"][80]["state"], "unknown", "module 11 is not in group 0");
+    let reports = value["reports"].as_array().unwrap();
+    assert_eq!(reports.len(), 2, "one report for the first occupied, and one for the change back to free");
+    assert_eq!(reports[0]["occupied"], false, "newest first");
+    assert_eq!(reports[0]["number"], 1);
+    assert_eq!(reports[1]["occupied"], true);
+    assert_eq!(reports[1]["feedback"]["name"], "Platform sensor");
 }

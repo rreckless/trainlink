@@ -6,7 +6,7 @@ pub mod features;
 pub mod frames;
 pub mod replies;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::net::{IpAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -56,6 +56,18 @@ const LOST_AFTER: Duration = Duration::from_secs(30);
 /// How often the watchdog checks the link
 pub const WATCH_EVERY: Duration = Duration::from_secs(1);
 
+/// How many feedback reports are kept while the app runs
+const REPORTS_KEPT: usize = 200;
+
+/// A feedback input that changed state, as the Z21 reported it
+#[derive(Debug, Clone)]
+pub struct FeedbackReport {
+    pub module: i64,
+    pub input: i64,
+    pub occupied: bool,
+    pub at: String,
+}
+
 pub struct Z21 {
     pub host: String,
     pub port: u16,
@@ -63,6 +75,8 @@ pub struct Z21 {
     pub central_state: Option<CentralState>,
     /// (module, input) -> occupied
     pub feedback: BTreeMap<(i64, i64), bool>,
+    /// Input changes, oldest first, kept in memory only while the app runs
+    pub reports: VecDeque<FeedbackReport>,
     /// turnout number -> output as last reported (None when the Z21 gave no output)
     pub turnouts: BTreeMap<i64, Option<u8>>,
     pub locos: BTreeMap<i64, LocoState>,
@@ -87,6 +101,7 @@ impl Z21 {
             connected: false,
             central_state: None,
             feedback: BTreeMap::new(),
+            reports: VecDeque::new(),
             turnouts: BTreeMap::new(),
             locos: BTreeMap::new(),
             version: None,
@@ -146,6 +161,24 @@ impl Z21 {
             "firmware": self.hardware.map(|hardware| hardware.firmware_text()),
             "features": self.hardware.map(|hardware| hardware.features().names()).unwrap_or_default(),
         })
+    }
+
+    /// Store what the Z21 reported for each input. A report is kept when an input changes, or when an input is first
+    /// seen occupied. The starting state of the other inputs is not reported, since a status frame covers 80 of them
+    pub fn record_feedback(&mut self, states: Vec<((i64, i64), bool)>) {
+        for ((module, input), occupied) in states {
+            let report = match self.feedback.get(&(module, input)) {
+                Some(&before) => before != occupied,
+                None => occupied,
+            };
+            if report {
+                self.reports.push_back(FeedbackReport { module, input, occupied, at: db::now() });
+                if self.reports.len() > REPORTS_KEPT {
+                    self.reports.pop_front();
+                }
+            }
+            self.feedback.insert((module, input), occupied);
+        }
     }
 
     /// Close the socket and forget what the Z21 reported
@@ -305,7 +338,7 @@ pub fn apply(inner: &mut Inner, frame: &[u8], now: Instant) {
         z21.programming.finish_with_value(cv, frame[8]);
     } else if header == LAN_RMBUS_DATACHANGED && frame.len() >= 15 {
         if let Some(states) = replies::rbus_feedback(frame[4], &frame[5..15]) {
-            z21.feedback.extend(states);
+            z21.record_feedback(states);
         }
     }
 }
