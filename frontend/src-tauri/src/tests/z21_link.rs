@@ -9,7 +9,7 @@ use serde_json::json;
 
 use super::{app, detail, send};
 use crate::state::AppState;
-use crate::z21::commands::status_request;
+use crate::z21::commands::{self, status_request};
 use crate::z21::{self, frames::build_frame};
 
 /// Frames the fake Z21 received, and a way to reply to the app
@@ -113,6 +113,7 @@ fn connecting_asks_for_status_and_subscribes_to_broadcasts() {
     assert!(fake.wait_for(&[0x08, 0x00, 0x50, 0x00, 0x03, 0x01, 0x00, 0x00]), "broadcast flags");
     assert!(fake.wait_for(&[0x05, 0x00, 0x81, 0x00, 0x00]), "feedback group 0");
     assert!(fake.wait_for(&[0x05, 0x00, 0x81, 0x00, 0x01]), "feedback group 1");
+    assert!(fake.wait_for(&[0x07, 0x00, 0x40, 0x00, 0x21, 0x21, 0x00]), "X-Bus version");
     assert_eq!(track_state(&app), "unknown");
     fake.say(&central_state(0x00));
     assert!(wait_until(|| track_state(&app) == "ready"));
@@ -278,4 +279,37 @@ fn nothing_is_reconnected_after_a_disconnect() {
     let app = app();
     app.inner.lock().unwrap().z21.last_reply = Instant::now() - Duration::from_secs(60);
     assert!(!z21::link_check(&app, Instant::now()));
+}
+
+#[test]
+fn track_power_off_and_the_version_request_are_the_frames_the_spec_gives() {
+    // Spec 2.3 and 2.5: X-Header 0x21 with DB0 0x80 for power off, and 0x21 0x21 for the version, each with its XOR
+    assert_eq!(commands::track_power_off(), vec![0x07, 0x00, 0x40, 0x00, 0x21, 0x80, 0xA1]);
+    assert_eq!(commands::version_request(), vec![0x07, 0x00, 0x40, 0x00, 0x21, 0x21, 0x00]);
+}
+
+#[test]
+fn the_version_the_z21_reports_is_kept_and_shown_in_the_status() {
+    let app = app();
+    assert!(send(&app, "GET", "/api/z21/status", None).1["xbus_version"].is_null());
+    {
+        let mut inner = app.inner.lock().unwrap();
+        // Reply: X-Bus version 4.0, command station ID 0x12, the Z21 family
+        z21::apply(&mut inner, &xbus_frame(0x0040, &[0x63, 0x21, 0x40, 0x12]), Instant::now());
+    }
+    let (_, value) = send(&app, "GET", "/api/z21/status", None);
+    assert_eq!(value["xbus_version"], "4.0");
+    assert_eq!(value["station_id"], 0x12);
+}
+
+#[test]
+fn track_power_can_be_cut_on_a_connected_z21() {
+    let fake = fake_z21();
+    let app = app();
+    assert_eq!(send(&app, "POST", "/api/z21/track-power/off", None).0, 503, "not connected yet");
+    assert!(z21::connect(&app, "127.0.0.1", fake.port));
+    let (status, value) = send(&app, "POST", "/api/z21/track-power/off", None);
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["status"], "track_power_off_sent");
+    assert!(fake.wait_for(&[0x07, 0x00, 0x40, 0x00, 0x21, 0x80, 0xA1]), "track power off reaches the Z21");
 }

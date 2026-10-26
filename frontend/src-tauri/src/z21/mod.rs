@@ -19,7 +19,7 @@ use commands::{
     XBUS_CV_NACK_SC_OR_NACK, XBUS_CV_RESULT,
     broadcast_flags, rbus_getdata, status_request, LAN_RMBUS_DATACHANGED, LAN_SYSTEMSTATE_DATACHANGED,
     RBUS_GROUPS, SYSTEMSTATE_CENTRAL_STATE_OFFSET, XBUS_STATUS_CHANGED, XBUS_STATUS_DB0, XBUS_LOCO_INFO_REPLY,
-    XBUS_TURNOUT_INFO,
+    XBUS_TURNOUT_INFO, XBUS_VERSION_REPLY, version_request,
 };
 use frames::LAN_X_HEADER;
 use replies::{CentralState, LocoState};
@@ -63,6 +63,8 @@ pub struct Z21 {
     /// turnout number -> output as last reported (None when the Z21 gave no output)
     pub turnouts: BTreeMap<i64, Option<u8>>,
     pub locos: BTreeMap<i64, LocoState>,
+    /// The X-Bus version and command station ID the Z21 reported, from the version request sent on connecting
+    pub version: Option<XbusVersion>,
     pub last_heartbeat: String,
     /// When the last frame from the Z21 arrived, or when the socket was opened
     pub last_reply: Instant,
@@ -82,6 +84,7 @@ impl Z21 {
             feedback: BTreeMap::new(),
             turnouts: BTreeMap::new(),
             locos: BTreeMap::new(),
+            version: None,
             last_heartbeat: db::now(),
             last_reply: Instant::now(),
             socket: None,
@@ -131,6 +134,8 @@ impl Z21 {
             "host": self.host,
             "port": self.port,
             "last_heartbeat": self.last_heartbeat,
+            "xbus_version": self.version.map(|version| format!("{}.{}", version.xbus >> 4, version.xbus & 0x0f)),
+            "station_id": self.version.map(|version| version.station_id),
         })
     }
 
@@ -145,7 +150,15 @@ impl Z21 {
         self.feedback.clear();
         self.turnouts.clear();
         self.locos.clear();
+        self.version = None;
     }
+}
+
+/// What the Z21 reported about itself: the X-Bus version (0x40 is 4.0) and the command station ID (0x12 is the Z21 family)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct XbusVersion {
+    pub xbus: u8,
+    pub station_id: u8,
 }
 
 /// Open the socket to the Z21 and start the reader. UDP has no handshake, so this confirms nothing itself;
@@ -184,6 +197,7 @@ pub fn connect_with_keep_alive(app: &Arc<AppState>, host: &str, port: u16, keep_
     // Ask for status, then subscribe to broadcasts, which are per client and so set after every connect
     let inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     inner.z21.send(&status_request());
+    inner.z21.send(&version_request());
     inner.z21.send(&broadcast_flags());
     for group in RBUS_GROUPS {
         inner.z21.send(&rbus_getdata(group));
@@ -248,6 +262,8 @@ pub fn apply(inner: &mut Inner, frame: &[u8], now: Instant) {
 
     if header == LAN_X_HEADER && frame.len() >= 7 && frame[4] == XBUS_STATUS_CHANGED && frame[5] == XBUS_STATUS_DB0 {
         set_central_state(z21, frame[6]);
+    } else if header == LAN_X_HEADER && frame.len() >= 9 && frame[4] == XBUS_VERSION_REPLY && frame[5] == 0x21 {
+        z21.version = Some(XbusVersion { xbus: frame[6], station_id: frame[7] });
     } else if header == LAN_X_HEADER && frame.len() >= 13 && frame[4] == XBUS_LOCO_INFO_REPLY {
         if let Some((address, state)) = replies::loco_info(&frame[4..frame.len() - 1]) {
             moving.observe(db, address, state.speed, now);

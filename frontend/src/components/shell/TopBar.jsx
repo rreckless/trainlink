@@ -86,6 +86,15 @@ function PowerControls() {
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm">
         <span className={`w-2 h-2 rounded-full ${track.dot}`} aria-hidden="true" />
         <span className="text-slate-200">{track.text}</span>
+        {z21.state === 'ready' && (
+          <button
+            onClick={() => run(() => locomotiveApi.trackPowerOff(), 'Track power off')}
+            disabled={busy}
+            className="ml-1 px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs disabled:opacity-50"
+          >
+            Power off
+          </button>
+        )}
         {z21.state === 'track_power_off' && (
           <button
             onClick={() => run(() => locomotiveApi.resumeTrackPower(), 'Track power resumed')}

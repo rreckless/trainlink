@@ -35,6 +35,7 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         ("POST", ["loco", "function"]) => set_function(app, call),
         ("GET", ["locos"]) => locos(app, call),
         ("POST", ["track-power", "on"]) => track_power_on(app),
+        ("POST", ["track-power", "off"]) => track_power_off(app),
         ("POST", ["loco", "speed"]) => set_speed(app, call),
         ("POST", ["loco", "info"]) => loco_info(app, call),
         ("POST", ["emergency-stop"]) => emergency_stop(app, call),
@@ -207,6 +208,18 @@ fn track_power_on(app: &Arc<AppState>) -> Out {
     }
     inner.z21.send(&commands::track_power_on());
     Ok(Reply::json(200, json!({ "status": "track_power_on_sent" })))
+}
+
+/// Cut the track power. Allowed in any state, so it is never refused for a fault: it is the way to make the track safe
+fn track_power_off(app: &Arc<AppState>) -> Out {
+    let inner = lock(app);
+    if !inner.z21.connected {
+        return Err(ApiError::new(503, "Z21 not connected"));
+    }
+    if !inner.z21.send(&commands::track_power_off()) {
+        return Err(ApiError::internal("Could not send the track power command to the Z21"));
+    }
+    Ok(Reply::json(200, json!({ "status": "track_power_off_sent" })))
 }
 
 fn set_speed(app: &Arc<AppState>, call: &Call) -> Out {

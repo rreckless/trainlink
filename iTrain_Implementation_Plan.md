@@ -227,9 +227,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Error handling and recovery: the app sends a status request every 10 seconds, because the spec drops a client that is silent for a minute. A link with no frame for 30 seconds is lost: commands are refused, and a watchdog reconnects to the same Z21 once a second while it is lost. A socket error no longer stops the reader. **Open:** check on hardware. The app cannot stop trains while the link is down, so a drop during a run leaves them running until it reconnects
 
 2. **Z21 Feature Support** ⬜
-   - 🟡 Query Z21 system state (version not queried)
+   - 🧪 Query Z21 system state: the X-Bus version and command station ID are asked for on connecting, and shown on the settings page. Not yet checked on hardware
    - 🧪 Query locomotive info (speed, direction, functions). Replies are parsed. Not yet verified on hardware
-   - 🟡 Track power on, with resume after a short circuit. Track power off not built
+   - 🧪 Track power on, with resume after a short circuit. Track power off from the top bar, and refused only when not connected. **Open:** check on hardware
    - ⬜ Feature detection
 
 3. **Locomotive Decoder Management** 🟡
