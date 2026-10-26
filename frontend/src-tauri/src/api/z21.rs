@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
-use crate::drivers::Driver;
+use crate::drivers::{Driver, DriverError};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
 use crate::z21::{self, commands, frames::MAX_ADDRESS, Z21};
@@ -60,7 +60,8 @@ fn connect(app: &Arc<AppState>, call: &Call) -> Out {
 
 fn status(app: &Arc<AppState>) -> Out {
     let inner = lock(app);
-    inner.z21.send(&commands::status_request());
+    // The answer comes back as an update, so a failure to ask is not an error for the status
+    let _ = inner.z21.request_status();
     Ok(Reply::json(200, inner.z21.status_json()))
 }
 
@@ -74,6 +75,15 @@ fn feedback(app: &Arc<AppState>) -> Out {
         .map(|input| json!({ "module": input.module, "input": input.input, "occupied": input.occupied }))
         .collect();
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
+}
+
+/// The answer for a command the driver did not send. `failure` says what went wrong when the command could not be sent
+pub(super) fn driver_error(error: DriverError, failure: &str) -> ApiError {
+    match error {
+        DriverError::Invalid(message) => ApiError::bad_request(message),
+        DriverError::NotConnected => ApiError::new(503, "Z21 not connected"),
+        DriverError::Failed => ApiError::internal(failure),
+    }
 }
 
 pub(super) fn ready_check(inner: &Inner, what: &str) -> Result<(), ApiError> {
@@ -93,8 +103,8 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
     if !(0..=1).contains(&output) {
         return Err(ApiError::unprocessable("output must be 0 or 1"));
     }
-    let activate = {
-        let inner = lock(app);
+    {
+        let mut inner = lock(app);
         if !inner.z21.connected {
             return Err(ApiError::new(503, "Z21 not connected"));
         }
@@ -105,12 +115,10 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
         if !(MIN_TURNOUT..=MAX_TURNOUT).contains(&turnout) {
             return Err(ApiError::bad_request(format!("Turnout must be {MIN_TURNOUT}-{MAX_TURNOUT}")));
         }
-        commands::turnout_set(turnout, output as u8, true).map_err(ApiError::bad_request)?
-    };
-    lock(app).z21.send(&activate);
+        Driver::throw_turnout(&mut inner.z21, turnout, output as u8, true).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
+    }
     std::thread::sleep(THROW);
-    let deactivate = commands::turnout_set(turnout, output as u8, false).map_err(ApiError::bad_request)?;
-    lock(app).z21.send(&deactivate);
+    Driver::throw_turnout(&mut lock(app).z21, turnout, output as u8, false).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
     Ok(Reply::json(200, json!({ "status": "throw_sent", "turnout": turnout, "output": output })))
 }
 
@@ -122,12 +130,10 @@ fn turnouts(app: &Arc<AppState>, call: &Call) -> Out {
     }
     let asked = {
         let inner = lock(app);
-        let connected = inner.z21.connected;
+        let connected = inner.z21.connected();
         if connected {
             for turnout in &numbers {
-                if let Ok(frame) = commands::turnout_info_request(*turnout) {
-                    inner.z21.send(&frame);
-                }
+                let _ = inner.z21.request_turnout_info(*turnout);
             }
         }
         connected
@@ -159,10 +165,9 @@ fn set_function(app: &Arc<AppState>, call: &Call) -> Out {
     if !(0..=commands::MAX_FUNCTION as i64).contains(&index) {
         return Err(ApiError::unprocessable(format!("function must be 0 to {}", commands::MAX_FUNCTION)));
     }
-    let inner = lock(app);
+    let mut inner = lock(app);
     ready_check(&inner, "Locomotive")?;
-    let frame = commands::set_function(address, index as u8, on).map_err(ApiError::bad_request)?;
-    inner.z21.send(&frame);
+    Driver::set_function(&mut inner.z21, address, index as u8, on).map_err(|error| driver_error(error, "Failed to set the function"))?;
     Ok(Reply::json(200, json!({ "status": "function_set", "address": address, "function": index, "on": on })))
 }
 
@@ -175,9 +180,7 @@ fn locos(app: &Arc<AppState>, call: &Call) -> Out {
     let mut inner = lock(app);
     if inner.z21.connected {
         for address in &addresses {
-            if let Ok(frame) = commands::loco_info_request(*address) {
-                inner.z21.send(&frame);
-            }
+            let _ = inner.z21.request_loco_info(*address);
         }
     }
     let inner = &mut *inner;
@@ -196,26 +199,24 @@ fn locos(app: &Arc<AppState>, call: &Call) -> Out {
 }
 
 fn track_power_on(app: &Arc<AppState>) -> Out {
-    let inner = lock(app);
+    let mut inner = lock(app);
     if !inner.z21.connected {
         return Err(ApiError::new(503, "Z21 not connected"));
     }
     if inner.z21.track_state() == "short_circuit" {
         return Err(ApiError::conflict("Short circuit still reported. Fix the short, then resume track power"));
     }
-    inner.z21.send(&commands::track_power_on());
+    Driver::track_power(&mut inner.z21, true).map_err(|error| driver_error(error, "Could not send the track power command to the Z21"))?;
     Ok(Reply::json(200, json!({ "status": "track_power_on_sent" })))
 }
 
 /// Cut the track power. Allowed in any state, so it is never refused for a fault: it is the way to make the track safe
 fn track_power_off(app: &Arc<AppState>) -> Out {
-    let inner = lock(app);
+    let mut inner = lock(app);
     if !inner.z21.connected {
         return Err(ApiError::new(503, "Z21 not connected"));
     }
-    if !inner.z21.send(&commands::track_power_off()) {
-        return Err(ApiError::internal("Could not send the track power command to the Z21"));
-    }
+    Driver::track_power(&mut inner.z21, false).map_err(|error| driver_error(error, "Could not send the track power command to the Z21"))?;
     Ok(Reply::json(200, json!({ "status": "track_power_off_sent" })))
 }
 
@@ -232,10 +233,7 @@ fn set_speed(app: &Arc<AppState>, call: &Call) -> Out {
     if !(1..=MAX_ADDRESS).contains(&address) {
         return Err(ApiError::bad_request("Address must be 1-9999"));
     }
-    let frame = commands::loco_drive(address, speed, forward).map_err(ApiError::bad_request)?;
-    if !inner.z21.send(&frame) {
-        return Err(ApiError::internal("Failed to set locomotive speed"));
-    }
+    Driver::drive(&mut inner.z21, address, speed, forward).map_err(|error| driver_error(error, "Failed to set locomotive speed"))?;
     let inner = &mut *inner;
     let Inner { db, moving, .. } = inner;
     moving.observe(db, address, Some(speed), std::time::Instant::now());
@@ -255,10 +253,7 @@ fn loco_info(app: &Arc<AppState>, call: &Call) -> Out {
     if !(1..=MAX_ADDRESS).contains(&address) {
         return Err(ApiError::bad_request("Address must be 1-9999"));
     }
-    let frame = commands::loco_info_request(address).map_err(ApiError::bad_request)?;
-    if !inner.z21.send(&frame) {
-        return Err(ApiError::internal("Failed to get locomotive info"));
-    }
+    inner.z21.request_loco_info(address).map_err(|error| driver_error(error, "Failed to get locomotive info"))?;
     Ok(Reply::json(200, json!({ "address": address, "status": "requested" })))
 }
 
@@ -268,12 +263,7 @@ fn emergency_stop(app: &Arc<AppState>, call: &Call) -> Out {
     if !confirm {
         return Err(ApiError::bad_request("Emergency stop not confirmed"));
     }
-    let inner = lock(app);
-    if !inner.z21.connected {
-        return Err(ApiError::new(503, "Z21 not connected"));
-    }
-    if !inner.z21.send(&commands::emergency_stop()) {
-        return Err(ApiError::internal("Failed to send emergency stop"));
-    }
+    let mut inner = lock(app);
+    Driver::emergency_stop(&mut inner.z21).map_err(|error| driver_error(error, "Failed to send emergency stop"))?;
     Ok(Reply::json(200, json!({ "status": "emergency_stop_sent", "message": "All locomotives stopped" })))
 }

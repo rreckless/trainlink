@@ -120,18 +120,6 @@ impl Z21 {
         }
     }
 
-    /// Send a frame, or say why it could not be sent
-    pub fn send_or_error(&self, frame: &[u8]) -> Result<(), String> {
-        if !self.connected {
-            return Err("Z21 not connected".into());
-        }
-        if self.send(frame) {
-            Ok(())
-        } else {
-            Err("Could not send the command to the Z21".into())
-        }
-    }
-
     /// Send a frame. Returns false if there is no socket
     pub fn send(&self, frame: &[u8]) -> bool {
         match &self.socket {

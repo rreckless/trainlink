@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 
-use super::fake_z21::{fake_z21, FakeZ21};
+use super::fake_z21::fake_z21;
 use super::{app, detail, send};
 use crate::state::AppState;
 use crate::z21::commands::{self, status_request};

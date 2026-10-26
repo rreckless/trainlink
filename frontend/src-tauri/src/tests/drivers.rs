@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::{app, send};
-use crate::drivers::{self, Driver};
+use crate::drivers::{self, Driver, DriverError};
 use crate::z21::{self, commands, features::HardwareInfo, Z21};
 
 #[test]
@@ -34,9 +34,9 @@ fn a_driver_refuses_commands_while_the_station_is_not_connected() {
     let app = app();
     let mut inner = app.inner.lock().unwrap();
     assert!(!inner.z21.connected());
-    assert_eq!(Driver::drive(&mut inner.z21, 3, 50, true).unwrap_err(), "Z21 not connected");
-    assert_eq!(Driver::emergency_stop(&mut inner.z21).unwrap_err(), "Z21 not connected");
-    assert_eq!(Driver::track_power(&mut inner.z21, false).unwrap_err(), "Z21 not connected");
+    assert_eq!(Driver::drive(&mut inner.z21, 3, 50, true).unwrap_err(), DriverError::NotConnected);
+    assert_eq!(Driver::emergency_stop(&mut inner.z21).unwrap_err(), DriverError::NotConnected);
+    assert_eq!(Driver::track_power(&mut inner.z21, false).unwrap_err(), DriverError::NotConnected);
 }
 
 #[test]
