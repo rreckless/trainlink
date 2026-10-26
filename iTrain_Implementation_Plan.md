@@ -79,8 +79,8 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 2. **Backend Foundation** 🟡
    - ✅ Rust core with the API, and a health check
    - ⬜ WebSocket endpoint (removed; nothing used it)
-   - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation. REST routes exist for Locomotive, Block, Signal, and Route only
-   - 🟡 REST API: Z21, locomotives, blocks, signals, routes, feedbacks, layouts, track library. Command stations still need routes
+   - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation. REST routes exist for all except CommandStation
+   - 🟡 REST API: Z21, locomotives, blocks, signals, routes, feedbacks, layouts, track library, consists, and project overviews. Command stations still need routes
    - ⬜ State management (not needed: the core holds state in memory and SQLite)
 
 3. **Frontend Foundation** 🟡
@@ -90,8 +90,8 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Settings UI (Z21 host and port), shared with the Control page
 
 4. **Testing Infrastructure** 🟡
-   - ✅ Core tests (`src-tauri/`, 52 passing with `cargo test`)
-   - ✅ Frontend unit tests (`npm test`, 42 passing)
+   - ✅ Core tests (`src-tauri/`, 106 passing with `cargo test`, 2 ignored)
+   - ✅ Frontend unit tests (`npm test`, 60 passing)
    - 🟡 Integration tests (driver tests run against the mock; browser tests run from a scratch Playwright script, not yet in the repo)
    - ✅ Fake Z21 on localhost for testing (`src-tauri/src/tests/z21_link.rs`)
    - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13. Real hardware test still pending
@@ -215,7 +215,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 1. **Serial/UDP Communication** 🟡
    - ✅ UDP transport with async I/O
    - ✅ Connection status and heartbeat
-   - 🟡 Incoming parsing: status, system state, R-BUS feedback, turnout info. Locomotive info replies not parsed
+   - 🟡 Incoming parsing: status, system state, R-BUS feedback, turnout info, and locomotive info. Tested against the fake Z21; hardware not yet checked
    - ⬜ Error handling and recovery
 
 2. **Z21 Feature Support** ⬜
