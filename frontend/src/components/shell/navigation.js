@@ -35,6 +35,7 @@ export const PAGES = NAV_GROUPS.flatMap((group) => group.items)
 // What the Z21's track state means to the user: a label, and the colour of its dot
 const TRACK_STATES = {
   disconnected: { text: 'Z21 not connected', dot: 'bg-slate-500' },
+  lost: { text: 'Z21 not responding', dot: 'bg-red-500' },
   unknown: { text: 'Checking track power', dot: 'bg-amber-500' },
   short_circuit: { text: 'Short circuit', dot: 'bg-red-500' },
   track_power_off: { text: 'Track power off', dot: 'bg-amber-500' },

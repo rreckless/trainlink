@@ -44,6 +44,14 @@ pub fn is_local_address(host: &str) -> bool {
 }
 /// How long the reader waits for a reply before checking whether it should stop
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
+/// How often the reader sends a status request. The spec asks each client to be in touch with the Z21 at least once a
+/// minute, or the Z21 drops it from its list of clients and stops sending it changes
+const KEEP_ALIVE_EVERY: Duration = Duration::from_secs(10);
+/// How long without any frame from the Z21 before the link counts as lost. Commands are refused while it is lost, and
+/// the watchdog reconnects
+const LOST_AFTER: Duration = Duration::from_secs(30);
+/// How often the watchdog checks the link
+pub const WATCH_EVERY: Duration = Duration::from_secs(1);
 
 pub struct Z21 {
     pub host: String,
@@ -56,6 +64,8 @@ pub struct Z21 {
     pub turnouts: BTreeMap<i64, Option<u8>>,
     pub locos: BTreeMap<i64, LocoState>,
     pub last_heartbeat: String,
+    /// When the last frame from the Z21 arrived, or when the socket was opened
+    pub last_reply: Instant,
     /// The programming operation in progress and the last one that finished
     pub programming: Programming,
     socket: Option<Arc<UdpSocket>>,
@@ -73,16 +83,25 @@ impl Z21 {
             turnouts: BTreeMap::new(),
             locos: BTreeMap::new(),
             last_heartbeat: db::now(),
+            last_reply: Instant::now(),
             socket: None,
             stop: None,
             programming: Programming::default(),
         }
     }
 
-    /// Overall track state: disconnected, unknown, short_circuit, track_power_off, or ready
+    /// No frame from the Z21 for longer than LOST_AFTER
+    pub fn is_lost(&self, now: Instant) -> bool {
+        now.duration_since(self.last_reply) > LOST_AFTER
+    }
+
+    /// Overall track state: disconnected, lost, unknown, short_circuit, track_power_off, or ready
     pub fn track_state(&self) -> &'static str {
         if !self.connected {
             return "disconnected";
+        }
+        if self.is_lost(Instant::now()) {
+            return "lost";
         }
         match self.central_state {
             None => "unknown",
@@ -132,6 +151,11 @@ impl Z21 {
 /// Open the socket to the Z21 and start the reader. UDP has no handshake, so this confirms nothing itself;
 /// the first reply from the Z21 does. Does not hold the lock while the socket is opened
 pub fn connect(app: &Arc<AppState>, host: &str, port: u16) -> bool {
+    connect_with_keep_alive(app, host, port, KEEP_ALIVE_EVERY)
+}
+
+/// Connect, sending a status request to keep the link up every `keep_alive`
+pub fn connect_with_keep_alive(app: &Arc<AppState>, host: &str, port: u16, keep_alive: Duration) -> bool {
     let socket = match UdpSocket::bind("0.0.0.0:0").and_then(|socket| {
         socket.connect((host, port))?;
         socket.set_read_timeout(Some(READ_TIMEOUT))?;
@@ -153,8 +177,9 @@ pub fn connect(app: &Arc<AppState>, host: &str, port: u16) -> bool {
         inner.z21.stop = Some(stop.clone());
         inner.z21.connected = true;
         inner.z21.central_state = None;
+        inner.z21.last_reply = Instant::now();
     }
-    spawn_reader(app.clone(), socket.clone(), stop);
+    spawn_reader(app.clone(), socket.clone(), stop, keep_alive);
 
     // Ask for status, then subscribe to broadcasts, which are per client and so set after every connect
     let inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -166,19 +191,48 @@ pub fn connect(app: &Arc<AppState>, host: &str, port: u16) -> bool {
     true
 }
 
-fn spawn_reader(app: Arc<AppState>, socket: Arc<UdpSocket>, stop: Arc<AtomicBool>) {
+/// Reads replies and applies them, and sends the status request that keeps the link up. A socket error does not end
+/// the reader: a Z21 that is not there can refuse a send, and the watchdog reconnects if no replies come
+fn spawn_reader(app: Arc<AppState>, socket: Arc<UdpSocket>, stop: Arc<AtomicBool>, keep_alive: Duration) {
     std::thread::spawn(move || {
         let mut buffer = [0u8; 1024];
+        let mut last_poll = Instant::now();
         while !stop.load(Ordering::SeqCst) {
+            if last_poll.elapsed() >= keep_alive {
+                let _ = socket.send(&status_request());
+                last_poll = Instant::now();
+            }
             match socket.recv(&mut buffer) {
                 Ok(length) => {
                     let mut inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                     apply(&mut inner, &buffer[..length], Instant::now());
                 }
                 Err(error) if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
-                Err(_) => break,
+                Err(_) => std::thread::sleep(READ_TIMEOUT),
             }
         }
+    });
+}
+
+/// Reconnect if the link has been lost. Returns true if a reconnect was tried. Nothing happens after a disconnect, or
+/// while the link is fine. A reconnect that does not open a socket is tried again on the next check
+pub fn link_check(app: &Arc<AppState>, now: Instant) -> bool {
+    let (host, port) = {
+        let inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !inner.z21.connected || !inner.z21.is_lost(now) {
+            return false;
+        }
+        (inner.z21.host.clone(), inner.z21.port)
+    };
+    connect(app, &host, port);
+    true
+}
+
+/// Check the link every WATCH_EVERY, for as long as the app runs
+pub fn spawn_watch(app: Arc<AppState>) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(WATCH_EVERY);
+        link_check(&app, Instant::now());
     });
 }
 
@@ -189,6 +243,7 @@ pub fn apply(inner: &mut Inner, frame: &[u8], now: Instant) {
     }
     let header = u16::from_le_bytes([frame[2], frame[3]]);
     inner.z21.last_heartbeat = db::now();
+    inner.z21.last_reply = now;
     let Inner { db, z21, moving, .. } = inner;
 
     if header == LAN_X_HEADER && frame.len() >= 7 && frame[4] == XBUS_STATUS_CHANGED && frame[5] == XBUS_STATUS_DB0 {

@@ -82,6 +82,7 @@ fn main() -> std::io::Result<()> {
     let app = Arc::new(AppState::new(connection, options.data.join("locomotive_images")));
     sync::spawn_loop(app.clone());
     trainlink_lib::automation::spawn_loop(app.clone());
+    trainlink_lib::z21::spawn_watch(app.clone());
     match &options.web {
         Some(path) => eprintln!("Web UI from {}", path.display()),
         None => eprintln!("No built web UI found. Run npm run build in frontend/, or pass --web"),
