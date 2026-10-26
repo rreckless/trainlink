@@ -9,7 +9,7 @@ use serde_json::json;
 
 use super::{app, detail, send};
 use crate::state::AppState;
-use crate::z21::commands::status_request;
+use crate::z21::commands::{self, status_request};
 use crate::z21::{self, frames::build_frame};
 
 /// Frames the fake Z21 received, and a way to reply to the app
@@ -113,6 +113,8 @@ fn connecting_asks_for_status_and_subscribes_to_broadcasts() {
     assert!(fake.wait_for(&[0x08, 0x00, 0x50, 0x00, 0x03, 0x01, 0x00, 0x00]), "broadcast flags");
     assert!(fake.wait_for(&[0x05, 0x00, 0x81, 0x00, 0x00]), "feedback group 0");
     assert!(fake.wait_for(&[0x05, 0x00, 0x81, 0x00, 0x01]), "feedback group 1");
+    assert!(fake.wait_for(&[0x07, 0x00, 0x40, 0x00, 0x21, 0x21, 0x00]), "X-Bus version");
+    assert!(fake.wait_for(&[0x04, 0x00, 0x1A, 0x00]), "hardware info");
     assert_eq!(track_state(&app), "unknown");
     fake.say(&central_state(0x00));
     assert!(wait_until(|| track_state(&app) == "ready"));
@@ -278,4 +280,87 @@ fn nothing_is_reconnected_after_a_disconnect() {
     let app = app();
     app.inner.lock().unwrap().z21.last_reply = Instant::now() - Duration::from_secs(60);
     assert!(!z21::link_check(&app, Instant::now()));
+}
+
+#[test]
+fn track_power_off_and_the_version_request_are_the_frames_the_spec_gives() {
+    // Spec 2.3 and 2.5: X-Header 0x21 with DB0 0x80 for power off, and 0x21 0x21 for the version, each with its XOR
+    assert_eq!(commands::track_power_off(), vec![0x07, 0x00, 0x40, 0x00, 0x21, 0x80, 0xA1]);
+    assert_eq!(commands::version_request(), vec![0x07, 0x00, 0x40, 0x00, 0x21, 0x21, 0x00]);
+}
+
+#[test]
+fn the_version_the_z21_reports_is_kept_and_shown_in_the_status() {
+    let app = app();
+    assert!(send(&app, "GET", "/api/z21/status", None).1["xbus_version"].is_null());
+    {
+        let mut inner = app.inner.lock().unwrap();
+        // Reply: X-Bus version 4.0, command station ID 0x12, the Z21 family
+        z21::apply(&mut inner, &xbus_frame(0x0040, &[0x63, 0x21, 0x40, 0x12]), Instant::now());
+    }
+    let (_, value) = send(&app, "GET", "/api/z21/status", None);
+    assert_eq!(value["xbus_version"], "4.0");
+    assert_eq!(value["station_id"], 0x12);
+}
+
+#[test]
+fn track_power_can_be_cut_on_a_connected_z21() {
+    let fake = fake_z21();
+    let app = app();
+    assert_eq!(send(&app, "POST", "/api/z21/track-power/off", None).0, 503, "not connected yet");
+    assert!(z21::connect(&app, "127.0.0.1", fake.port));
+    let (status, value) = send(&app, "POST", "/api/z21/track-power/off", None);
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["status"], "track_power_off_sent");
+    assert!(fake.wait_for(&[0x07, 0x00, 0x40, 0x00, 0x21, 0x80, 0xA1]), "track power off reaches the Z21");
+}
+
+/// A LAN_GET_HWINFO reply with the hardware type and the firmware, both little-endian as the spec gives them
+fn hardware_reply(hw_type: u16, firmware: u16) -> Vec<u8> {
+    let mut data = vec![0u8; 8];
+    data[0..2].copy_from_slice(&hw_type.to_le_bytes());
+    data[4..6].copy_from_slice(&firmware.to_le_bytes());
+    build_frame(0x001A, &data)
+}
+
+#[test]
+fn the_hardware_the_z21_reports_is_named_with_its_firmware_and_features() {
+    let app = app();
+    {
+        let mut inner = app.inner.lock().unwrap();
+        // Spec example: hardware type 0x200 (black Z21, 2012), firmware 1.20
+        z21::apply(&mut inner, &hardware_reply(0x0200, 0x0120), Instant::now());
+    }
+    let (_, value) = send(&app, "GET", "/api/z21/status", None);
+    assert_eq!(value["model"], "Z21 (black, 2012)");
+    assert_eq!(value["firmware"], "1.20");
+    assert_eq!(value["features"], json!([]), "no POM read before firmware 1.22");
+
+    {
+        let mut inner = app.inner.lock().unwrap();
+        z21::apply(&mut inner, &hardware_reply(0x0211, 0x0143), Instant::now());
+    }
+    let (_, value) = send(&app, "GET", "/api/z21/status", None);
+    assert_eq!(value["model"], "Z21 XL series");
+    assert_eq!(value["features"], json!(["pom_read"]));
+}
+
+#[test]
+fn a_pom_read_is_refused_on_firmware_older_than_1_22() {
+    let app = app();
+    send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel" })));
+    {
+        let mut inner = app.inner.lock().unwrap();
+        z21::apply(&mut inner, &hardware_reply(0x0200, 0x0120), Instant::now());
+    }
+    let (status, value) = send(&app, "POST", "/api/programming/pom/read", Some(json!({ "locomotive_id": 1, "cv": 29 })));
+    assert_eq!(status, 409, "{value}");
+    assert_eq!(detail(&value), "This Z21 has firmware 1.20. Reading a CV on the main track needs firmware 1.22 or later");
+
+    {
+        let mut inner = app.inner.lock().unwrap();
+        z21::apply(&mut inner, &hardware_reply(0x0200, 0x0143), Instant::now());
+    }
+    // Past the firmware check, the read stops at the track state, because this test has no ready track
+    assert_eq!(send(&app, "POST", "/api/programming/pom/read", Some(json!({ "locomotive_id": 1, "cv": 29 }))).0, 503);
 }

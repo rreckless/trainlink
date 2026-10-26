@@ -33,6 +33,7 @@ export const locomotiveApi = {
     request('POST', '/api/z21/loco/speed', { address, speed, direction: forward }),
   emergencyStop: () => request('POST', '/api/z21/emergency-stop', { confirm: true }),
   resumeTrackPower: () => request('POST', '/api/z21/track-power/on'),
+  trackPowerOff: () => request('POST', '/api/z21/track-power/off'),
   // Speed, direction, and functions the Z21 last reported, by address
   getStates: (addresses) => request('GET', `/api/z21/locos?addresses=${addresses.join(',')}`),
   setFunction: (address, index, on) => request('POST', '/api/z21/loco/function', { address, function: index, on }),

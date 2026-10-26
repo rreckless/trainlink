@@ -144,6 +144,15 @@ fn pom_read(app: &Arc<AppState>, call: &Call) -> Out {
     let cv = check_cv(fields::required_int(&body, "cv")?)?;
     let mut inner = lock(app);
     let address = locomotive_address(&inner, &body)?;
+    // Only refused when the Z21 has said what it is: until then the Z21 is asked, and it answers as it can
+    if let Some(hardware) = inner.z21.hardware {
+        if !hardware.features().pom_read {
+            return Err(ApiError::conflict(format!(
+                "This Z21 has firmware {}. Reading a CV on the main track needs firmware 1.22 or later",
+                hardware.firmware_text()
+            )));
+        }
+    }
     super::z21::ready_check(&inner, "Programming")?;
     let frame = commands::pom_read_byte(address, cv).map_err(ApiError::unprocessable)?;
     send_now(&mut inner, &frame)?;

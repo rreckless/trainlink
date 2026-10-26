@@ -1,6 +1,7 @@
 //! Z21 commands (frames to send) and replies (frames decoded), from the Z21 LAN protocol spec v1.13.
 //! Locomotives are 1-9999 and speeds are 0-126 in the UI, sent in the 128-step format.
 
+use super::features::LAN_GET_HWINFO;
 use super::frames::{build_frame, build_xbus_frame, encode_address};
 
 pub const LAN_SET_BROADCASTFLAGS: u16 = 0x0050;
@@ -18,6 +19,10 @@ const XBUS_LOCO_DRIVE: u8 = 0xE4;
 const XBUS_STOP: u8 = 0x80;
 const XBUS_STATUS_REQUEST: [u8; 3] = [0x21, 0x24, 0x05];
 const XBUS_TRACK_POWER_ON: [u8; 2] = [0x21, 0x81];
+const XBUS_TRACK_POWER_OFF: [u8; 2] = [0x21, 0x80];
+const XBUS_VERSION_REQUEST: [u8; 2] = [0x21, 0x21];
+/// The reply to a version request: X-Header, then the X-Bus version and the command station ID
+pub const XBUS_VERSION_REPLY: u8 = 0x63;
 pub const XBUS_STATUS_CHANGED: u8 = 0x62;
 pub const XBUS_STATUS_DB0: u8 = 0x22;
 pub const XBUS_LOCO_INFO_REQUEST: u8 = 0xE3;
@@ -63,6 +68,19 @@ pub fn status_request() -> Vec<u8> {
 
 pub fn track_power_on() -> Vec<u8> {
     build_xbus_frame(&XBUS_TRACK_POWER_ON)
+}
+
+pub fn track_power_off() -> Vec<u8> {
+    build_xbus_frame(&XBUS_TRACK_POWER_OFF)
+}
+
+pub fn version_request() -> Vec<u8> {
+    build_xbus_frame(&XBUS_VERSION_REQUEST)
+}
+
+/// LAN_GET_HWINFO: asks for the hardware type and firmware version
+pub fn hardware_info_request() -> Vec<u8> {
+    build_frame(LAN_GET_HWINFO, &[])
 }
 
 pub fn broadcast_flags() -> Vec<u8> {
