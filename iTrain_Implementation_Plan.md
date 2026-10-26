@@ -389,9 +389,6 @@ Entry criteria:
    - 🧪 Project and layout diagnostics: blocks without sensors, turnouts without addresses, and turnout legs with no track, with a "check again" action. Each item names its layout
    - 🧪 A health score and a category view: command stations, locomotives, track, turnouts, blocks and routes are scored. Cameras and recovery show as not built and are not scored
    - 🧪 Connection log: connections, lost links and track state changes, kept while the app runs. A copyable support package with status, counts, health categories and the recent log. Names, addresses and the Z21's IP address are left out. **Open:** the support package has not been sent to anyone to check it reads well
-8. **Accessory keyboard** ⬜
-   - ⬜ Grid of accessory addresses, with two outputs each, showing what uses each address
-   - ⬜ Range, grid size, "only in use" filter, and a safe test mode that locks empty addresses
 
 **10c. Automation (needs 10b)**
 9. **Routes** ⬜
