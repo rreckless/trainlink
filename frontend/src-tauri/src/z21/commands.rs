@@ -25,6 +25,9 @@ pub const XBUS_LOCO_INFO_REPLY: u8 = 0xEF;
 pub const XBUS_SET_FUNCTION: u8 = 0xE4;
 pub const XBUS_TURNOUT_SET: u8 = 0x53;
 pub const XBUS_TURNOUT_INFO: u8 = 0x43;
+/// The X-Header of the programming answers: 0x61 for a refusal, 0x64 for a result
+pub const XBUS_CV_NACK_SC_OR_NACK: u8 = 0x61;
+pub const XBUS_CV_RESULT: u8 = 0x64;
 const SPEED_STEP_MODE_128: u8 = 0x13;
 pub const MAX_FUNCTION: u8 = 31;
 
@@ -105,3 +108,43 @@ fn turnout_address(turnout: i64) -> Result<(u8, u8), String> {
     let address = (turnout - 1) as u16;
     Ok(((address >> 8) as u8, (address & 0xFF) as u8))
 }
+
+/// The CV address the Z21 takes: CV 1 is 0, CV 2 is 1, and so on, as two bytes. CVs run from 1 to 1024
+fn cv_address(cv: u16) -> Result<(u8, u8), String> {
+    if !(1..=1024).contains(&cv) {
+        return Err("CV must be 1 to 1024".into());
+    }
+    let address = cv - 1;
+    Ok(((address >> 8) as u8, (address & 0xFF) as u8))
+}
+
+/// Read a CV on the programming track, in direct mode (spec 6.1)
+pub fn cv_read(cv: u16) -> Result<Vec<u8>, String> {
+    let (msb, lsb) = cv_address(cv)?;
+    Ok(build_xbus_frame(&[0x23, 0x11, msb, lsb]))
+}
+
+/// Write a CV on the programming track, in direct mode (spec 6.2)
+pub fn cv_write(cv: u16, value: u8) -> Result<Vec<u8>, String> {
+    let (msb, lsb) = cv_address(cv)?;
+    Ok(build_xbus_frame(&[0x24, 0x12, msb, lsb, value]))
+}
+
+/// Write a CV of a locomotive decoder on the main track, while it runs (spec 6.6). The Z21 sends no answer
+pub fn pom_write_byte(address: i64, cv: u16, value: u8) -> Result<Vec<u8>, String> {
+    let (msb, lsb) = cv_address(cv)?;
+    let (address_msb, address_lsb) = encode_address(address)?;
+    Ok(build_xbus_frame(&[0xE6, 0x30, address_msb, address_lsb, 0xEC | msb, lsb, value]))
+}
+
+/// Write one bit of a CV of a locomotive decoder on the main track (spec 6.7). The bit is 0 to 7
+pub fn pom_write_bit(address: i64, cv: u16, bit: u8, on: bool) -> Result<Vec<u8>, String> {
+    if bit > 7 {
+        return Err("Bit must be 0 to 7".into());
+    }
+    let (msb, lsb) = cv_address(cv)?;
+    let (address_msb, address_lsb) = encode_address(address)?;
+    let value = (u8::from(on) << 3) | bit;
+    Ok(build_xbus_frame(&[0xE6, 0x30, address_msb, address_lsb, 0xE8 | msb, lsb, value]))
+}
+
