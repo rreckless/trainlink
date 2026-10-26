@@ -15,7 +15,8 @@ const defaultFunctions = () =>
   }))
 
 // Form for one locomotive: its name, address, picture, and what each of the 20 function buttons does
-export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onRemovePicture }) {
+// In a dialog the dialog's own Save and Cancel act on the form, through its id, so the form has no buttons of its own
+export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onRemovePicture, formId, inDialog = false }) {
   const [name, setName] = useState(locomotive?.name ?? '')
   const [address, setAddress] = useState(locomotive?.dcc_address ?? '')
   const [type, setType] = useState(locomotive?.locomotive_type ?? 'diesel')
@@ -66,7 +67,7 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
   }
 
   return (
-    <form onSubmit={submit} className="bg-slate-700 rounded-lg p-4 space-y-4">
+    <form id={formId} onSubmit={submit} className="bg-slate-700 rounded-lg p-4 space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label className="text-sm text-slate-300">
           Name
@@ -184,14 +185,16 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
 
       {error && <p className="text-sm text-red-300">{error}</p>}
 
-      <div className="flex gap-2">
-        <button type="submit" disabled={busy} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50">
-          Save locomotive
-        </button>
-        <button type="button" onClick={onCancel} disabled={busy} className="px-4 py-2 bg-slate-800 rounded hover:bg-slate-600 disabled:opacity-50">
-          Cancel
-        </button>
-      </div>
+      {!inDialog && (
+        <div className="flex gap-2">
+          <button type="submit" disabled={busy} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50">
+            Save locomotive
+          </button>
+          <button type="button" onClick={onCancel} disabled={busy} className="px-4 py-2 bg-slate-800 rounded hover:bg-slate-600 disabled:opacity-50">
+            Cancel
+          </button>
+        </div>
+      )}
     </form>
   )
 }

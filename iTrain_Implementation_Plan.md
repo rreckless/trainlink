@@ -474,6 +474,8 @@ Entry criteria:
 **Not yet reviewed in LocoLink** (add when seen): Macros, Shuttles, Drivers, Freight & switching, Command Truth, Projects' Save as and Export, and the Experience, Systems, Data and Demo settings.
 
 ### Phase 10f: Design Direction (from the LocoLink review)
+
+**Done in the design direction:** the side menu follows LocoLink's layout: Basics, Advanced and More advanced features, each opening and closing, with the less common pages under a folded group in Basics. Edits open in a pop-up, as LocoLink's edit dialogs do: turnout settings, locomotives, blocks, and new consists. **Open:** the layout editor's piece properties panel is still inline, and it needs a decision on whether it becomes a pop-up too.
 **Goal**: Change how TrainLink is organised and presented, so that a new user sees what to do next and an experienced user can find things quickly. The pages stay in one codebase across platforms.
 
 **Done**
