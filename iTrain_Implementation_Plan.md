@@ -368,8 +368,11 @@ Entry criteria:
    - ⬜ 29 function buttons, replacing 20. Functions 13 to 28 need their own Z21 frames, to be checked on hardware
    - 🧪 Photos up to 16 MB, replacing 2 MB
    - ⬜ Locomotive import from another app
-3. **Import review** ⬜
-   - ⬜ After an AnyRail import, a list of items to check later: turnouts without an address, turnout symbols without a link, and blocks without a sensor
+3. **Import review** 🟡
+   - 🧪 The AnyRail import report lists gaps, unanchored turnouts, unplaced pieces and hand mismatches. It is shown when the import runs, not kept for later
+   - 🧪 The Health page lists blocks without a sensor and turnouts without a DCC address, across all layouts
+   - ⬜ Keep the import report so it can be reviewed later
+   - ⬜ Turnout symbols without a link: not yet defined, so no list exists for them
 4. **Setup checklist** ⬜
    - ⬜ Guided steps: command station, locomotives, first manual run, track plan, blocks and sensors, turnouts, and routes
 
@@ -499,7 +502,7 @@ Entry criteria:
 2. ✅ Mock Z21 UDP responder (done)
 3. ✅ Unit tests for the Z21 packet builder and the speed and direction logic (done; now in the Rust core)
 4. ✅ REST routes for locomotives, blocks, signals, routes, feedbacks, layouts, and the track library. Command stations still need routes.
-5. 🟡 Z21 R-BUS feedback parsing and `GET /api/z21/feedback` done. Still to do: link feedback inputs to blocks, and verify on hardware. **Next.**
+5. 🟡 Z21 R-BUS feedback parsing and `GET /api/z21/feedback` done. Feedback inputs are linked to blocks, and a block's occupancy follows its feedback (tested in the core). Still to do: verify on hardware. **Next.**
 6. ✅ DCC turnout control: turnouts take a DCC address, and the Operate panel switches them. Spec v1.13 commands. Not yet tried on hardware
 7. ✅ Control page: locomotive roster with multi-select, the layout in operate mode, and the Z21 connection at the top. Browser-tested with the Z21 stubbed
 
