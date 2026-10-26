@@ -11,6 +11,7 @@ mod trackside;
 mod z21;
 mod z21_link;
 mod moving;
+mod alarm;
 mod anyrail;
 mod automation;
 mod collision;

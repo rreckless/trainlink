@@ -175,7 +175,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Train detection via Z21 feedback: the feedback sets a block's occupancy, which runs and signals read. Tested with the fake Z21. **Open:** check on a real detector
    - 🧪 Automatic signal management to prevent collisions: a run never enters an occupied block, and signals show stop for an occupied block, so both agree. Caution comes from the next block
    - 🧪 Deadlock prevention: a run holds the block it is in and claims the block ahead before moving. A cycle of runs waiting on each other is broken by stopping the newer run, with a notice. Tested with the fake Z21
-   - 🧪 A block that is occupied but not claimed by a run (a train no run expects) holds the runs that want it. **Open:** no alarm for unexpected trains yet
+   - 🧪 A block that is occupied but not claimed by a run (a train no run expects) holds the runs that want it, and raises an alarm on the Route Manager until it is free. An alarm can be dismissed, but the hold stays. Tested with the fake Z21. **Open:** check on a real layout
    - **Open:** check on a real layout with two runs sharing a block
 
 4. **Turnouts** 🧪

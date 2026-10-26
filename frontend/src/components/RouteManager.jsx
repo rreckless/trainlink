@@ -59,6 +59,7 @@ export default function RouteManager() {
   const [blocks, setBlocks] = useState([])
   const [routes, setRoutes] = useState([])
   const [notices, setNotices] = useState([])
+  const [alarms, setAlarms] = useState([])
   const [locomotives, setLocomotives] = useState([])
   const [runLocomotive, setRunLocomotive] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -91,7 +92,10 @@ export default function RouteManager() {
 
   const refreshRoutes = (id) =>
     routesApi
-      .notices()
+      .alarms()
+      .then(setAlarms)
+      .catch(() => {})
+      .then(() => routesApi.notices())
       .then(setNotices)
       .catch(() => {})
       .then(() => routesApi.list(id))
@@ -310,6 +314,25 @@ export default function RouteManager() {
           </ul>
         )}
       </div>
+
+      {alarms.length > 0 && (
+        <div className="xl:col-span-3 bg-red-900 border border-red-700 rounded-lg p-3 space-y-2">
+          <h4 className="font-semibold text-sm">Alarms: runs are held until these blocks are free</h4>
+          <ul className="space-y-1">
+            {alarms.map((alarm) => (
+              <li key={alarm.block_id} className="flex items-center gap-3 text-sm text-red-100">
+                <span className="flex-1">{alarm.message}</span>
+                <button
+                  onClick={() => routesApi.dismissAlarm(alarm.block_id).then(() => refreshRoutes(layoutId))}
+                  className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700"
+                >
+                  Dismiss
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {notices.length > 0 && (
         <div className="xl:col-span-3 bg-slate-800 rounded-lg p-3">

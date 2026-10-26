@@ -289,6 +289,20 @@ pub fn routes(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             let inner = lock(app);
             Ok(Reply::json(200, json!(inner.notices)))
         }
+        ("GET", ["alarms"]) => {
+            let inner = lock(app);
+            let mut alarms: Vec<Value> = inner.alarms.iter().map(|(block, message)| json!({ "block_id": block, "message": message })).collect();
+            alarms.sort_by_key(|alarm| alarm["block_id"].as_i64().unwrap_or_default());
+            Ok(Reply::json(200, json!(alarms)))
+        }
+        ("POST", ["alarms", id, "dismiss"]) => {
+            let id = super::id_segment(id)?;
+            let mut inner = lock(app);
+            if !crate::automation::dismiss_alarm(&mut inner, id) {
+                return Err(ApiError::not_found("Alarm", id));
+            }
+            Ok(Reply::empty(204))
+        }
         ("GET", []) => {
             let inner = lock(app);
             let routes = trackside::routes(&inner.db, optional_layout_id(call)?)?;

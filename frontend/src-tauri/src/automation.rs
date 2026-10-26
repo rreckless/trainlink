@@ -8,7 +8,7 @@
 //! run in the cycle. Signals show stop when a block is occupied, and runs never enter an occupied block, so the signals
 //! and the runs agree.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -192,12 +192,40 @@ fn break_cycles(inner: &mut Inner, now: Instant) -> rusqlite::Result<Vec<i64>> {
     Ok(stopped)
 }
 
+/// Raise an alarm for each block that has become occupied with no run holding it, and clear the alarms of blocks that
+/// are free again. A block that was already occupied at the last check does not raise a new alarm: a train a run has just
+/// left in its last block is not unexpected
+fn check_unexpected(inner: &mut Inner, occupied: &HashMap<i64, bool>) -> rusqlite::Result<()> {
+    let now_occupied: HashSet<i64> = occupied.iter().filter(|(_, is)| **is).map(|(block, _)| *block).collect();
+    let free: Vec<i64> = inner.alarms.keys().filter(|block| !now_occupied.contains(block)).copied().collect();
+    for block in free {
+        inner.alarms.remove(&block);
+    }
+    for block in &now_occupied {
+        if inner.seen_occupied.contains(block) || inner.claims.contains_key(block) || inner.alarms.contains_key(block) {
+            continue;
+        }
+        let name = trackside::block(&inner.db, *block)?.map(|found| found.name).unwrap_or_else(|| format!("block {block}"));
+        inner.alarms.insert(*block, format!("Unexpected train in {name}: no run has claimed it"));
+        notice(inner, format!("Unexpected train in {name}"));
+    }
+    inner.seen_occupied = now_occupied;
+    Ok(())
+}
+
+/// Dismiss the alarm for a block. The block is still held, so runs keep waiting for it until it is free
+pub fn dismiss_alarm(inner: &mut Inner, block: i64) -> bool {
+    inner.alarms.remove(&block).is_some()
+}
+
 /// One check of every running route. Routes that are running but were not started in this session are stopped, since
 /// their run was lost when the app closed
 pub fn tick(inner: &mut Inner, now: Instant) -> rusqlite::Result<()> {
     if inner.z21.track_state() != "ready" {
         return Ok(());
     }
+    let occupied = occupied_map(inner)?;
+    check_unexpected(inner, &occupied)?;
     let running: Vec<trackside::Route> = trackside::routes(&inner.db, None)?.into_iter().filter(|route| route.is_running).collect();
     for route in running {
         if !inner.runs.contains_key(&route.id) {

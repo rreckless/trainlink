@@ -12,4 +12,7 @@ export const routesApi = {
   stop: (id) => request('POST', `/api/routes/${id}/stop`),
   // What the automation has done that matters: stops made to avoid a collision or a crash, newest last
   notices: () => request('GET', '/api/routes/notices'),
+  // Blocks with a train that no run has claimed, until they are free. Dismissing hides the alarm but not the hold
+  alarms: () => request('GET', '/api/routes/alarms'),
+  dismissAlarm: (blockId) => request('POST', `/api/routes/alarms/${blockId}/dismiss`),
 }
