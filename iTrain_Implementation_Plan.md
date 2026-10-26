@@ -437,8 +437,27 @@ Entry criteria:
     - ⬜ Set a DCC-EX output to DC for the analog section, and link a DC profile to make it drivable
     - ⬜ Switch track power off before every change between DCC and analog mode
     - ⬜ TrackManager, profiles, replay and shuttle, and precision settings: not yet reviewed in detail
+29. **Multi-throttle** ⬜ (builds on Phase 8)
+    - ⬜ One throttle card per locomotive, each with its own speed slider, direction and functions
+    - ⬜ Speed presets at 0%, 25%, 50%, 75% and 100%, and a "stop this locomotive" button
+    - ⬜ Quick function buttons (light, sound, whistle, F3, pinnable), with a link to the full function list
+30. **Signals** ⬜
+    - ⬜ Signal types: German main (Hp), German distant (Vr), shunt (Sh), combination (Ks), and national types for the Netherlands, Austria, plus custom and general
+    - ⬜ Feed by signal type, or one address for red and green, with a swap option
+    - ⬜ Aspect table that maps each aspect to its addresses, for example Hp0 stop and Hp1 clear
+    - ⬜ Fictitious signals that are not wired to hardware
+31. **Multi-unit consists** ⬜ (replaces the software-only consist in Phase 8 once CV19 programming exists)
+    - ⬜ A numbered consist with its own consist address, shared by the locomotives in it
+    - ⬜ Each locomotive's CV19 is set to the consist address, so the decoders run together
+    - ⬜ A minimum of two locomotives per consist, with a reversed flag for each
+    - ⬜ A consist window that the layout remembers, and a single speed slider for the whole consist
+    - ⬜ A consist address that routes and automation can refer to
+32. **Trains** ⬜ (builds on item 21)
+    - ⬜ A train is one locomotive plus an ordered list of wagons, with a name, group, weight class and train type
+    - ⬜ Train length and weight are worked out from the wagons, for block and automation checks
+    - ⬜ A "main train of this loco" flag, for locomotives with several trains
 
-**Not yet reviewed in LocoLink** (add when seen): Macros, Shuttles, Drivers, Freight & switching, the Consists tab on Wagons & trains, Command Truth, Projects' Save as and Export, and the Experience, Systems, Data and Demo settings.
+**Not yet reviewed in LocoLink** (add when seen): Macros, Shuttles, Drivers, Freight & switching, Command Truth, Projects' Save as and Export, and the Experience, Systems, Data and Demo settings.
 
 ---
 
