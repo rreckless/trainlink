@@ -412,9 +412,17 @@ pub fn set_block_signals(conn: &Connection, block_id: i64, signal_ids: &[i64]) -
 
 /// Replace the blocks a signal protects
 pub fn set_signal_blocks(conn: &Connection, signal_id: i64, block_ids: &[i64]) -> rusqlite::Result<()> {
+    // The blocks a signal leaves and joins both send their links, so each of them is marked changed
+    let previous: Vec<i64> = conn
+        .prepare("SELECT block_id FROM block_signals WHERE signal_id = ?1")?
+        .query_map([signal_id], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
     conn.execute("DELETE FROM block_signals WHERE signal_id = ?1", [signal_id])?;
     for block_id in block_ids {
         conn.execute("INSERT INTO block_signals (block_id, signal_id) VALUES (?1, ?2)", params![block_id, signal_id])?;
+    }
+    for block_id in previous.iter().chain(block_ids) {
+        sync::mark_changed(conn, "blocks", *block_id)?;
     }
     sync::mark_changed(conn, "signals", signal_id)?;
     Ok(())

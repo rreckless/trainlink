@@ -347,3 +347,45 @@ fn settings_are_checked_before_they_are_kept() {
     assert_eq!(send(&app, "PUT", "/api/settings/volume", Some(json!({ "value": 3 }))).0, 404);
     assert_eq!(send(&app, "GET", "/api/settings", None).1, json!({}));
 }
+
+#[test]
+fn block_links_reach_the_other_device_and_removals_too() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b) = (device("a-links"), device("b-links"));
+    let (_, layout) = send(&a, "POST", "/api/layouts", Some(json!({ "name": "Links", "width": 800, "height": 400, "scale": "N" })));
+    let layout_id = layout["id"].as_i64().unwrap();
+    let (_, platform) = send(&a, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Platform", "x": 1, "y": 2 })));
+    let (_, exit) = send(&a, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Exit", "x": 3, "y": 2 })));
+    let (_, feedback) = send(&a, "POST", "/api/feedbacks", Some(json!({ "layout_id": layout_id, "name": "F", "x": 1, "y": 1, "feedback_number": 4 })));
+    let (_, signal) = send(&a, "POST", "/api/signals", Some(json!({ "layout_id": layout_id, "name": "Home", "x": 1, "y": 3, "signal_type": "main" })));
+    let platform_id = platform["id"].as_i64().unwrap();
+    let links = json!({
+        "next_block_id": exit["id"],
+        "feedback_ids": [feedback["id"]],
+        "signal_ids": [signal["id"]],
+    });
+    let (status, _) = send(&a, "PATCH", &format!("/api/blocks/{platform_id}"), Some(links));
+    assert_eq!(status, 200);
+    sync(&a, &cloud);
+    sync(&b, &cloud);
+
+    let (_, b_blocks) = send(&b, "GET", "/api/blocks", None);
+    let (_, b_feedbacks) = send(&b, "GET", "/api/feedbacks", None);
+    let (_, b_signals) = send(&b, "GET", "/api/signals", None);
+    let b_platform = b_blocks.as_array().unwrap().iter().find(|block| block["name"] == "Platform").unwrap().clone();
+    let b_exit = b_blocks.as_array().unwrap().iter().find(|block| block["name"] == "Exit").unwrap();
+    assert_eq!(b_platform["next_block_id"], b_exit["id"], "the next block points at the block on B");
+    assert_eq!(b_platform["feedback_ids"], json!([b_feedbacks[0]["id"]]));
+    assert_eq!(b_platform["signal_ids"], json!([b_signals[0]["id"]]));
+
+    tick();
+    let (status, _) = send(&a, "PATCH", &format!("/api/blocks/{platform_id}"), Some(json!({ "next_block_id": null, "feedback_ids": [], "signal_ids": [] })));
+    assert_eq!(status, 200);
+    sync(&a, &cloud);
+    sync(&b, &cloud);
+    let (_, b_blocks) = send(&b, "GET", "/api/blocks", None);
+    let b_platform = b_blocks.as_array().unwrap().iter().find(|block| block["name"] == "Platform").unwrap();
+    assert!(b_platform["next_block_id"].is_null(), "a cleared next block reaches B");
+    assert_eq!(b_platform["feedback_ids"], json!([]), "removed links reach B");
+    assert_eq!(b_platform["signal_ids"], json!([]));
+}
