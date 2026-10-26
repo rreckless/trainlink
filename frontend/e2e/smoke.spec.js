@@ -296,3 +296,37 @@ test('the setup checklist lists the steps in order, and each step opens its page
   await page.getByRole('button', { name: 'Open' }).first().click()
   await expect(page.getByText('Z21 connection', { exact: false }).first()).toBeVisible()
 })
+
+test('a block with no sensor is under Problems, shows its group, and opens with the group filled in', async ({ page }) => {
+  const created = await page.request.post('/api/layouts', { data: { name: 'Block filters', width: 800, height: 600, scale: 'N' } })
+  const layout = await created.json()
+  const block = await (await page.request.post('/api/blocks', { data: { layout_id: layout.id, name: 'Yard A', x: 0, y: 0 } })).json()
+  const grouped = await page.request.patch(`/api/blocks/${block.id}`, { data: { group_name: 'Yard' } })
+  expect(grouped.status()).toBe(200)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Blocks', exact: true }).first().click()
+  await page.getByRole('button', { name: /^Problems \(\d+\)$/ }).click()
+  await expect(page.getByRole('button', { name: /Yard A/ })).toBeVisible()
+  await expect(page.getByText('Yard', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /Yard A/ }).click()
+  await expect(page.getByLabel('Group (optional)')).toHaveValue('Yard')
+})
+
+test('a sensor on a block takes a role, and the role is saved with the block', async ({ page }) => {
+  const layout = await (await page.request.post('/api/layouts', { data: { name: 'Sensor roles', width: 800, height: 600, scale: 'N' } })).json()
+  const feedback = await (await page.request.post('/api/feedbacks', { data: { layout_id: layout.id, name: 'Exit sensor', x: 1, y: 1, feedback_number: 42 } })).json()
+  const block = await (await page.request.post('/api/blocks', { data: { layout_id: layout.id, name: 'Roles block', x: 0, y: 0 } })).json()
+  await page.request.patch(`/api/blocks/${block.id}`, { data: { feedback_ids: [feedback.id] } })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Blocks', exact: true }).first().click()
+  await page.getByRole('button', { name: /Roles block/ }).click()
+  await expect(page.getByRole('checkbox', { name: /Exit sensor/ })).toBeChecked()
+  await page.getByLabel('Role of Exit sensor').selectOption('exit')
+  await page.getByRole('button', { name: 'Save block' }).click()
+  await expect(page.getByText('Saved Roles block')).toBeVisible()
+
+  const saved = await (await page.request.get(`/api/blocks/${block.id}`)).json()
+  expect(saved.feedback_roles[String(feedback.id)]).toBe('exit')
+})

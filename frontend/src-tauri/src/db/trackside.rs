@@ -1,5 +1,7 @@
 //! Blocks, signals, feedbacks, and routes. Blocks link to signals and feedbacks through join tables
 
+use std::collections::{BTreeMap, HashMap};
+
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::Value;
@@ -18,8 +20,12 @@ pub struct Block {
     pub max_speed: i64,
     /// The block a train enters after this one, if it is known. Used for caution aspects
     pub next_block_id: Option<i64>,
+    /// The group the block belongs to on the Blocks page, if any
+    pub group_name: Option<String>,
     pub signal_ids: Vec<i64>,
     pub feedback_ids: Vec<i64>,
+    /// The role of each sensor, keyed by feedback id: entry, middle or exit. A sensor without a role is not in the map
+    pub feedback_roles: BTreeMap<String, String>,
     pub created_at: String,
     #[serde(skip)]
     pub length: Option<f64>,
@@ -83,7 +89,7 @@ fn ids(conn: &Connection, sql: &str, id: i64) -> rusqlite::Result<Vec<i64>> {
 
 // Blocks
 
-const BLOCK_COLUMNS: &str = "id, layout_id, name, x, y, state, occupied, max_speed, next_block_id, length, occupancy_locomotive_id, created_at";
+const BLOCK_COLUMNS: &str = "id, layout_id, name, x, y, state, occupied, max_speed, next_block_id, group_name, length, occupancy_locomotive_id, created_at";
 
 fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
     Ok(Block {
@@ -96,8 +102,10 @@ fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
         occupied: row.get("occupied")?,
         max_speed: row.get("max_speed")?,
         next_block_id: row.get("next_block_id")?,
+        group_name: row.get("group_name")?,
         signal_ids: Vec::new(),
         feedback_ids: Vec::new(),
+        feedback_roles: BTreeMap::new(),
         created_at: row.get("created_at")?,
         length: row.get("length")?,
         occupancy_locomotive_id: row.get("occupancy_locomotive_id")?,
@@ -107,6 +115,9 @@ fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
 fn with_links(conn: &Connection, mut block: Block) -> rusqlite::Result<Block> {
     block.signal_ids = ids(conn, "SELECT signal_id FROM block_signals WHERE block_id = ?1 ORDER BY signal_id", block.id)?;
     block.feedback_ids = ids(conn, "SELECT feedback_id FROM block_feedbacks WHERE block_id = ?1 ORDER BY feedback_id", block.id)?;
+    let mut statement = conn.prepare("SELECT feedback_id, role FROM block_feedbacks WHERE block_id = ?1 AND role IS NOT NULL")?;
+    let roles = statement.query_map([block.id], |row| Ok((row.get::<_, i64>(0)?.to_string(), row.get::<_, String>(1)?)))?;
+    block.feedback_roles = roles.collect::<rusqlite::Result<_>>()?;
     Ok(block)
 }
 
@@ -148,9 +159,9 @@ pub fn insert_block(conn: &Connection, block: &NewBlock) -> rusqlite::Result<i64
 /// Write the editable columns back. `occupied` follows the state
 pub fn save_block(conn: &Connection, block: &Block) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE blocks SET name = ?2, x = ?3, y = ?4, max_speed = ?5, state = ?6, occupied = ?7, next_block_id = ?8, updated_at = ?9
-         WHERE id = ?1",
-        params![block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, block.next_block_id, now()],
+        "UPDATE blocks SET name = ?2, x = ?3, y = ?4, max_speed = ?5, state = ?6, occupied = ?7, next_block_id = ?8, updated_at = ?9,
+             group_name = ?10 WHERE id = ?1",
+        params![block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, block.next_block_id, now(), block.group_name],
     )?;
     sync::mark_changed(conn, "blocks", block.id)?;
     Ok(())
@@ -393,13 +404,30 @@ pub fn delete_route(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Replace the feedbacks a block reads its occupancy from
+/// Replace the feedbacks a block reads its occupancy from. A feedback that stays keeps its role
 pub fn set_block_feedbacks(conn: &Connection, block_id: i64, feedback_ids: &[i64]) -> rusqlite::Result<()> {
+    let mut statement = conn.prepare("SELECT feedback_id, role FROM block_feedbacks WHERE block_id = ?1")?;
+    let kept: HashMap<i64, Option<String>> = statement
+        .query_map([block_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
     conn.execute("DELETE FROM block_feedbacks WHERE block_id = ?1", [block_id])?;
     for feedback_id in feedback_ids {
+        let role = kept.get(feedback_id).cloned().flatten();
         conn.execute(
-            "INSERT INTO block_feedbacks (block_id, feedback_id) VALUES (?1, ?2)",
-            params![block_id, feedback_id],
+            "INSERT INTO block_feedbacks (block_id, feedback_id, role) VALUES (?1, ?2, ?3)",
+            params![block_id, feedback_id, role],
+        )?;
+    }
+    sync::mark_changed(conn, "blocks", block_id)?;
+    Ok(())
+}
+
+/// Set the role of each sensor a block already reads from. None clears the role
+pub fn set_feedback_roles(conn: &Connection, block_id: i64, roles: &[(i64, Option<String>)]) -> rusqlite::Result<()> {
+    for (feedback_id, role) in roles {
+        conn.execute(
+            "UPDATE block_feedbacks SET role = ?3 WHERE block_id = ?1 AND feedback_id = ?2",
+            params![block_id, feedback_id, role],
         )?;
     }
     sync::mark_changed(conn, "blocks", block_id)?;
@@ -442,6 +470,16 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         .collect::<rusqlite::Result<_>>()?;
     if !columns.iter().any(|column| column == "next_block_id") {
         conn.execute_batch("ALTER TABLE blocks ADD COLUMN next_block_id INTEGER REFERENCES blocks(id);")?;
+    }
+    if !columns.iter().any(|column| column == "group_name") {
+        conn.execute_batch("ALTER TABLE blocks ADD COLUMN group_name TEXT;")?;
+    }
+    let sensor_columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(block_feedbacks)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<_>>()?;
+    if !sensor_columns.iter().any(|column| column == "role") {
+        conn.execute_batch("ALTER TABLE block_feedbacks ADD COLUMN role TEXT;")?;
     }
     Ok(())
 }

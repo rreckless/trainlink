@@ -105,3 +105,82 @@ fn routes_check_their_blocks_and_refuse_running_state() {
     let (status, _) = send(&app, "PATCH", &format!("/api/routes/{route_id}"), Some(json!({ "block_sequence": [999] })));
     assert_eq!(status, 400);
 }
+
+#[test]
+fn a_block_group_is_saved_trimmed_and_can_be_cleared() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let (_, block) = send(&app, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Platform", "x": 0, "y": 0 })));
+    let id = block["id"].as_i64().unwrap();
+    assert!(block["group_name"].is_null());
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "group_name": "  Up main " })));
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["group_name"], "Up main");
+
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "group_name": "   " })));
+    assert!(value["group_name"].is_null(), "blank text clears the group");
+
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "group_name": "Yard" })));
+    assert_eq!(value["group_name"], "Yard");
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "group_name": null })));
+    assert!(value["group_name"].is_null());
+}
+
+#[test]
+fn a_block_group_name_is_at_most_40_characters_and_must_be_text() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let (_, block) = send(&app, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Platform", "x": 0, "y": 0 })));
+    let id = block["id"].as_i64().unwrap();
+    let long = "x".repeat(41);
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "group_name": long })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "A group name can be at most 40 characters");
+    assert_eq!(send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "group_name": 7 }))).0, 422);
+}
+
+#[test]
+fn a_database_from_before_block_groups_gets_the_column() {
+    let conn = rusqlite::Connection::open_in_memory().expect("in-memory database");
+    conn.execute_batch("CREATE TABLE blocks (id INTEGER PRIMARY KEY, layout_id INTEGER, name TEXT NOT NULL, next_block_id INTEGER);
+        CREATE TABLE block_feedbacks (block_id INTEGER NOT NULL, feedback_id INTEGER NOT NULL, PRIMARY KEY (block_id, feedback_id));
+        INSERT INTO blocks (layout_id, name) VALUES (1, 'Old');")
+        .expect("old table");
+    crate::db::trackside::migrate(&conn).expect("migrate");
+    let group: Option<String> = conn.query_row("SELECT group_name FROM blocks WHERE name = 'Old'", [], |row| row.get(0)).unwrap();
+    assert_eq!(group, None);
+    crate::db::trackside::migrate(&conn).expect("running it twice is harmless");
+}
+
+#[test]
+fn sensor_roles_are_kept_when_the_sensors_change_and_checked() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let (_, one) = send(&app, "POST", "/api/feedbacks", Some(json!({ "layout_id": layout_id, "name": "F1", "x": 1, "y": 1, "feedback_number": 1 })));
+    let (_, two) = send(&app, "POST", "/api/feedbacks", Some(json!({ "layout_id": layout_id, "name": "F2", "x": 2, "y": 2, "feedback_number": 2 })));
+    let (one_id, two_id) = (one["id"].as_i64().unwrap(), two["id"].as_i64().unwrap());
+    let (_, block) = send(&app, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Platform", "x": 0, "y": 0 })));
+    let id = block["id"].as_i64().unwrap();
+    send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "feedback_ids": [one_id, two_id] })));
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "feedback_roles": { one_id.to_string(): "entry", two_id.to_string(): "exit" } })));
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["feedback_roles"][one_id.to_string()], "entry");
+    assert_eq!(value["feedback_roles"][two_id.to_string()], "exit");
+
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "feedback_ids": [one_id] })));
+    assert_eq!(value["feedback_roles"][one_id.to_string()], "entry", "a sensor that stays keeps its role");
+    assert!(value["feedback_roles"][two_id.to_string()].is_null(), "a sensor that goes loses its role");
+
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "feedback_roles": { one_id.to_string(): null } })));
+    assert!(value["feedback_roles"][one_id.to_string()].is_null(), "null clears the role");
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "feedback_roles": { one_id.to_string(): "side" } })));
+    assert_eq!(status, 422, "{value}");
+    assert_eq!(detail(&value), "Sensor role must be one of: entry, middle, exit");
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "feedback_roles": { two_id.to_string(): "middle" } })));
+    assert_eq!(status, 422, "{value}");
+    assert_eq!(detail(&value), "Only a sensor the block reads from can have a role");
+}
