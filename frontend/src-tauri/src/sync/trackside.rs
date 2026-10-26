@@ -1,6 +1,6 @@
 //! Blocks, signals, feedbacks, and routes: their rows, and the references between them, in both directions
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 
 use super::map::{decide, local_id_of, sync_id_of};
@@ -47,6 +47,57 @@ pub fn apply_block(conn: &Connection, row: &Value) -> rusqlite::Result<bool> {
     Ok(true)
 }
 
+/// The sync ids of the rows a block links to, through a join table. Rows that have no sync id yet are left out
+fn linked_sync_ids(conn: &Connection, sql: &str, table: &str, block: i64) -> rusqlite::Result<Vec<String>> {
+    let locals: Vec<i64> = conn.prepare(sql)?.query_map([block], |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
+    let mut out = Vec::new();
+    for local in locals {
+        if let Some(sync) = sync_id_of(conn, table, local)? {
+            out.push(sync);
+        }
+    }
+    Ok(out)
+}
+
+/// The sync ids a row lists under a key, as strings
+fn strings(row: &Value, key: &str) -> Vec<String> {
+    row.get(key).and_then(Value::as_array).map(|items| items.iter().filter_map(|item| item.as_str().map(str::to_string)).collect()).unwrap_or_default()
+}
+
+/// Set the links of each block that has no unsent change, from the cloud's rows. It runs after every table is applied,
+/// so a link to a block, feedback or signal that arrived in the same sync is found. A block with an unsent change keeps
+/// its own links until they are sent
+pub fn relink_blocks(conn: &Connection, rows: &[Value]) -> rusqlite::Result<()> {
+    for row in rows.iter().filter(|row| row.get("deleted_at").is_none_or(Value::is_null)) {
+        let Some(sync_id) = text(row, "id") else { continue };
+        let found: Option<(i64, i64)> = conn
+            .query_row("SELECT id, dirty FROM blocks WHERE sync_id = ?1", [sync_id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .optional()?;
+        let Some((block, dirty)) = found else { continue };
+        if dirty != 0 {
+            continue;
+        }
+        let next = match text(row, "next_block_id") {
+            Some(sync) => local_id_of(conn, "blocks", &sync)?,
+            None => None,
+        };
+        conn.execute("UPDATE blocks SET next_block_id = ?2 WHERE id = ?1", params![block, next])?;
+        conn.execute("DELETE FROM block_feedbacks WHERE block_id = ?1", [block])?;
+        for sync in strings(row, "feedback_ids") {
+            if let Some(feedback) = local_id_of(conn, "feedbacks", &sync)? {
+                conn.execute("INSERT OR IGNORE INTO block_feedbacks (block_id, feedback_id) VALUES (?1, ?2)", params![block, feedback])?;
+            }
+        }
+        conn.execute("DELETE FROM block_signals WHERE block_id = ?1", [block])?;
+        for sync in strings(row, "signal_ids") {
+            if let Some(signal) = local_id_of(conn, "signals", &sync)? {
+                conn.execute("INSERT OR IGNORE INTO block_signals (block_id, signal_id) VALUES (?1, ?2)", params![block, signal])?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn block_outbound(conn: &Connection, user: &str) -> rusqlite::Result<Vec<(i64, String, Value)>> {
     let mut statement = conn.prepare(
         "SELECT id, sync_id, layout_id, name, x, y, max_speed, length, state, occupancy_locomotive_id, created_at, updated_at FROM blocks WHERE dirty = 1",
@@ -76,6 +127,13 @@ pub fn block_outbound(conn: &Connection, user: &str) -> rusqlite::Result<Vec<(i6
             Some(local) => sync_id_of(conn, "locomotives", local)?,
             None => None,
         };
+        let next_local: Option<i64> = conn.query_row("SELECT next_block_id FROM blocks WHERE id = ?1", [id], |row| row.get(0))?;
+        let next_sync = match next_local {
+            Some(next) => sync_id_of(conn, "blocks", next)?,
+            None => None,
+        };
+        let feedback_syncs = linked_sync_ids(conn, "SELECT feedback_id FROM block_feedbacks WHERE block_id = ?1", "feedbacks", id)?;
+        let signal_syncs = linked_sync_ids(conn, "SELECT signal_id FROM block_signals WHERE block_id = ?1", "signals", id)?;
         out.push((id, stamp.clone(), json!({
             "id": sync_id,
             "user_id": user,
@@ -87,6 +145,9 @@ pub fn block_outbound(conn: &Connection, user: &str) -> rusqlite::Result<Vec<(i6
             "length": length,
             "state": state,
             "occupancy_locomotive_id": locomotive_sync,
+            "next_block_id": next_sync,
+            "feedback_ids": feedback_syncs,
+            "signal_ids": signal_syncs,
             "created_at": to_cloud(&created),
             "updated_at": to_cloud(&stamp),
             "deleted_at": Value::Null,
