@@ -2,6 +2,7 @@
 //! and the state the API reads (track power, turnouts, locomotives, R-BUS feedback)
 
 pub mod commands;
+pub mod features;
 pub mod frames;
 pub mod replies;
 
@@ -19,8 +20,10 @@ use commands::{
     XBUS_CV_NACK_SC_OR_NACK, XBUS_CV_RESULT,
     broadcast_flags, rbus_getdata, status_request, LAN_RMBUS_DATACHANGED, LAN_SYSTEMSTATE_DATACHANGED,
     RBUS_GROUPS, SYSTEMSTATE_CENTRAL_STATE_OFFSET, XBUS_STATUS_CHANGED, XBUS_STATUS_DB0, XBUS_LOCO_INFO_REPLY,
-    XBUS_TURNOUT_INFO, XBUS_VERSION_REPLY, version_request,
+    XBUS_TURNOUT_INFO, XBUS_VERSION_REPLY, hardware_info_request, version_request,
 };
+use features::LAN_GET_HWINFO;
+use features::HardwareInfo;
 use frames::LAN_X_HEADER;
 use replies::{CentralState, LocoState};
 
@@ -65,6 +68,8 @@ pub struct Z21 {
     pub locos: BTreeMap<i64, LocoState>,
     /// The X-Bus version and command station ID the Z21 reported, from the version request sent on connecting
     pub version: Option<XbusVersion>,
+    /// The hardware type and firmware the Z21 reported, from LAN_GET_HWINFO sent on connecting
+    pub hardware: Option<HardwareInfo>,
     pub last_heartbeat: String,
     /// When the last frame from the Z21 arrived, or when the socket was opened
     pub last_reply: Instant,
@@ -85,6 +90,7 @@ impl Z21 {
             turnouts: BTreeMap::new(),
             locos: BTreeMap::new(),
             version: None,
+            hardware: None,
             last_heartbeat: db::now(),
             last_reply: Instant::now(),
             socket: None,
@@ -136,6 +142,9 @@ impl Z21 {
             "last_heartbeat": self.last_heartbeat,
             "xbus_version": self.version.map(|version| format!("{}.{}", version.xbus >> 4, version.xbus & 0x0f)),
             "station_id": self.version.map(|version| version.station_id),
+            "model": self.hardware.and_then(|hardware| hardware.model()),
+            "firmware": self.hardware.map(|hardware| hardware.firmware_text()),
+            "features": self.hardware.map(|hardware| hardware.features().names()).unwrap_or_default(),
         })
     }
 
@@ -151,6 +160,7 @@ impl Z21 {
         self.turnouts.clear();
         self.locos.clear();
         self.version = None;
+        self.hardware = None;
     }
 }
 
@@ -198,6 +208,7 @@ pub fn connect_with_keep_alive(app: &Arc<AppState>, host: &str, port: u16, keep_
     let inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     inner.z21.send(&status_request());
     inner.z21.send(&version_request());
+    inner.z21.send(&hardware_info_request());
     inner.z21.send(&broadcast_flags());
     for group in RBUS_GROUPS {
         inner.z21.send(&rbus_getdata(group));
@@ -259,6 +270,13 @@ pub fn apply(inner: &mut Inner, frame: &[u8], now: Instant) {
     inner.z21.last_heartbeat = db::now();
     inner.z21.last_reply = now;
     let Inner { db, z21, moving, .. } = inner;
+    if header == LAN_GET_HWINFO && frame.len() >= 12 {
+        // Reply: hardware type and firmware version, both 32 bits little-endian in the spec, the firmware as BCD
+        z21.hardware = Some(HardwareInfo {
+            hw_type: u32::from_le_bytes([frame[4], frame[5], frame[6], frame[7]]),
+            firmware: u16::from_le_bytes([frame[8], frame[9]]),
+        });
+    }
 
     if header == LAN_X_HEADER && frame.len() >= 7 && frame[4] == XBUS_STATUS_CHANGED && frame[5] == XBUS_STATUS_DB0 {
         set_central_state(z21, frame[6]);

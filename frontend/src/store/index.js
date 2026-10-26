@@ -29,7 +29,7 @@ export const useStore = create((set) => ({
 
   // Z21 track state, polled from /api/z21/status
   // state: disconnected | lost | unknown | short_circuit | track_power_off | ready
-  z21: { connected: false, state: 'disconnected', lastHeartbeat: null, xbusVersion: null },
+  z21: { connected: false, state: 'disconnected', lastHeartbeat: null, xbusVersion: null, model: null, firmware: null, features: [] },
   // Z21 address used by Settings and the Control page
   z21Host: '10.0.0.111',
   z21Port: 21105,

@@ -6,7 +6,7 @@ const STATUS_URL = `${BASE_URL}/api/z21/status`
 
 // Fetch the Z21 status once and store it. Anything that changes the Z21 calls this afterwards
 export const refreshZ21Status = async () => {
-  let z21 = { connected: false, state: 'disconnected', lastHeartbeat: null, xbusVersion: null }
+  let z21 = { connected: false, state: 'disconnected', lastHeartbeat: null, xbusVersion: null, model: null, firmware: null, features: [] }
   try {
     const response = await apiFetch(STATUS_URL)
     if (response.ok) {
@@ -16,6 +16,9 @@ export const refreshZ21Status = async () => {
         state: data.connected ? data.state : 'disconnected',
         lastHeartbeat: data.last_heartbeat,
         xbusVersion: data.xbus_version ?? null,
+        model: data.model ?? null,
+        firmware: data.firmware ?? null,
+        features: data.features ?? [],
       }
     }
   } catch (error) {

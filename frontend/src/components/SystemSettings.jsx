@@ -19,6 +19,8 @@ export default function SystemSettings() {
   const z21Connected = z21.connected
   const z21State = z21.state
   const z21Version = z21.xbusVersion
+  const z21Model = z21.model
+  const z21Firmware = z21.firmware
   const z21LastHeartbeat = z21.lastHeartbeat
 
   // The address is saved to the account when its field is left, so every device uses it
@@ -65,7 +67,11 @@ export default function SystemSettings() {
             </div>
           </div>
 
-          {z21Connected && z21Version && <p className="text-xs text-slate-400 mb-2">Z21 X-Bus version {z21Version}</p>}
+          {z21Connected && (z21Model || z21Firmware || z21Version) && (
+            <p className="text-xs text-slate-400 mb-2">
+              {[z21Model, z21Firmware && `firmware ${z21Firmware}`, z21Version && `X-Bus ${z21Version}`].filter(Boolean).join(', ')}
+            </p>
+          )}
 
           {z21Connected && z21State === 'short_circuit' && (
             <p className="text-xs text-red-400 mb-2">

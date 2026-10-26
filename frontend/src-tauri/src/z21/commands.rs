@@ -1,6 +1,7 @@
 //! Z21 commands (frames to send) and replies (frames decoded), from the Z21 LAN protocol spec v1.13.
 //! Locomotives are 1-9999 and speeds are 0-126 in the UI, sent in the 128-step format.
 
+use super::features::LAN_GET_HWINFO;
 use super::frames::{build_frame, build_xbus_frame, encode_address};
 
 pub const LAN_SET_BROADCASTFLAGS: u16 = 0x0050;
@@ -75,6 +76,11 @@ pub fn track_power_off() -> Vec<u8> {
 
 pub fn version_request() -> Vec<u8> {
     build_xbus_frame(&XBUS_VERSION_REQUEST)
+}
+
+/// LAN_GET_HWINFO: asks for the hardware type and firmware version
+pub fn hardware_info_request() -> Vec<u8> {
+    build_frame(LAN_GET_HWINFO, &[])
 }
 
 pub fn broadcast_flags() -> Vec<u8> {
