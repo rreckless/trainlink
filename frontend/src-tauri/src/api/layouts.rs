@@ -177,11 +177,12 @@ fn import(call: &Call) -> Out {
     if !(radius > 0.0 && radius <= 10_000.0) {
         return Err(ApiError::unprocessable("inner_radius_mm must be above 0 and at most 10,000"));
     }
-    let result = anyrail::import(&xml, radius).map_err(ApiError::bad_request)?;
+    let mut result = anyrail::import(&xml, radius).map_err(ApiError::bad_request)?;
     check_track_pieces(&json!({
         "track_system": result["track_system"],
         "track_pieces": result["track_pieces"],
     }))?;
+    result["no_track_legs"] = json!(anyrail::legs_without_track(&xml).map_err(ApiError::bad_request)?);
     Ok(Reply::json(200, result))
 }
 

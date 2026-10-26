@@ -65,3 +65,18 @@ fn an_empty_project_has_nothing_missing() {
     assert_eq!(health["counts"]["missing"], 0);
     assert_eq!(health["turnouts_without_address"].as_array().unwrap().len(), 0);
 }
+
+#[test]
+fn legs_without_track_saved_on_a_layout_are_listed_on_health() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let legs = json!([{ "turnout": "TOR1", "leg": "C", "point": "P3" }]);
+    let (status, value) = send(&app, "PATCH", &format!("/api/layouts/{layout_id}"), Some(json!({ "elements": { "no_track_legs": legs } })));
+    assert_eq!(status, 200, "{value}");
+
+    let (_, health) = send(&app, "GET", "/api/overview/health", None);
+    assert_eq!(health["legs_without_track"][0]["layout"], "Main");
+    assert_eq!(health["legs_without_track"][0]["turnout"], "TOR1");
+    assert_eq!(health["legs_without_track"][0]["leg"], "C");
+    assert_eq!(health["counts"]["missing"], 1);
+}

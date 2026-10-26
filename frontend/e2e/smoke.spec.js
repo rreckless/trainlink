@@ -269,3 +269,19 @@ test('a locomotive keeps its type, group, speed limit, colour and reverse settin
     reverse_direction: true,
   })
 })
+
+test('a turnout leg with no track is listed on Health until the review is cleared', async ({ page }) => {
+  const created = await page.request.post('/api/layouts', { data: { name: 'Review', width: 800, height: 600, scale: 'N' } })
+  expect(created.status()).toBe(201)
+  const layout = await created.json()
+  const saved = await page.request.patch(`/api/layouts/${layout.id}`, {
+    data: { elements: { no_track_legs: [{ turnout: 'TOR1', leg: 'C', point: 'P3' }] } },
+  })
+  expect(saved.status()).toBe(200)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Health', exact: true }).first().click()
+  await expect(page.getByText('TOR1 leg C')).toBeVisible()
+  await page.getByRole('button', { name: 'Clear review' }).first().click()
+  await expect(page.getByText('Every turnout leg has track on the other side')).toBeVisible()
+})
