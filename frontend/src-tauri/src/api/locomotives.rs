@@ -28,7 +28,7 @@ const IMAGE_TYPES: [(&str, &str, &[u8]); 3] = [
 pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", []) => list(app),
-        ("GET", ["next-address"]) => next_address(app),
+        ("GET", ["next-address"]) => next_address(app, call),
         ("POST", []) => create(app, call),
         ("GET", [id]) => get(app, super::id_segment(id)?),
         ("PATCH", [id]) => update(app, super::id_segment(id)?, call),
@@ -47,10 +47,23 @@ fn check_address(address: i64) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// The lowest DCC address no locomotive uses, for a new locomotive to take
-fn next_address(app: &Arc<AppState>) -> Out {
+/// The lowest DCC address no locomotive on the given command station uses, for a new locomotive to take
+fn next_address(app: &Arc<AppState>, call: &Call) -> Out {
+    let station = call
+        .param("command_station_id")
+        .map(|value| value.parse::<i64>())
+        .transpose()
+        .map_err(|_| ApiError::unprocessable("command_station_id must be a whole number"))?;
     let inner = lock(app);
-    Ok(Reply::json(200, json!({ "dcc_address": locomotives::next_free_address(&inner.db)? })))
+    Ok(Reply::json(200, json!({ "dcc_address": locomotives::next_free_address(&inner.db, station)? })))
+}
+
+/// Refuse an address another locomotive on the same command station already uses
+fn check_address_free(conn: &rusqlite::Connection, address: i64, command_station_id: Option<i64>, except: Option<i64>) -> Result<(), ApiError> {
+    match locomotives::address_user(conn, address, command_station_id, except)? {
+        Some(name) => Err(ApiError::conflict(format!("DCC address {address} is already used by {name} on this command station"))),
+        None => Ok(()),
+    }
 }
 
 fn list(app: &Arc<AppState>) -> Out {
@@ -76,6 +89,7 @@ fn create(app: &Arc<AppState>, call: &Call) -> Out {
     check_address(address)?;
 
     let inner = lock(app);
+    check_address_free(&inner.db, address, command_station_id, None)?;
     if let Some(station) = command_station_id {
         let found: bool = inner
             .db
@@ -193,6 +207,7 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
         }
         locomotive.decoder_profile_id = profile;
     }
+    check_address_free(&inner.db, locomotive.dcc_address, locomotive.command_station_id, Some(id))?;
     locomotives::save(&inner.db, &locomotive).map_err(|error| {
         if is_unique_violation(&error) {
             ApiError::conflict("Another locomotive already has this name or DCC address")

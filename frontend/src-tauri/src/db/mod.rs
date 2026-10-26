@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS decoder_profiles (
 CREATE TABLE IF NOT EXISTS locomotives (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
-    dcc_address INTEGER NOT NULL UNIQUE,
+    dcc_address INTEGER NOT NULL,
     locomotive_type TEXT NOT NULL,
     length REAL,
     speed INTEGER NOT NULL DEFAULT 0,
@@ -187,14 +187,51 @@ pub fn is_unique_violation(error: &Error) -> bool {
     matches!(error, Error::SqliteFailure(failure, _) if failure.code == ErrorCode::ConstraintViolation)
 }
 
-/// Add the decoder profile column to a database made before it existed
-fn locomotives_migrate(conn: &Connection) -> rusqlite::Result<()> {
-    let columns: Vec<String> = conn
-        .prepare("PRAGMA table_info(locomotives)")?
-        .query_map([], |row| row.get::<_, String>(1))?
-        .collect::<rusqlite::Result<_>>()?;
+/// Bring an older locomotives table up to date: the decoder profile column, no single address for all stations, and the
+/// address index that makes each command station's addresses unique
+pub(crate) fn locomotives_migrate(conn: &Connection) -> rusqlite::Result<()> {
+    let columns: Vec<String> = table_columns(conn, "locomotives")?;
     if !columns.iter().any(|column| column == "decoder_profile_id") {
         conn.execute_batch("ALTER TABLE locomotives ADD COLUMN decoder_profile_id INTEGER REFERENCES decoder_profiles(id);")?;
     }
-    Ok(())
+    let table_sql: String = conn.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'locomotives'", [], |row| row.get(0))?;
+    if table_sql.contains("dcc_address INTEGER NOT NULL UNIQUE") {
+        rebuild_locomotives_without_global_address(conn, &table_sql)?;
+    }
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS locomotives_station_address ON locomotives (COALESCE(command_station_id, 0), dcc_address);",
+    )
+}
+
+fn table_columns(conn: &Connection, table: &str) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(&format!("PRAGMA table_info({table})"))?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect()
+}
+
+/// SQLite cannot drop a UNIQUE constraint, so the table is copied into one without it, as SQLite's own guide describes.
+/// Every column and index is kept, including the sync columns. Foreign keys are off while the table is replaced, so
+/// the rows that refer to locomotives are not deleted with the old table
+fn rebuild_locomotives_without_global_address(conn: &Connection, table_sql: &str) -> rusqlite::Result<()> {
+    let Some(body) = table_sql.find('(').map(|open| &table_sql[open..]) else { return Ok(()) };
+    let new_table = body.replace("dcc_address INTEGER NOT NULL UNIQUE", "dcc_address INTEGER NOT NULL");
+    let columns = table_columns(conn, "locomotives")?.join(", ");
+    let indexes: Vec<String> = conn
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'locomotives' AND sql IS NOT NULL")?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut copy = format!(
+        "BEGIN; CREATE TABLE locomotives_new {new_table}; INSERT INTO locomotives_new ({columns}) SELECT {columns} FROM locomotives; DROP TABLE locomotives; ALTER TABLE locomotives_new RENAME TO locomotives;"
+    );
+    for index in indexes {
+        copy.push_str(&format!("{index};"));
+    }
+    copy.push_str(" COMMIT;");
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let result = conn.execute_batch(&copy);
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK;");
+    }
+    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+    result
 }

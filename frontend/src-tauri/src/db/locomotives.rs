@@ -54,11 +54,24 @@ pub fn labels_from_profile(functions: &Value) -> Value {
     labels
 }
 
-/// The lowest DCC address from 1 that no locomotive uses
-pub fn next_free_address(conn: &Connection) -> rusqlite::Result<i64> {
-    let mut statement = conn.prepare("SELECT dcc_address FROM locomotives ORDER BY dcc_address")?;
-    let used: Vec<i64> = statement.query_map([], |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
+/// The lowest DCC address from 1 that no locomotive on this command station uses. A locomotive with no station shares
+/// one set of addresses with the other locomotives that have none
+pub fn next_free_address(conn: &Connection, command_station_id: Option<i64>) -> rusqlite::Result<i64> {
+    let mut statement = conn.prepare(
+        "SELECT dcc_address FROM locomotives WHERE COALESCE(command_station_id, 0) = COALESCE(?1, 0) ORDER BY dcc_address",
+    )?;
+    let used: Vec<i64> = statement.query_map([command_station_id], |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
     Ok(used.iter().enumerate().find(|(index, address)| **address != *index as i64 + 1).map_or(used.len() as i64 + 1, |(index, _)| index as i64 + 1))
+}
+
+/// The name of the locomotive already using this address on this command station, other than the one given
+pub fn address_user(conn: &Connection, address: i64, command_station_id: Option<i64>, except: Option<i64>) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT name FROM locomotives WHERE dcc_address = ?1 AND COALESCE(command_station_id, 0) = COALESCE(?2, 0) AND id IS NOT ?3",
+        params![address, command_station_id, except],
+        |row| row.get(0),
+    )
+    .optional()
 }
 
 const COLUMNS: &str = "id, name, dcc_address, locomotive_type, length, speed, direction, functions,
