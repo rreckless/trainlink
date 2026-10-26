@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ENTITY_KINDS } from '../../layout/model'
-import { MAX_CURVE_DEGREES, arcCurve, arcLength } from '../../layout/curves'
+import { MAX_CURVE_DEGREES, arcCurve, arcLength, curveOf } from '../../layout/curves'
 
 const DCC_MAX = 2048
 
@@ -34,11 +34,15 @@ function LengthField({ placed, maxLength, busy, onChange }) {
   )
 }
 
-// A curve from a radius and an angle. The panel shows the length the ends will be apart before anything is changed
-function CurveFields({ maxLength, busy, onApply }) {
-  const [radius, setRadius] = useState('300')
-  const [angle, setAngle] = useState('90')
-  const [side, setSide] = useState('left')
+// The round figure shown for a measured value, to one decimal place
+const shown = (value) => String(Math.round(value * 10) / 10)
+
+// A curve from a radius and an angle. It starts from the curve the track already has, so the figures are the real ones,
+// and the panel shows the length the ends will be apart before anything is changed
+function CurveFields({ current, maxLength, busy, onApply }) {
+  const [radius, setRadius] = useState(current ? shown(current.radius) : '300')
+  const [angle, setAngle] = useState(current ? shown(current.angle) : '90')
+  const [side, setSide] = useState(current ? current.side : 'left')
   const radiusValue = Number(radius)
   const angleValue = Number(angle)
   const valid = Number.isFinite(radiusValue) && radiusValue > 0 && Number.isFinite(angleValue) && angleValue > 0 && angleValue <= MAX_CURVE_DEGREES
@@ -48,6 +52,11 @@ function CurveFields({ maxLength, busy, onApply }) {
   return (
     <div className="space-y-2">
       <p className="text-slate-300">Curve from radius and angle</p>
+      <p className="text-xs text-slate-400">
+        {current
+          ? `Now: radius ${shown(current.radius)} mm, ${shown(current.angle)}°, bends ${current.side}`
+          : 'Now: straight'}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-slate-400">
           Radius (mm)
@@ -191,7 +200,13 @@ export default function LayoutProperties({ item, track, placed, piece, busy, onR
           <LengthField key={placed.id} placed={placed} maxLength={piece.length} busy={busy} onChange={onSetLength} />
         )}
         {piece.type === 'flex' && onArc && (
-          <CurveFields key={`arc-${placed.id}`} maxLength={piece.length} busy={busy} onApply={onArc} />
+          <CurveFields
+            key={`arc-${placed.id}`}
+            current={curveOf(placed.length ?? piece.length, placed.handles)}
+            maxLength={piece.length}
+            busy={busy}
+            onApply={onArc}
+          />
         )}
         {piece.type === 'flex' && onMakeCurved && (
           <div className="space-y-2">

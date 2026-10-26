@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MAX_CURVE_DEGREES, arcCurve, arcLength, curvedShape } from './curves.js'
+import { MAX_CURVE_DEGREES, arcCurve, arcLength, curveOf, curvedShape } from './curves.js'
 
 // The centre of the arc: on the perpendicular through the middle of the chord, on the side away from the bend
 const centre = (length, radius, angle, side) => ({
@@ -39,4 +39,19 @@ test('a curve needs a radius above zero and an angle from 1 to 90 degrees', () =
   assert.throws(() => arcCurve(0, 90, 'left'))
   assert.throws(() => arcCurve(300, 0, 'left'))
   assert.throws(() => arcCurve(300, MAX_CURVE_DEGREES + 1, 'left'))
+})
+
+test('a curve reads back as the radius, angle and side it was made from', () => {
+  for (const [radius, angle, side] of [[300, 90, 'left'], [250, 60, 'right'], [150, 15, 'left']]) {
+    const curve = arcCurve(radius, angle, side)
+    const read = curveOf(curve.length, curve.handles)
+    assert.ok(Math.abs(read.radius - radius) < 0.5, `radius ${read.radius} for ${radius}`)
+    assert.ok(Math.abs(read.angle - angle) < 0.1, `angle ${read.angle} for ${angle}`)
+    assert.equal(read.side, side)
+  }
+})
+
+test('a track with no bend reads as no curve', () => {
+  assert.equal(curveOf(400, [{ x: 133, y: 0 }, { x: 267, y: 0 }]), null)
+  assert.equal(curveOf(400, undefined), null)
 })

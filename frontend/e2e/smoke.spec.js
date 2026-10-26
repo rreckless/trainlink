@@ -208,3 +208,34 @@ test('a flex track curved to a radius and angle takes its chord length and curve
   expect(piece.handles).toHaveLength(2)
   expect(piece.handles[0].y).toBeLessThan(0)
 })
+
+test('a selected curve shows its own radius and angle, not the defaults', async ({ page }) => {
+  const name = `Read curve ${Date.now()}`
+  const created = await page.request.post('/api/layouts', { data: { name, width: 1200, height: 800, scale: 'N' } })
+  const id = (await created.json()).id
+  await page.request.patch(`/api/layouts/${id}`, {
+    data: { elements: { track_system: 'Code 55', track_pieces: [{ id: 'f1', piece_id: 'peco-n-sl-300f', x: 100, y: 100, rotation: 0, flip: false }] } },
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Layout Editor', exact: true }).first().click()
+  await page.getByRole('tab', { name }).click()
+  await page.waitForLoadState('networkidle')
+  const box = await page.locator('canvas').first().boundingBox()
+  await page.mouse.click(box.x + 300, box.y + 100)
+  await page.getByLabel('Radius (mm)').fill('250')
+  await page.getByLabel('Angle (1 to 90°)').fill('60')
+  await page.locator('select').filter({ has: page.locator('option[value="right"]') }).selectOption('right')
+  await page.getByRole('button', { name: 'Apply curve' }).click()
+
+  // Applying scrolled the page to the button, so the canvas is measured again before the next clicks
+  const moved = await page.locator('canvas').first().boundingBox()
+  // Deselect on empty canvas, then select the curve again
+  await page.mouse.click(moved.x + 400, moved.y + 200)
+  await expect(page.getByText('Nothing selected')).toBeVisible()
+  // The curve bulges 250 * (1 - cos 30°) ≈ 33 mm toward the bend at its middle, so that is where it is hit
+  await page.mouse.click(moved.x + 225, moved.y + 133)
+  await expect(page.getByText('Now: radius 250 mm, 60°, bends right')).toBeVisible()
+  await expect(page.getByLabel('Radius (mm)')).toHaveValue('250')
+  await expect(page.getByLabel('Angle (1 to 90°)')).toHaveValue('60')
+})

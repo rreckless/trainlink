@@ -125,3 +125,19 @@ export function arcCurve(radius, angleDegrees, side) {
 export function arcLength(radius, angleDegrees) {
   return radius * rad(angleDegrees)
 }
+
+// The arc a flex track follows, read back from its length and handles: its radius, the angle it turns through, and the
+// side it bends to. A track with no bend, or a shape that is not an arc, reads as null. Handles dragged by hand give an
+// arc that fits the shape as closely as its two tangents allow
+export function curveOf(length, handles) {
+  if (!Array.isArray(handles) || handles.length !== 2 || !(length > 0)) return null
+  const [p1, p2] = handles
+  const start = Math.atan2(p1.y, p1.x)
+  const arrive = Math.atan2(-p2.y, length - p2.x)
+  const turn = arrive - start
+  const angle = Math.abs(deg(turn))
+  if (!(angle > 0.05) || angle >= 180) return null
+  const radius = length / (2 * Math.sin(Math.abs(turn) / 2))
+  if (!Number.isFinite(radius)) return null
+  return { radius, angle, side: turn > 0 ? 'left' : 'right' }
+}
