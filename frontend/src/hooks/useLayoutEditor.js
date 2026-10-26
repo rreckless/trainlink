@@ -39,8 +39,10 @@ export function useLayoutEditor() {
   const [items, setItems] = useState([])
   const [tracks, setTracks] = useState([])
   const [pieces, setPieces] = useState([])
+  // Turnout legs the AnyRail import found with no track on the other side. Kept with the layout until cleared
+  const [legs, setLegs] = useState([])
   // Last state loaded from or saved to the server, used to work out what changed
-  const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
+  const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', legs: '[]', size: null })
   const [importReport, setImportReport] = useState(null)
   const [tool, setTool] = useState('select')
   // The piece picked from the list to place next, or null
@@ -66,9 +68,10 @@ export function useLayoutEditor() {
   const dirty = useMemo(() => {
     if (JSON.stringify(tracks) !== saved.tracks) return true
     if (JSON.stringify(pieces) !== saved.pieces) return true
+    if (JSON.stringify(legs) !== saved.legs) return true
     if (sizeChanged) return true
     return diffItems(saved.items, items).length > 0
-  }, [items, tracks, pieces, saved, sizeChanged])
+  }, [items, tracks, pieces, legs, saved, sizeChanged])
 
   const selectedItem = items.find((item) => item.key === selectedKey) || null
   const selectedTrack = selectedKey?.startsWith('track:')
@@ -127,11 +130,14 @@ export function useLayoutEditor() {
       setLayout(found)
       setItems(loadedItems)
       setTracks(loadedTracks)
+      const loadedLegs = found.elements?.no_track_legs ?? []
       setPieces(loadedPieces)
+      setLegs(loadedLegs)
       setSaved({
         items: snapshotOf(loadedItems),
         tracks: JSON.stringify(loadedTracks),
         pieces: JSON.stringify(loadedPieces),
+        legs: JSON.stringify(loadedLegs),
         size: { width: found.width, height: found.height },
       })
       setSelectedKey(null)
@@ -226,7 +232,8 @@ export function useLayoutEditor() {
         setItems([])
         setTracks([])
         setPieces([])
-        setSaved({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
+        setLegs([])
+        setSaved({ items: new Map(), tracks: '[]', pieces: '[]', legs: '[]', size: null })
         setSelectedKey(null)
         setPendingStart(null)
         useStore.getState().setLayout(null)
@@ -336,6 +343,7 @@ export function useLayoutEditor() {
       try {
         const report = await layoutApi.importAnyRail({ xml, inner_radius_mm: innerRadiusMm })
         setPieces(report.track_pieces)
+        setLegs(report.no_track_legs ?? [])
         setLayout((prev) => ({ ...prev, width: report.width, height: report.height }))
         setSelectedKey(null)
         setPendingStart(null)
@@ -362,10 +370,10 @@ export function useLayoutEditor() {
         else if (op.op === 'update') await layoutApi.updateEntity(op.kind, op.id, op.body)
         else await layoutApi.deleteEntity(op.kind, op.id)
       }
-      if (JSON.stringify(tracks) !== saved.tracks || JSON.stringify(pieces) !== saved.pieces || sizeChanged) {
+      if (JSON.stringify(tracks) !== saved.tracks || JSON.stringify(pieces) !== saved.pieces || JSON.stringify(legs) !== saved.legs || sizeChanged) {
         await layoutApi.updateLayout(layout.id, {
           ...(sizeChanged ? { width: layout.width, height: layout.height } : {}),
-          elements: { ...layout.elements, tracks, track_pieces: pieces, track_system: trackSystem },
+          elements: { ...layout.elements, tracks, track_pieces: pieces, track_system: trackSystem, no_track_legs: legs },
         })
       }
       await openLayout(layout.id)

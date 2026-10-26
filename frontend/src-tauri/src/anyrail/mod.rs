@@ -368,6 +368,33 @@ pub fn three_way_groups(doc: &Document, connectors: &Connectors) -> Vec<(Vec<Str
 }
 
 /// Convert a JMRI layout-config XML string into track pieces, with the layout's size and what could not be placed
+/// Turnout and slip legs with no track on the other side: each leg ends at an anchor that no other track segment
+/// touches. An end bumper is a deliberate end, so it is not listed
+pub fn legs_without_track(xml: &str) -> Result<Vec<Value>, String> {
+    let doc = parse(xml)?;
+    let connectors = connectors(&doc);
+    let mut uses: HashMap<String, usize> = HashMap::new();
+    for segment in doc.descendants().filter(|node| node.has_tag_name("tracksegment")) {
+        let (first, second) = segment_keys(&segment);
+        *uses.entry(first.0).or_default() += 1;
+        *uses.entry(second.0).or_default() += 1;
+    }
+    let anchors: HashSet<String> = doc
+        .descendants()
+        .filter(|node| node.has_tag_name("positionablepoint") && attr(node, "type") == "ANCHOR")
+        .map(|node| attr(&node, "ident").to_string())
+        .collect();
+    Ok(connectors
+        .order
+        .iter()
+        .filter_map(|leg| {
+            let other = connectors.links.get(leg)?;
+            let open = other.1 == "POS_POINT" && anchors.contains(&other.0) && uses.get(&other.0) == Some(&1);
+            open.then(|| json!({ "turnout": leg.0, "leg": leg.1.rsplit('_').next().unwrap_or_default(), "point": other.0 }))
+        })
+        .collect())
+}
+
 pub fn import(xml: &str, inner_radius_mm: f64) -> Result<Value, String> {
     if !(inner_radius_mm > 0.0) {
         return Err("The inner curve radius must be a positive number of mm".into());

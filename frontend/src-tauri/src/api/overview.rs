@@ -77,6 +77,19 @@ fn health(app: &Arc<AppState>) -> Out {
         .into_iter()
         .filter(|row| row["has_address"] == Value::Bool(false) && row["dcc_output_straight"].is_null())
         .collect();
+    // Legs found by the AnyRail import are kept in the layout's elements until the user clears them
+    let mut legs: Vec<Value> = Vec::new();
+    for layout in crate::db::layouts::list(&inner.db)? {
+        for item in layout.elements.get("no_track_legs").and_then(Value::as_array).into_iter().flatten() {
+            legs.push(json!({
+                "layout_id": layout.id,
+                "layout": layout.name,
+                "turnout": item["turnout"],
+                "leg": item["leg"],
+                "point": item["point"],
+            }));
+        }
+    }
     let blocks_total: i64 = inner.db.query_row("SELECT COUNT(*) FROM blocks", [], |row| row.get(0))?;
     let turnouts_total = turnout_rows(&inner)?.len();
     Ok(Reply::json(
@@ -84,10 +97,11 @@ fn health(app: &Arc<AppState>) -> Out {
         json!({
             "blocks_without_sensor": blocks,
             "turnouts_without_address": turnouts,
+            "legs_without_track": legs,
             "counts": {
                 "blocks": blocks_total,
                 "turnouts": turnouts_total,
-                "missing": blocks.len() + turnouts.len(),
+                "missing": blocks.len() + turnouts.len() + legs.len(),
             },
         }),
     ))

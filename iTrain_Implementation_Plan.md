@@ -371,8 +371,8 @@ Entry criteria:
 3. **Import review** 🟡
    - 🧪 The AnyRail import report lists gaps, unanchored turnouts, unplaced pieces and hand mismatches. It is shown when the import runs, not kept for later
    - 🧪 The Health page lists blocks without a sensor and turnouts without a DCC address, across all layouts
-   - ⬜ Keep the import report so it can be reviewed later
-   - ⬜ Turnout symbols without a link: not yet defined, so no list exists for them
+   - 🧪 Turnout legs with no track on the other side (the anchor they end at is touched by no other track) are kept on the layout after an import, and listed on the Health page until the review is cleared
+   - ⬜ The full import report is still shown only at import time, not kept
 4. **Setup checklist** ⬜
    - ⬜ Guided steps: command station, locomotives, first manual run, track plan, blocks and sensors, turnouts, and routes
 

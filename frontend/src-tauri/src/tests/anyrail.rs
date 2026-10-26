@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::anyrail::import;
+use crate::anyrail::{import, legs_without_track};
 
 const FIXTURES: [(&str, &str, &str); 5] = [
     ("basic", include_str!("anyrail/basic.xml"), include_str!("anyrail/basic.json")),
@@ -92,4 +92,30 @@ fn only_jpeg_png_and_webp_pictures_are_accepted() {
     assert_eq!(crate::import_file::picture_type(Path::new("shunter.webp")), Some("image/webp"));
     assert_eq!(crate::import_file::picture_type(Path::new("notes.txt")), None);
     assert_eq!(crate::import_file::picture_type(Path::new("no-extension")), None);
+}
+
+#[test]
+fn a_leg_ending_at_an_anchor_that_no_other_track_touches_is_listed() {
+    let xml = r#"<layout-config>
+<layoutturnout ident="T1" turnoutname="T1" type="RH_TURNOUT" connectaname="A1" connectbname="B1" connectcname="C1" xcen="0" ycen="0" xb="1" yb="0" xc="1" yc="1" continuing="2"/>
+<tracksegment ident="S1" connect1name="T1" type1="TURNOUT_A" connect2name="P1" type2="POS_POINT"/>
+<tracksegment ident="S2" connect1name="T1" type1="TURNOUT_B" connect2name="P2" type2="POS_POINT"/>
+<tracksegment ident="S3" connect1name="T1" type1="TURNOUT_C" connect2name="P3" type2="POS_POINT"/>
+<tracksegment ident="S4" connect1name="P2" type1="POS_POINT" connect2name="P4" type2="POS_POINT"/>
+<positionablepoint ident="P1" type="END_BUMPER" x="0" y="0"/>
+<positionablepoint ident="P2" type="ANCHOR" x="1" y="0"/>
+<positionablepoint ident="P3" type="ANCHOR" x="1" y="1"/>
+<positionablepoint ident="P4" type="END_BUMPER" x="2" y="0"/>
+</layout-config>"#;
+    let found = legs_without_track(xml).unwrap();
+    assert_eq!(found, vec![serde_json::json!({ "turnout": "T1", "leg": "C", "point": "P3" })]);
+}
+
+#[test]
+fn the_sample_fixtures_list_only_their_unattached_legs() {
+    // These fixtures are geometry tests, so their turnouts stand alone: every leg ends at an anchor nothing else touches
+    let turnout = legs_without_track(include_str!("anyrail/turnout_joined.xml")).unwrap();
+    assert_eq!(turnout.len(), 2);
+    let slip = legs_without_track(include_str!("anyrail/slip_joined.xml")).unwrap();
+    assert_eq!(slip.len(), 3);
 }
