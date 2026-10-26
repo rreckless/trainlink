@@ -4,6 +4,7 @@ use std::path::Path;
 
 use rusqlite::{Connection, Error, ErrorCode};
 
+pub mod consists;
 pub mod layouts;
 pub mod locomotives;
 pub mod settings;
@@ -59,6 +60,19 @@ CREATE TABLE IF NOT EXISTS locomotives (
     command_station_id INTEGER REFERENCES command_stations(id),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS consists (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS consist_members (
+    consist_id INTEGER NOT NULL REFERENCES consists(id) ON DELETE CASCADE,
+    locomotive_id INTEGER NOT NULL UNIQUE REFERENCES locomotives(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    reversed INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (consist_id, locomotive_id)
 );
 CREATE TABLE IF NOT EXISTS blocks (
     id INTEGER PRIMARY KEY,

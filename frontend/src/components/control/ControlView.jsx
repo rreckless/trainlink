@@ -6,6 +6,7 @@ import { useZ21Connection } from '../../hooks/useZ21Connection'
 import { useLocomotiveRoster } from '../../hooks/useLocomotiveRoster'
 import LocomotiveRoster from './LocomotiveRoster'
 import FunctionPanel from './FunctionPanel'
+import ConsistPanel from './ConsistPanel'
 import OperatePanel from './OperatePanel'
 
 const TRACK_MESSAGES = {
@@ -104,6 +105,7 @@ export default function ControlView() {
         <LocomotiveRoster roster={roster} controlsEnabled={controlsEnabled} onError={setError} />
         <FunctionPanel roster={roster} controlsEnabled={controlsEnabled} />
       </div>
+      <ConsistPanel roster={roster} controlsEnabled={controlsEnabled} onError={setError} />
       <OperatePanel />
     </div>
   )

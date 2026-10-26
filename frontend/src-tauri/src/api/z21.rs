@@ -78,7 +78,7 @@ fn feedback(app: &Arc<AppState>) -> Out {
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
 }
 
-fn ready_check(inner: &Inner, what: &str) -> Result<(), ApiError> {
+pub(super) fn ready_check(inner: &Inner, what: &str) -> Result<(), ApiError> {
     if !inner.z21.connected {
         return Err(ApiError::new(503, "Z21 not connected"));
     }
