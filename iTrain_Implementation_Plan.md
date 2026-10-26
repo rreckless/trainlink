@@ -379,7 +379,7 @@ Entry criteria:
 **10b. Blocks and sensors (needs Phase 2)**
 5. **Blocks** 🧪
    - 🧪 Blocks page with filters for all, occupied, reserved, free and problems. Problems are blocks with no sensor linked, the same blocks Health lists
-   - 🧪 Block properties: group, length, max speed, sensors and signals. Borders are neighbouring blocks, set both ways and synced. Length, brake point and stop point are in cm. The stop point cannot be past the end of the block, and the brake point cannot be after the stop point. Borders, roles, brake and stop points, and length sync between devices. **Open:** automatic driving does not read the brake and stop points yet, because automatic driving is not built (item 10 in Phase 10c)
+   - 🧪 Block properties: group, length, max speed, sensors and signals. Borders are neighbouring blocks, set both ways and synced. Length, brake point and stop point are in cm. The stop point cannot be past the end of the block, and the brake point cannot be after the stop point. Borders, roles, brake and stop points, and length sync between devices. The migration `supabase/migrations/20261028100000_block_borders_stops_roles.sql` is applied to the project. **Open:** automatic driving does not read the brake and stop points yet, because automatic driving is not built (item 10 in Phase 10c)
    - 🧪 Entry, middle and exit roles on each linked sensor, kept when the sensor list changes. **Open:** the roles are not synced to the cloud yet, and no route or signal reads them yet
    - ⬜ Signal addresses: moved to item 30 (Signals), which decides how signals are addressed
 6. **Feedback monitor** ⬜
