@@ -82,3 +82,33 @@ test('a block can be linked to its next block and a signal on the Blocks page', 
   expect(saved.next_block_id).toBe(second.id)
   expect(saved.signal_ids.length).toBe(1)
 })
+
+test('a route is built from blocks in order on the Routes page', async ({ page }) => {
+  const layout = await (await page.request.post('/api/layouts', {
+    data: { name: 'Routes test', width: 800, height: 600, scale: 'N' },
+  })).json()
+  const first = await (await page.request.post('/api/blocks', {
+    data: { layout_id: layout.id, name: 'Route A', x: 0, y: 0 },
+  })).json()
+  const second = await (await page.request.post('/api/blocks', {
+    data: { layout_id: layout.id, name: 'Route B', x: 5, y: 0 },
+  })).json()
+  await page.request.patch(`/api/blocks/${first.id}`, { data: { next_block_id: second.id } })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Routes', exact: true }).first().click()
+  await page.getByRole('combobox').nth(0).selectOption({ label: 'Routes test' })
+  await page.getByRole('button', { name: 'New route' }).click()
+  await page.getByLabel('Name').fill('Up')
+  await page.getByRole('combobox').nth(1).selectOption({ label: 'Route A' })
+  await page.getByRole('button', { name: 'Add block' }).click()
+  await page.getByRole('combobox').nth(1).selectOption({ label: 'Route B' })
+  await page.getByRole('button', { name: 'Add block' }).click()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Save route' }).click()
+
+  await expect(page.getByText('Created Up')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Up\s+2 blocks/ })).toBeVisible()
+  await expect(page.getByText('not linked')).toHaveCount(0)
+})

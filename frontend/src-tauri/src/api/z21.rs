@@ -183,7 +183,7 @@ fn locos(app: &Arc<AppState>, call: &Call) -> Out {
         }
     }
     let inner = &mut *inner;
-    let Inner { db, z21, moving } = inner;
+    let Inner { db, z21, moving, .. } = inner;
     moving.flush_if_due(db, std::time::Instant::now());
     let states: serde_json::Map<String, Value> = addresses
         .iter()

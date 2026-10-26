@@ -153,25 +153,30 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 ### Phase 3: Automation & Routes (3-4 weeks)
 **Goal**: Route-based automation
 
-1. **Route Management** ⬜
-   - 🟡 Route model and REST routes exist, Route Manager UI is a placeholder
-   - ⬜ Route definition (sequence of blocks)
-   - ⬜ Route creation UI with wizard
-   - ⬜ Advanced route options (speed limits, dwell times)
-   - ⬜ Route visualization
-   - ⬜ Run and Stop on the Route Manager. The Run button does nothing yet, and the backend refuses to run a route until automatic driving is built
+1. **Route Management** ✅
+   - ✅ Route model and REST routes exist, with a sequence of blocks that cannot repeat a block and must stay on one layout
+   - ✅ Route definition (sequence of blocks): a wizard on the Route Manager, with blocks in order (move up, move down, remove), then options, then review
+   - ✅ Steps that do not follow a block's next-block link are flagged on the Route Manager and in the route's `unlinked_steps`. Not required before a route is saved
+   - ✅ Route creation wizard: blocks, options, and review. The review draws the route on the layout with its blocks outlined
+   - ✅ Advanced route options: a speed for each block (blank for the block's maximum), a wait in seconds at each block, and auto-return. Checked on the server: one entry per block, speed 0 to 126, wait 0 to 3600 seconds
+   - ✅ Route visualization: the steps in order with each block's live state, and the route outlined on the layout
+   - 🧪 Run and Stop on the Route Manager, through automatic driving (below). Tested with the fake Z21. **Open:** check on a real layout
 
-2. **Automatic Driving** ⬜
-   - ⬜ Simple automatic mode (follow route)
-   - ⬜ Speed management
-   - ⬜ Stop at destinations
-   - ⬜ Route completion handling
+2. **Automatic Driving** 🧪
+   - 🧪 Simple automatic mode (follow route): a run starts a route with a locomotive in its first block, and moves on as the train enters each block. Tested with the fake Z21
+   - 🧪 Speed management: each block's speed from the route's speed profile, or the block's maximum speed
+   - 🧪 Stop at destinations: a run stops at the last block of its route, or turns round with auto-return
+   - 🧪 Route completion handling: a route that completes is no longer running. A run that was not started in this session is stopped at start-up
+   - 🧪 Waiting for a busy block: a run holds at speed 0 until the block ahead is free, and the Route Manager shows what it waits for. No configurable time yet
+   - **Open:** check on a real layout. Collision avoidance (item 3) must come before runs on a shared layout
 
-3. **Collision Avoidance** ⬜
-   - ⬜ Block occupancy tracking
-   - ⬜ Train detection via Z21 feedback
-   - ⬜ Automatic signal management to prevent collisions
-   - ⬜ Deadlock prevention
+3. **Collision Avoidance** 🧪
+   - ✅ Block occupancy tracking: a block is occupied when a linked feedback reports it, or by its own state where nothing has reported
+   - 🧪 Train detection via Z21 feedback: the feedback sets a block's occupancy, which runs and signals read. Tested with the fake Z21. **Open:** check on a real detector
+   - 🧪 Automatic signal management to prevent collisions: a run never enters an occupied block, and signals show stop for an occupied block, so both agree. Caution comes from the next block
+   - 🧪 Deadlock prevention: a run holds the block it is in and claims the block ahead before moving. A cycle of runs waiting on each other is broken by stopping the newer run, with a notice. Tested with the fake Z21
+   - 🧪 A block that is occupied but not claimed by a run (a train no run expects) holds the runs that want it, and raises an alarm on the Route Manager until it is free. An alarm can be dismissed, but the hold stays. Tested with the fake Z21. **Open:** check on a real layout
+   - **Open:** check on a real layout with two runs sharing a block
 
 4. **Turnouts** 🧪
    - 🧪 Z21 turnout commands (LAN_X_SET_TURNOUT, queued, activate then deactivate), frames checked against the spec. Not yet tried on a turnout

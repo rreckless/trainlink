@@ -51,6 +51,7 @@ export default function LayoutCanvas({
   items,
   liveOccupied = {},
   liveAspects = {},
+  highlightedBlocks = [],
   tool,
   selectedKey,
   pendingStart,
@@ -405,8 +406,8 @@ export default function LayoutCanvas({
                   width={BLOCK_WIDTH}
                   height={BLOCK_HEIGHT}
                   fill={(liveOccupied[item.id] ?? item.state === 'occupied') ? '#b45309' : '#1e40af'}
-                  stroke={selected ? '#38bdf8' : '#334155'}
-                  strokeWidth={selected ? 3 : 1}
+                  stroke={selected ? '#38bdf8' : highlightedBlocks.includes(item.id) ? '#facc15' : '#334155'}
+                  strokeWidth={selected || highlightedBlocks.includes(item.id) ? 3 : 1}
                   cornerRadius={3}
                   listening={listening}
                   draggable={draggable}
