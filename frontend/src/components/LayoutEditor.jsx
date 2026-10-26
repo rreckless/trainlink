@@ -118,7 +118,9 @@ export default function LayoutEditor() {
   }, [editor.deleteSelected, editor.cancelTrack, editor.setSelectedKey, editor.selectedPlaced, editor.rotatePiece])
 
   const selected = Boolean(editor.selectedItem || editor.selectedTrack || editor.selectedPlaced)
-  const empty = editor.tracks.length === 0 && editor.items.length === 0
+  // The start card shows until something is on the layout, or a tool other than Select is chosen to start one
+  const drawn = editor.tracks.length + editor.items.length + editor.pieces.length
+  const showStart = drawn === 0 && editor.tool === 'select'
 
   return (
     <div className="flex flex-col gap-3">
@@ -207,7 +209,7 @@ export default function LayoutEditor() {
                   onMove={editor.moveItem}
                 />
               </div>
-              {empty && (
+              {showStart && (
                 <EmptyStart
                   onDraw={() => editor.chooseTool('track')}
                   onPlace={() => editor.chooseTool('piece')}

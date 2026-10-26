@@ -135,3 +135,24 @@ test('the decoder CVs page offers the CVs of the NMRA profile and keeps Write of
   await page.getByLabel('I have checked the CV number and the value').check()
   await expect(write).toBeEnabled()
 })
+
+test('the start card shows on an empty layout and goes once a piece is on it', async ({ page }) => {
+  const name = `Start card ${Date.now()}`
+  const created = await page.request.post('/api/layouts', { data: { name, width: 800, height: 400, scale: 'N' } })
+  const id = (await created.json()).id
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Layout Editor', exact: true }).first().click()
+  await page.getByRole('tab', { name }).click()
+  await expect(page.getByText('Start the track plan')).toBeVisible()
+
+  const saved = await page.request.patch(`/api/layouts/${id}`, {
+    data: { elements: { track_system: 'Code 55', track_pieces: [{ id: 'p1', piece_id: 'peco-n-sl-300f', x: 100, y: 100, rotation: 0, flip: false }] } },
+  })
+  expect(saved.status()).toBe(200)
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Layout Editor', exact: true }).first().click()
+  await page.getByRole('tab', { name }).click()
+  await expect(page.getByText('Start the track plan')).toHaveCount(0)
+})
