@@ -446,12 +446,12 @@ Entry criteria:
     - ⬜ Feed by signal type, or one address for red and green, with a swap option
     - ⬜ Aspect table that maps each aspect to its addresses, for example Hp0 stop and Hp1 clear
     - ⬜ Fictitious signals that are not wired to hardware
-31. **Multi-unit consists** ⬜ (replaces the software-only consist in Phase 8 once CV19 programming exists)
-    - ⬜ A numbered consist with its own consist address, shared by the locomotives in it
-    - ⬜ Each locomotive's CV19 is set to the consist address, so the decoders run together
-    - ⬜ A minimum of two locomotives per consist, with a reversed flag for each
-    - ⬜ A consist window that the layout remembers, and a single speed slider for the whole consist
-    - ⬜ A consist address that routes and automation can refer to
+31. **Multi-unit consists** 🟡 (replaces the software-only consist in Phase 8 once CV19 programming exists)
+    - 🧪 A consist has its own consist address (1 to 127), stored and checked so no two consists share one. Built on branch `consist-address`, not yet pushed
+    - ⬜ Each locomotive's CV19 is set to the consist address, so the decoders run together. Needs Phase 9 CV programming
+    - 🧪 A minimum of two locomotives per consist, with a reversed flag for each. Existing one-locomotive consists keep working but cannot be edited down to one
+    - 🧪 A Consists page in the side menu, under Drive, for making and driving consists, with one speed slider for the whole consist. Not yet in a separate window that the layout remembers
+    - ⬜ A consist address that routes and automation can refer to (Phase 3)
 32. **Trains** ⬜ (builds on item 21)
     - ⬜ A train is one locomotive plus an ordered list of wagons, with a name, group, weight class and train type
     - ⬜ Train length and weight are worked out from the wagons, for block and automation checks

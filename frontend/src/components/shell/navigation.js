@@ -1,4 +1,4 @@
-import { Gauge, GitBranch, PenTool, Route, Settings, TrainFront } from 'lucide-react'
+import { Gauge, GitBranch, Layers, PenTool, Route, Settings, TrainFront } from 'lucide-react'
 
 // The pages, grouped as they appear in the side navigation. Colour is the accent of the page's icon tile
 export const NAV_GROUPS = [
@@ -7,6 +7,7 @@ export const NAV_GROUPS = [
     items: [
       { id: 'control', label: 'Control', icon: Gauge, accent: 'bg-amber-500', subtitle: 'Drive locomotives and set their functions' },
       { id: 'locomotives', label: 'Locomotives', icon: TrainFront, accent: 'bg-violet-500', subtitle: 'The roster, pictures, and function labels' },
+      { id: 'consists', label: 'Consists', icon: Layers, accent: 'bg-purple-500', subtitle: 'Group locomotives under one consist address' },
     ],
   },
   {
