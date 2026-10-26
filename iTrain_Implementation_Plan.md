@@ -373,8 +373,8 @@ Entry criteria:
    - 🧪 The Health page lists blocks without a sensor and turnouts without a DCC address, across all layouts
    - 🧪 Turnout legs with no track on the other side (the anchor they end at is touched by no other track) are kept on the layout after an import, and listed on the Health page until the review is cleared
    - ⬜ The full import report is still shown only at import time, not kept
-4. **Setup checklist** ⬜
-   - ⬜ Guided steps: command station, locomotives, first manual run, track plan, blocks and sensors, turnouts, and routes
+4. **Setup checklist** 🧪
+   - 🧪 Guided steps: command station, locomotives, first manual run, track plan, blocks and sensors, turnouts, and routes. Each step is done when its data exists and opens its page. A first manual run is done once a locomotive has recorded moving time
 
 **10b. Blocks and sensors (needs Phase 2)**
 5. **Blocks** ⬜
@@ -488,7 +488,7 @@ Entry criteria:
 
 **Not yet done**
 4. ⬜ **Basic and Advanced sidebar.** Group the pages into Basics and Advanced, with the rest collapsed, as LocoLink does
-5. ⬜ **Guided setup checklist.** A Setup page with numbered steps (command station, locomotives, track plan, blocks and sensors, turnouts, routes), each showing done or to do
+5. 🧪 **Guided setup checklist.** A Setup page with numbered steps (command station, locomotives, first run, track plan, blocks and sensors, turnouts, routes), each showing done or to do
 6. ⬜ **Summary cards and filters** on the Locomotives and Blocks pages, as on the Turnouts page
 7. ⬜ **Item editing in one form with a live preview**, for new items first (turnouts, blocks, locomotives), then converting the existing inline forms
 8. ⬜ **Import review list** after an AnyRail import: turnouts without an address, turnouts without a link, and blocks without a sensor (see Phase 10a item 3)

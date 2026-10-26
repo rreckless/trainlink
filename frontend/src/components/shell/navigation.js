@@ -1,4 +1,4 @@
-import { Boxes, Cpu, Gauge, GitBranch, Layers, PenTool, Route, Settings, Split, Stethoscope, TrainFront } from 'lucide-react'
+import { Boxes, Cpu, Gauge, GitBranch, Layers, ListChecks, PenTool, Route, Settings, Split, Stethoscope, TrainFront } from 'lucide-react'
 
 // The side navigation, as LocoLink lays it out: three sections that open and close, and within Basics a group of less
 // common pages that is closed until it is opened. Colour is the accent of the page's icon tile
@@ -12,6 +12,7 @@ const PAGE = {
   turnouts: { id: 'turnouts', label: 'Turnouts', icon: Split, accent: 'bg-blue-400', subtitle: 'Every turnout on every layout, and which have an address' },
   routes: { id: 'routes', label: 'Routes', icon: Route, accent: 'bg-teal-500', subtitle: 'Routes through the blocks of a layout' },
   editor: { id: 'editor', label: 'Layout Editor', icon: PenTool, accent: 'bg-sky-500', subtitle: 'Draw the track and place its pieces' },
+  setup: { id: 'setup', label: 'Setup', icon: ListChecks, accent: 'bg-green-500', subtitle: 'The steps to a working setup, and which are done' },
   health: { id: 'health', label: 'Health', icon: Stethoscope, accent: 'bg-emerald-500', subtitle: 'What is missing before automatic driving works' },
   settings: { id: 'settings', label: 'Settings', icon: Settings, accent: 'bg-slate-500', subtitle: 'The Z21 connection and the app' },
 }
@@ -20,7 +21,7 @@ export const NAV_SECTIONS = [
   {
     id: 'basics',
     title: 'Basics',
-    items: [PAGE.control, PAGE.locomotives, PAGE.turnouts, PAGE.routes, PAGE.decoder],
+    items: [PAGE.setup, PAGE.control, PAGE.locomotives, PAGE.turnouts, PAGE.routes, PAGE.decoder],
     more: { title: 'More basic features', items: [PAGE.consists, PAGE.switchboard] },
   },
   {

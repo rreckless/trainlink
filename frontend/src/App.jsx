@@ -13,6 +13,7 @@ import ConsistsView from './components/consists/ConsistsView'
 import TurnoutsView from './components/turnouts/TurnoutsView'
 import BlocksView from './components/blocks/BlocksView'
 import HealthView from './components/health/HealthView'
+import SetupView from './components/setup/SetupView'
 import ProgrammingView from './components/programming/ProgrammingView'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
@@ -28,6 +29,7 @@ const PAGE_VIEWS = {
   blocks: BlocksView,
   turnouts: TurnoutsView,
   health: HealthView,
+  setup: SetupView,
   decoder: ProgrammingView,
   routes: RouteManager,
   editor: LayoutEditor,

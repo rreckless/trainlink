@@ -80,3 +80,20 @@ fn legs_without_track_saved_on_a_layout_are_listed_on_health() {
     assert_eq!(health["legs_without_track"][0]["leg"], "C");
     assert_eq!(health["counts"]["missing"], 1);
 }
+
+#[test]
+fn setup_steps_are_done_as_the_data_for_them_is_added() {
+    let app = app();
+    let (status, value) = send(&app, "GET", "/api/overview/setup", None);
+    assert_eq!(status, 200);
+    assert_eq!(value["total"], 7);
+    assert_eq!(value["done"], 0, "{value}");
+
+    send(&app, "POST", "/api/command-stations", Some(json!({ "name": "Z21", "port": "10.0.0.111:21105" })));
+    send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel" })));
+    let (_, value) = send(&app, "GET", "/api/overview/setup", None);
+    assert_eq!(value["done"], 2, "{value}");
+    assert_eq!(value["steps"][0]["done"], true);
+    assert_eq!(value["steps"][1]["page"], "locomotives");
+    assert_eq!(value["steps"][2]["done"], false, "no run recorded yet");
+}
