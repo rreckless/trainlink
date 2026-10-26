@@ -117,7 +117,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Automatic signal management: a linked signal shows stop when a block it protects is occupied, caution when the block after is, and go otherwise
    - ✅ Block properties UI: the Blocks page
    - ✅ Live occupancy on the Switchboard, in the layout editor, and in the operate panel on the Control page. Refreshed every two seconds
-   - 🧪 Block links sync between devices: the next block, feedbacks and signals travel with each block. Tested with the in-memory cloud. **Open:** apply `supabase/migrations/20261026100000_block_links.sql` to the project, then check on two real devices
+   - 🧪 Block links sync between devices: the next block, feedbacks and signals travel with each block. Tested with the in-memory cloud. The migration `supabase/migrations/20261026100000_block_links.sql` is applied to the project. **Open:** check on two real devices
 
 3. **Signal Control** ✅
    - ✅ Signal model and REST routes exist
