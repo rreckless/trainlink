@@ -364,3 +364,22 @@ test('the feedback monitor shows all 128 addresses, with unlinked ones marked', 
   await page.getByRole('button', { name: 'Read now' }).click()
   await expect(page.getByText(/128 addresses/)).toBeVisible()
 })
+
+test('the health page shows a score and a card for each category, with cameras and recovery not built', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Health', exact: true }).first().click()
+  await expect(page.getByText('Health score')).toBeVisible()
+  await expect(page.getByText(/^\d+%$/).first()).toBeVisible()
+  await expect(page.getByText('Command stations', { exact: true })).toBeVisible()
+  await expect(page.getByText('Not built').first()).toBeVisible()
+})
+
+test('the health page shows the connection log, and makes a support package that can be copied', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Health', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Connection log' })).toBeVisible()
+  await page.getByRole('button', { name: 'Make support package' }).click()
+  await expect(page.locator('textarea[readonly]')).toHaveValue(/TrainLink support package/)
+  await page.getByRole('button', { name: 'Copy' }).click()
+  await expect(page.getByRole('button', { name: /Copied|Copy/ })).toBeVisible()
+})

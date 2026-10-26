@@ -9,6 +9,9 @@ export default function HealthView() {
   const [health, setHealth] = useState(null)
   const [error, setError] = useState('')
   const [checkedAt, setCheckedAt] = useState(null)
+  const [log, setLog] = useState([])
+  const [support, setSupport] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const check = useCallback(
     () =>
@@ -18,10 +21,33 @@ export default function HealthView() {
           setHealth(result)
           setError('')
           setCheckedAt(new Date())
+          return overviewApi.connectionLog()
         })
+        .then((entries) => setLog(entries.slice(-50).reverse()))
         .catch((err) => setError(`Could not run the check: ${err.message}`)),
     []
   )
+
+  // The support package is made when asked for, so it always has the current state
+  const makeSupport = () =>
+    overviewApi
+      .supportPackage()
+      .then((result) => {
+        setSupport(result.text)
+        setCopied(false)
+      })
+      .catch((err) => setError(`Could not make the support package: ${err.message}`))
+
+  // The text is copied from a selected box when the clipboard API is not available
+  const copySupport = async (event) => {
+    try {
+      await navigator.clipboard.writeText(support)
+      setCopied(true)
+    } catch {
+      event.currentTarget.parentElement.querySelector('textarea').select()
+      setCopied(document.execCommand('copy'))
+    }
+  }
 
   useEffect(() => {
     check()
@@ -65,6 +91,37 @@ export default function HealthView() {
 
       {health && (
         <>
+          <section className="bg-slate-800 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold">Health score</h4>
+              <span className="text-2xl font-semibold">{health.score}%</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              The share of scored categories that are fine. Cameras and recovery are not built yet, so they are not scored.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {health.categories.map((category) => (
+                <div key={category.id} className="bg-slate-700 rounded px-3 py-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">{category.label}</div>
+                    <div className="text-xs text-slate-400">{category.detail}</div>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded ${
+                      category.status === 'ok'
+                        ? 'bg-green-800 text-green-100'
+                        : category.status === 'attention'
+                          ? 'bg-amber-700 text-amber-100'
+                          : 'bg-slate-600 text-slate-300'
+                    }`}
+                  >
+                    {category.status === 'ok' ? 'Fine' : category.status === 'attention' ? 'Needs attention' : 'Not built'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="bg-slate-800 rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold">
@@ -143,6 +200,43 @@ export default function HealthView() {
                   </div>
                 )
               })
+            )}
+          </section>
+
+          <section className="bg-slate-800 rounded-lg p-4 space-y-3">
+            <h4 className="font-semibold">Connection log</h4>
+            <p className="text-xs text-slate-400">Connections, lost links and track state changes since the app started. Kept in memory only.</p>
+            {log.length === 0 ? (
+              <p className="text-sm text-slate-400">Nothing logged yet.</p>
+            ) : (
+              <ul className="space-y-1">
+                {log.slice(0, 50).map((entry, index) => (
+                  <li key={`${entry.at}-${index}`} className="text-sm bg-slate-700 rounded px-3 py-2 flex justify-between gap-3">
+                    <span>{entry.message}</span>
+                    <span className="text-xs text-slate-400 shrink-0">{entry.at}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="bg-slate-800 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold">Support package</h4>
+              <button onClick={makeSupport} className="px-3 py-1 text-sm bg-slate-700 rounded hover:bg-slate-600">
+                Make support package
+              </button>
+            </div>
+            <p className="text-xs text-slate-400">
+              Status, counts, health categories and the recent log. Names, addresses and the Z21's IP address are left out, so it is safe to send.
+            </p>
+            {support && (
+              <div className="space-y-2">
+                <textarea readOnly value={support} rows={12} className="w-full px-3 py-2 bg-slate-900 rounded border border-slate-600 text-xs text-slate-200 font-mono" />
+                <button onClick={copySupport} className="px-3 py-1 text-sm bg-slate-700 rounded hover:bg-slate-600">
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
             )}
           </section>
         </>

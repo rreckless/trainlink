@@ -58,6 +58,15 @@ pub const WATCH_EVERY: Duration = Duration::from_secs(1);
 
 /// How many feedback reports are kept while the app runs
 const REPORTS_KEPT: usize = 200;
+/// How many connection log entries are kept while the app runs
+const LOG_KEPT: usize = 300;
+
+/// One line of the connection log, kept in memory while the app runs
+#[derive(Debug, Clone)]
+pub struct LogEntry {
+    pub at: String,
+    pub message: String,
+}
 
 /// A feedback input that changed state, as the Z21 reported it
 #[derive(Debug, Clone)]
@@ -77,6 +86,10 @@ pub struct Z21 {
     pub feedback: BTreeMap<(i64, i64), bool>,
     /// Input changes, oldest first, kept in memory only while the app runs
     pub reports: VecDeque<FeedbackReport>,
+    /// Connection events and track state changes, oldest first, kept in memory only while the app runs
+    pub log: VecDeque<LogEntry>,
+    /// The track state last written to the log, so each change is logged once
+    pub last_track_state: &'static str,
     /// turnout number -> output as last reported (None when the Z21 gave no output)
     pub turnouts: BTreeMap<i64, Option<u8>>,
     pub locos: BTreeMap<i64, LocoState>,
@@ -102,6 +115,8 @@ impl Z21 {
             central_state: None,
             feedback: BTreeMap::new(),
             reports: VecDeque::new(),
+            log: VecDeque::new(),
+            last_track_state: "disconnected",
             turnouts: BTreeMap::new(),
             locos: BTreeMap::new(),
             version: None,
@@ -181,8 +196,28 @@ impl Z21 {
         }
     }
 
+    /// Add a line to the connection log
+    pub fn log(&mut self, message: &str) {
+        self.log.push_back(LogEntry { at: db::now(), message: message.into() });
+        if self.log.len() > LOG_KEPT {
+            self.log.pop_front();
+        }
+    }
+
+    /// Log the track state when it has changed since it was last logged
+    pub fn note_track_state(&mut self) {
+        let state = self.track_state();
+        if state != self.last_track_state {
+            self.log(&format!("Track state is now {state}"));
+            self.last_track_state = state;
+        }
+    }
+
     /// Close the socket and forget what the Z21 reported
     pub fn disconnect(&mut self) {
+        if self.connected {
+            self.log("Disconnected from the Z21");
+        }
         if let Some(stop) = self.stop.take() {
             stop.store(true, Ordering::SeqCst);
         }
@@ -232,6 +267,7 @@ pub fn connect_with_keep_alive(app: &Arc<AppState>, host: &str, port: u16, keep_
         inner.z21.socket = Some(socket.clone());
         inner.z21.stop = Some(stop.clone());
         inner.z21.connected = true;
+        inner.z21.log("Connected to the Z21");
         inner.z21.central_state = None;
         inner.z21.last_reply = Instant::now();
     }
@@ -276,10 +312,11 @@ fn spawn_reader(app: Arc<AppState>, socket: Arc<UdpSocket>, stop: Arc<AtomicBool
 /// while the link is fine. A reconnect that does not open a socket is tried again on the next check
 pub fn link_check(app: &Arc<AppState>, now: Instant) -> bool {
     let (host, port) = {
-        let inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut inner = app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if !inner.z21.connected || !inner.z21.is_lost(now) {
             return false;
         }
+        inner.z21.log("No reply from the Z21, reconnecting");
         (inner.z21.host.clone(), inner.z21.port)
     };
     connect(app, &host, port);
@@ -290,6 +327,7 @@ pub fn link_check(app: &Arc<AppState>, now: Instant) -> bool {
 pub fn spawn_watch(app: Arc<AppState>) {
     std::thread::spawn(move || loop {
         std::thread::sleep(WATCH_EVERY);
+        app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).z21.note_track_state();
         link_check(&app, Instant::now());
     });
 }

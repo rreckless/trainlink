@@ -97,3 +97,39 @@ fn setup_steps_are_done_as_the_data_for_them_is_added() {
     assert_eq!(value["steps"][1]["page"], "locomotives");
     assert_eq!(value["steps"][2]["done"], false, "no run recorded yet");
 }
+
+#[test]
+fn health_categories_and_score_follow_the_project() {
+    let app = app();
+    let (_, health) = send(&app, "GET", "/api/overview/health", None);
+    assert_eq!(health["categories"].as_array().unwrap().len(), 8);
+    assert_eq!(health["categories"][6]["status"], "not_built", "cameras are not built, so they are not scored");
+    // Command stations, locomotives and routes are missing; track, turnouts and blocks are fine: 3 of 6 scored
+    assert_eq!(health["score"], 50, "{health}");
+
+    send(&app, "POST", "/api/command-stations", Some(json!({ "name": "Z21", "port": "10.0.0.111:21105" })));
+    send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel" })));
+    let (_, health) = send(&app, "GET", "/api/overview/health", None);
+    assert_eq!(health["categories"][0]["status"], "ok");
+    assert_eq!(health["categories"][1]["status"], "ok");
+    // Routes are still missing: 5 of 6 scored categories are fine
+    assert_eq!(health["score"], 83, "{health}");
+}
+
+#[test]
+fn the_support_package_has_status_and_the_log_but_no_names_or_addresses() {
+    let app = app();
+    layout(&app, "Private Layout");
+    send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Secret Loco", "dcc_address": 3, "locomotive_type": "diesel" })));
+    let (status, value) = send(&app, "GET", "/api/overview/support", None);
+    assert_eq!(status, 200);
+    let text = value["text"].as_str().unwrap();
+    assert!(text.starts_with("TrainLink support package"));
+    assert!(text.contains("Z21 connected: no"));
+    assert!(text.contains("Track state: disconnected"));
+    assert!(text.contains("Health score:"));
+    assert!(text.contains("Recent connection log:"));
+    assert!(!text.contains("Private Layout"), "layout names are left out");
+    assert!(!text.contains("Secret Loco"), "locomotive names are left out");
+    assert!(!text.contains("10.0.0.111"), "addresses are left out");
+}
