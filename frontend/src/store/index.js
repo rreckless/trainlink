@@ -28,7 +28,7 @@ export const useStore = create((set) => ({
   clientId: null,
 
   // Z21 track state, polled from /api/z21/status
-  // state: disconnected | unknown | short_circuit | track_power_off | ready
+  // state: disconnected | lost | unknown | short_circuit | track_power_off | ready
   z21: { connected: false, state: 'disconnected', lastHeartbeat: null },
   // Z21 address used by Settings and the Control page
   z21Host: '10.0.0.111',

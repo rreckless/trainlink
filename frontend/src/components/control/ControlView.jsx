@@ -10,6 +10,7 @@ import OperatePanel from './OperatePanel'
 
 const TRACK_MESSAGES = {
   disconnected: 'Connect the Z21 in Settings to control locomotives and turnouts',
+  lost: 'The Z21 has stopped answering. TrainLink is reconnecting, and commands are blocked until it does',
   unknown: 'Waiting for the Z21 to report its track state',
   short_circuit: 'The Z21 reports a short circuit. Fix the short, then resume track power',
   track_power_off: 'Resume track power to run locomotives and turnouts',

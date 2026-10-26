@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 
-use super::{app, send};
+use super::{app, detail, send};
 use crate::state::AppState;
+use crate::z21::commands::status_request;
 use crate::z21::{self, frames::build_frame};
 
 /// Frames the fake Z21 received, and a way to reply to the app
@@ -219,4 +220,62 @@ fn a_turnout_poll_answers_with_the_state_the_z21_sends_back_to_it() {
         let (_, turnouts) = send(&app, "GET", "/api/z21/turnouts?addresses=25", None);
         assert_eq!(turnouts["states"]["25"], json!(1), "the first answer already carries the Z21's reply");
     });
+}
+
+#[test]
+fn the_app_keeps_polling_the_z21_so_it_stays_on_its_client_list() {
+    let fake = fake_z21();
+    let app = app();
+    assert!(z21::connect_with_keep_alive(&app, "127.0.0.1", fake.port, Duration::from_millis(50)));
+    let status = status_request();
+    let polls = || fake.received.lock().unwrap().iter().filter(|frame| frame.as_slice() == status.as_slice()).count();
+    // The first status request comes with the connection. The rest are polls, sent with no reply from the Z21
+    assert!(wait_until(|| polls() >= 3), "status requests keep coming");
+}
+
+#[test]
+fn a_link_silent_for_half_a_minute_is_lost_and_refuses_commands() {
+    let app = app();
+    {
+        let mut inner = app.inner.lock().unwrap();
+        inner.z21.connected = true;
+        z21::apply(&mut inner, &central_state(0x00), Instant::now());
+    }
+    assert_eq!(track_state(&app), "ready");
+
+    app.inner.lock().unwrap().z21.last_reply = Instant::now() - Duration::from_secs(31);
+    assert_eq!(track_state(&app), "lost");
+    let (status, value) = send(&app, "POST", "/api/programming/read", Some(json!({ "cv": 29 })));
+    assert_eq!(status, 409, "{value}");
+    assert!(detail(&value).contains("(lost)"), "{value}");
+
+    // Any frame from the Z21 brings the link back
+    {
+        let mut inner = app.inner.lock().unwrap();
+        z21::apply(&mut inner, &central_state(0x00), Instant::now());
+    }
+    assert_eq!(track_state(&app), "ready");
+}
+
+#[test]
+fn the_watchdog_reconnects_a_lost_link_to_the_same_z21() {
+    let fake = fake_z21();
+    let app = app();
+    assert!(z21::connect_with_keep_alive(&app, "127.0.0.1", fake.port, Duration::from_secs(60)));
+    let status = status_request();
+    let asked = || fake.received.lock().unwrap().iter().filter(|frame| frame.as_slice() == status.as_slice()).count();
+    let before = asked();
+    assert!(!z21::link_check(&app, Instant::now()), "a healthy link is left alone");
+
+    app.inner.lock().unwrap().z21.last_reply = Instant::now() - Duration::from_secs(31);
+    assert!(z21::link_check(&app, Instant::now()));
+    assert!(wait_until(|| asked() > before), "the new socket asks the Z21 for its status");
+    assert_eq!(track_state(&app), "unknown", "connected again, waiting for the Z21's track state");
+}
+
+#[test]
+fn nothing_is_reconnected_after_a_disconnect() {
+    let app = app();
+    app.inner.lock().unwrap().z21.last_reply = Instant::now() - Duration::from_secs(60);
+    assert!(!z21::link_check(&app, Instant::now()));
 }

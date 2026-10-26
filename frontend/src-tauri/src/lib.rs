@@ -82,6 +82,7 @@ pub fn run() {
             let state = Arc::new(AppState::new(connection, folder.join("locomotive_images")));
             sync::spawn_loop(state.clone());
             automation::spawn_loop(state.clone());
+            z21::spawn_watch(state.clone());
             app.manage(state);
             Ok(())
         })
