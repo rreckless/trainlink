@@ -9,7 +9,7 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
 /// The largest picture the app keeps, the same limit the core applies to uploads
-const MAX_PICTURE_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_PICTURE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct ChosenFile {
@@ -65,7 +65,7 @@ pub async fn pick_picture_file(app: AppHandle) -> Result<Option<ChosenPicture>, 
     };
     let size = std::fs::metadata(&path).map_err(|error| format!("Could not read the file: {error}"))?.len();
     if size > MAX_PICTURE_BYTES {
-        return Err("Picture must be 2 MB or smaller".into());
+        return Err("Picture must be 16 MB or smaller".into());
     }
     let bytes = std::fs::read(&path).map_err(|error| format!("Could not read the file: {error}"))?;
     let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();

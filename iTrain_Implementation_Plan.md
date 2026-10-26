@@ -361,12 +361,12 @@ Entry criteria:
    - 🧪 Manual turnout (no motor) flag, and a per-turnout switching time (default 300 ms, replacing the fixed 150 ms). The throw uses the turnout's own time
    - 🧪 Per-turnout group, command station and notes. A throw is refused if the connected Z21 is not the turnout's command station. The station is chosen from the stations this device has
    - 🧪 Position feedback toggle per turnout. With it on, a throw asks the Z21 for the turnout's position, and the list shows the output the Z21 reports. **Open:** the reported output is not yet mapped to straight or diverging, because that depends on the Z21's output numbering on a real turnout
-2. **Locomotives** ⬜
-   - ⬜ Decoder type (DCC 128 and others) and command station per locomotive
-   - ⬜ Locomotive types: steam, diesel, electric, multiple unit, tram, shunt, museum and other
-   - ⬜ Group, maximum speed, reverse direction, and a colour
-   - ⬜ 29 function buttons, replacing 20
-   - ⬜ Photos up to 16 MB, replacing 2 MB
+2. **Locomotives** 🟡
+   - ⬜ Decoder type (DCC 128 and others). The command station per locomotive is already done
+   - 🧪 Locomotive types: steam, diesel, electric, multiple unit, tram, shunt, museum and other. The API refuses any other type
+   - 🧪 Group, maximum speed, reverse direction, and a colour. The maximum speed is a speed step from 1 to 126 and caps the step sent. Reverse sends forward as reverse, for a locomotive fitted the other way round. **Open:** these fields are not synced to the cloud yet, so other devices do not get them, and km/h needs each locomotive's calibration
+   - ⬜ 29 function buttons, replacing 20. Functions 13 to 28 need their own Z21 frames, to be checked on hardware
+   - 🧪 Photos up to 16 MB, replacing 2 MB
    - ⬜ Locomotive import from another app
 3. **Import review** ⬜
    - ⬜ After an AnyRail import, a list of items to check later: turnouts without an address, turnout symbols without a link, and blocks without a sensor

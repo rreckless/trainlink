@@ -4,7 +4,7 @@ import { NATIVE_FILE_PICKER } from '../../services/api'
 import { pickPictureInDesktop } from '../../services/desktopFiles'
 import { locomotiveApi, pictureUrl } from '../../services/locomotiveApi'
 
-const LOCOMOTIVE_TYPES = ['diesel', 'steam', 'electric', 'other']
+const LOCOMOTIVE_TYPES = ['steam', 'diesel', 'electric', 'multiple unit', 'tram', 'shunt', 'museum', 'other']
 const LABEL_MAX = 24
 
 // Defaults for a new locomotive: F0 is the light, the rest are numbered
@@ -21,6 +21,10 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
   const [address, setAddress] = useState(locomotive?.dcc_address ?? '')
   const [type, setType] = useState(locomotive?.locomotive_type ?? 'diesel')
   const [length, setLength] = useState(locomotive?.length ?? '')
+  const [group, setGroup] = useState(locomotive?.group_name ?? '')
+  const [maxSpeed, setMaxSpeed] = useState(locomotive?.max_speed ?? '')
+  const [reverse, setReverse] = useState(locomotive?.reverse_direction ?? false)
+  const [colour, setColour] = useState(locomotive?.colour ?? '')
   const [functions, setFunctions] = useState(locomotive?.function_labels ?? defaultFunctions())
   const [picture, setPicture] = useState(null)
   const [error, setError] = useState('')
@@ -61,6 +65,10 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
       dcc_address: number,
       locomotive_type: type,
       function_labels: functions.map((item) => ({ label: item.label.trim(), momentary: item.momentary })),
+      group_name: group.trim(),
+      max_speed: maxSpeed === '' ? null : Number(maxSpeed),
+      reverse_direction: reverse,
+      colour,
     }
     if (length !== '') body.length = Number(length)
     onSave(body, picture)
@@ -122,6 +130,44 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
             className="mt-1 w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
           />
         </label>
+        <label className="text-sm text-slate-300">
+          Group (optional)
+          <input
+            value={group}
+            onChange={(event) => setGroup(event.target.value)}
+            className="mt-1 w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+          />
+        </label>
+        <label className="text-sm text-slate-300">
+          Maximum speed (speed step 1-126, optional)
+          <input
+            type="number"
+            min="1"
+            max="126"
+            value={maxSpeed}
+            onChange={(event) => setMaxSpeed(event.target.value)}
+            className="mt-1 w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+          />
+        </label>
+        <div className="text-sm text-slate-300">
+          <span className="block mb-1">Colour (optional)</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={colour || '#64748b'}
+              onChange={(event) => setColour(event.target.value)}
+              aria-label="Colour"
+              className="h-10 w-16 bg-slate-800 rounded border border-slate-600"
+            />
+            <button type="button" onClick={() => setColour('')} disabled={colour === ''} className="px-3 py-2 bg-slate-800 rounded hover:bg-slate-600 disabled:opacity-50">
+              No colour
+            </button>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-300 self-end pb-2">
+          <input type="checkbox" checked={reverse} onChange={(event) => setReverse(event.target.checked)} />
+          Reverse direction (fitted the other way round)
+        </label>
       </div>
 
       <div className="flex items-center gap-3">
@@ -130,7 +176,7 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
         )}
         {picture && <span className="text-sm text-slate-300">New picture: {picture.name}</span>}
         <div className="text-sm text-slate-300">
-          <span className="block mb-1">Picture (JPEG, PNG, or WebP, 2 MB max)</span>
+          <span className="block mb-1">Picture (JPEG, PNG, or WebP, 16 MB max)</span>
           {NATIVE_FILE_PICKER ? (
             <button
               type="button"
