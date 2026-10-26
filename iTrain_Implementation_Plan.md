@@ -230,7 +230,7 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🧪 Query Z21 system state: the X-Bus version and command station ID are asked for on connecting, and shown on the settings page. Not yet checked on hardware
    - 🧪 Query locomotive info (speed, direction, functions). Replies are parsed. Not yet verified on hardware
    - 🧪 Track power on, with resume after a short circuit. Track power off from the top bar, and refused only when not connected. **Open:** check on hardware
-   - 🧪 Feature detection: the app asks the Z21 for its hardware type and firmware on connecting (LAN_GET_HWINFO), names the model, and lists the features the firmware has. POM read is refused on firmware before 1.22. Only the command stations the spec lists are assumed to have features. **Open:** check the model and firmware on the real Z21
+   - 🧪 Feature detection: the app asks the Z21 for its hardware type and firmware on connecting (LAN_GET_HWINFO), names the model, and lists the features the firmware has. POM read is refused on firmware before 1.22. Only the command stations the spec lists are assumed to have features. Checked on the real Z21 (black, 2013, firmware 1.43): the model, firmware, X-Bus 4.0 and station ID 0x12 were read, and POM read is listed. The 1.20 refusal was checked through the server against a stand-in that reports 1.20; a real 1.20 unit has not been tested
 
 3. **Locomotive Decoder Management** 🟡
    - ⬜ Import locomotive definitions
