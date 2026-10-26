@@ -5,6 +5,7 @@ use std::path::Path;
 use rusqlite::{Connection, Error, ErrorCode};
 
 pub mod command_stations;
+pub mod decoder_profiles;
 pub mod consists;
 pub mod layouts;
 pub mod locomotives;
@@ -45,6 +46,17 @@ CREATE TABLE IF NOT EXISTS command_stations (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS decoder_profiles (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    manufacturer TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    builtin INTEGER NOT NULL DEFAULT 0,
+    cvs TEXT NOT NULL DEFAULT '[]',
+    functions TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS locomotives (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -59,6 +71,7 @@ CREATE TABLE IF NOT EXISTS locomotives (
     travelled_time REAL NOT NULL DEFAULT 0,
     travelled_distance REAL NOT NULL DEFAULT 0,
     command_station_id INTEGER REFERENCES command_stations(id),
+    decoder_profile_id INTEGER REFERENCES decoder_profiles(id),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -159,6 +172,8 @@ fn setup(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch(SCHEMA)?;
     consists::migrate(connection)?;
     trackside::migrate(connection)?;
+    locomotives_migrate(connection)?;
+    decoder_profiles::seed(connection)?;
     sync::migrate(connection)
 }
 
@@ -170,4 +185,16 @@ pub fn now() -> String {
 /// True if the error is a UNIQUE constraint failing
 pub fn is_unique_violation(error: &Error) -> bool {
     matches!(error, Error::SqliteFailure(failure, _) if failure.code == ErrorCode::ConstraintViolation)
+}
+
+/// Add the decoder profile column to a database made before it existed
+fn locomotives_migrate(conn: &Connection) -> rusqlite::Result<()> {
+    let columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(locomotives)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<_>>()?;
+    if !columns.iter().any(|column| column == "decoder_profile_id") {
+        conn.execute_batch("ALTER TABLE locomotives ADD COLUMN decoder_profile_id INTEGER REFERENCES decoder_profiles(id);")?;
+    }
+    Ok(())
 }

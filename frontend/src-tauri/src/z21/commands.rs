@@ -148,3 +148,11 @@ pub fn pom_write_bit(address: i64, cv: u16, bit: u8, on: bool) -> Result<Vec<u8>
     Ok(build_xbus_frame(&[0xE6, 0x30, address_msb, address_lsb, 0xE8 | msb, lsb, value]))
 }
 
+/// Read a CV of a locomotive decoder on the main track (spec 6.8). The Z21 answers with the result or a refusal, as for a
+/// direct read, and needs RailCom on in the Z21 and in the decoder (CV 28 bits 0 and 1, CV 29 bit 3)
+pub fn pom_read_byte(address: i64, cv: u16) -> Result<Vec<u8>, String> {
+    let (msb, lsb) = cv_address(cv)?;
+    let (address_msb, address_lsb) = encode_address(address)?;
+    Ok(build_xbus_frame(&[0xE6, 0x30, address_msb, address_lsb, 0xE4 | msb, lsb, 0x00]))
+}
+

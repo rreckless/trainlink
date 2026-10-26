@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::{app, detail, send};
-use crate::z21::commands::{cv_read, cv_write, pom_write_bit, pom_write_byte};
+use crate::z21::commands::{cv_read, cv_write, pom_read_byte, pom_write_bit, pom_write_byte};
 use crate::z21::frames::build_frame;
 use crate::z21::replies::CentralState;
 
@@ -148,4 +148,59 @@ fn a_pom_write_needs_a_locomotive_on_the_roster() {
     ready(&app);
     let (status, _) = send(&app, "POST", "/api/programming/pom/write", Some(json!({ "locomotive_id": 999, "cv": 29, "value": 6, "confirm": true })));
     assert_eq!(status, 404);
+}
+
+#[test]
+fn a_pom_byte_read_is_the_frame_the_spec_gives() {
+    // Loco 3, CV 29 (spec 6.8): 0xE6 0x30, the loco address, 0xE4 plus the CV's MSB, the CV LSB, then 0x00
+    assert_eq!(
+        pom_read_byte(3, 29).unwrap(),
+        vec![0x0C, 0x00, 0x40, 0x00, 0xE6, 0x30, 0x00, 0x03, 0xE4, 0x1C, 0x00, 0x2D]
+    );
+}
+
+#[test]
+fn a_pom_read_needs_a_locomotive_and_a_ready_track() {
+    let app = app();
+    assert_eq!(send(&app, "POST", "/api/programming/pom/read", Some(json!({ "locomotive_id": 1, "cv": 29 }))).0, 404);
+    let (status, _) = send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel" })));
+    assert_eq!(status, 201);
+    assert_eq!(send(&app, "POST", "/api/programming/pom/read", Some(json!({ "locomotive_id": 1, "cv": 29 }))).0, 503);
+}
+
+#[test]
+fn a_profile_limits_which_cvs_a_write_may_change() {
+    let app = app();
+    ready(&app);
+    let (_, profile) = send(&app, "GET", "/api/decoder-profiles", None);
+    let profile_id = profile[0]["id"].as_i64().unwrap();
+    // CV 7 is read-only in the NMRA profile, CV 40 is not in it at all, and CV 2 takes 0 to 255
+    let (status, value) = send(&app, "POST", "/api/programming/write", Some(json!({ "cv": 7, "value": 1, "confirm": true, "profile_id": profile_id })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "CV 7 is read-only in the profile NMRA standard");
+    let (status, value) = send(&app, "POST", "/api/programming/write", Some(json!({ "cv": 40, "value": 1, "confirm": true, "profile_id": profile_id })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "CV 40 is not in the profile NMRA standard");
+    let (status, value) = send(&app, "POST", "/api/programming/write", Some(json!({ "cv": 1, "value": 200, "confirm": true, "profile_id": profile_id })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "CV 1 takes a value from 1 to 127 in the profile NMRA standard");
+    // A value inside the range gets as far as the Z21, which has no socket in the tests
+    assert_eq!(send(&app, "POST", "/api/programming/write", Some(json!({ "cv": 1, "value": 3, "confirm": true, "profile_id": profile_id }))).0, 500);
+    assert_eq!(send(&app, "POST", "/api/programming/write", Some(json!({ "cv": 1, "value": 3, "confirm": true, "profile_id": 999 }))).0, 404);
+}
+
+#[test]
+fn a_profile_limits_pom_writes_too() {
+    let app = app();
+    ready(&app);
+    let (_, profile) = send(&app, "GET", "/api/decoder-profiles", None);
+    let profile_id = profile[0]["id"].as_i64().unwrap();
+    let (_, loco) = send(&app, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel" })));
+    let loco_id = loco["id"].as_i64().unwrap();
+    let (status, value) = send(&app, "POST", "/api/programming/pom/write", Some(json!({ "locomotive_id": loco_id, "cv": 8, "value": 1, "confirm": true, "profile_id": profile_id })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "CV 8 is read-only in the profile NMRA standard");
+    let (status, value) = send(&app, "POST", "/api/programming/pom/bit", Some(json!({ "locomotive_id": loco_id, "cv": 7, "bit": 0, "on": true, "confirm": true, "profile_id": profile_id })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "CV 7 is read-only in the profile NMRA standard");
 }

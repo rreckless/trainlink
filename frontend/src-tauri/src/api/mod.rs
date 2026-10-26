@@ -3,6 +3,7 @@
 
 pub mod auth;
 pub mod command_stations;
+pub mod decoder_profiles;
 pub mod consists;
 pub mod layouts;
 pub mod library;
@@ -85,6 +86,7 @@ fn route(app: &Arc<AppState>, call: &Call, segments: &[&str]) -> Out {
         ["api", "command-stations", rest @ ..] => command_stations::route(app, call, rest),
         ["api", "overview", rest @ ..] => overview::route(app, call, rest),
         ["api", "programming", rest @ ..] => programming::route(app, call, rest),
+        ["api", "decoder-profiles", rest @ ..] => decoder_profiles::route(app, call, rest),
         ["api", "blocks", rest @ ..] => trackside::blocks(app, call, rest),
         ["api", "signals", rest @ ..] => trackside::signals(app, call, rest),
         ["api", "feedbacks", rest @ ..] => trackside::feedbacks(app, call, rest),

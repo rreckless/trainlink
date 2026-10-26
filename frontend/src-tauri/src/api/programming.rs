@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use super::Call;
-use crate::db::locomotives;
+use crate::db::{decoder_profiles, locomotives};
 use crate::fields::{self, Body};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
@@ -28,6 +28,7 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         ("POST", ["write"]) => write(app, call),
         ("POST", ["pom", "write"]) => pom_write(app, call),
         ("POST", ["pom", "bit"]) => pom_bit(app, call),
+        ("POST", ["pom", "read"]) => pom_read(app, call),
         _ => Err(ApiError::new(405, "Method not allowed")),
     }
 }
@@ -49,6 +50,29 @@ fn check_value(value: i64) -> Result<u8, ApiError> {
 fn require_confirmation(body: &Body) -> Result<(), ApiError> {
     if fields::optional_bool(body, "confirm")? != Some(true) {
         return Err(ApiError::unprocessable("Confirm the write first: a wrong CV value can stop a decoder working"));
+    }
+    Ok(())
+}
+
+/// When a profile is named, the CV must be in it, must not be read-only, and the value must be inside its range.
+/// Pass None for the value when the write sets a single bit
+fn check_profile(inner: &Inner, body: &Body, cv: u16, value: Option<u8>) -> Result<(), ApiError> {
+    let Some(id) = fields::optional_int(body, "profile_id")? else { return Ok(()) };
+    let profile = decoder_profiles::get(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Decoder profile", id))?;
+    let entry = profile
+        .cvs
+        .as_array()
+        .and_then(|cvs| cvs.iter().find(|entry| entry.get("cv").and_then(Value::as_i64) == Some(i64::from(cv))))
+        .ok_or_else(|| ApiError::unprocessable(format!("CV {cv} is not in the profile {}", profile.name)))?;
+    if entry.get("read_only").and_then(Value::as_bool).unwrap_or(false) {
+        return Err(ApiError::unprocessable(format!("CV {cv} is read-only in the profile {}", profile.name)));
+    }
+    if let Some(value) = value {
+        let min = entry.get("min").and_then(Value::as_i64).unwrap_or(0);
+        let max = entry.get("max").and_then(Value::as_i64).unwrap_or(255);
+        if !(min..=max).contains(&i64::from(value)) {
+            return Err(ApiError::unprocessable(format!("CV {cv} takes a value from {min} to {max} in the profile {}", profile.name)));
+        }
     }
     Ok(())
 }
@@ -80,8 +104,9 @@ fn write(app: &Arc<AppState>, call: &Call) -> Out {
     let cv = check_cv(fields::required_int(&body, "cv")?)?;
     let value = check_value(fields::required_int(&body, "value")?)?;
     require_confirmation(&body)?;
-    let frame = commands::cv_write(cv, value).map_err(ApiError::unprocessable)?;
     let mut inner = lock(app);
+    check_profile(&inner, &body, cv, Some(value))?;
+    let frame = commands::cv_write(cv, value).map_err(ApiError::unprocessable)?;
     super::z21::ready_check(&inner, "Programming")?;
     send_now(&mut inner, &frame)?;
     inner.z21.programming.start(cv, "write", Some(value), Instant::now());
@@ -102,6 +127,7 @@ fn pom_write(app: &Arc<AppState>, call: &Call) -> Out {
     require_confirmation(&body)?;
     let mut inner = lock(app);
     let address = locomotive_address(&inner, &body)?;
+    check_profile(&inner, &body, cv, Some(value))?;
     super::z21::ready_check(&inner, "Programming")?;
     let frame = commands::pom_write_byte(address, cv, value).map_err(ApiError::unprocessable)?;
     if !inner.z21.send(&frame) {
@@ -110,6 +136,19 @@ fn pom_write(app: &Arc<AppState>, call: &Call) -> Out {
     // The Z21 gives no answer on the main track, so the write is recorded as sent, not checked
     inner.z21.programming.last = Some(crate::z21::Outcome { cv, kind: "pom_write", value: Some(value), error: None });
     Ok(Reply::json(200, json!({ "status": "sent", "cv": cv, "value": value, "checked": false })))
+}
+
+/// Read a CV of a locomotive on the main track. The answer comes back as a result, like a direct read
+fn pom_read(app: &Arc<AppState>, call: &Call) -> Out {
+    let body = call.json_body()?;
+    let cv = check_cv(fields::required_int(&body, "cv")?)?;
+    let mut inner = lock(app);
+    let address = locomotive_address(&inner, &body)?;
+    super::z21::ready_check(&inner, "Programming")?;
+    let frame = commands::pom_read_byte(address, cv).map_err(ApiError::unprocessable)?;
+    send_now(&mut inner, &frame)?;
+    inner.z21.programming.start(cv, "pom_read", None, Instant::now());
+    Ok(Reply::json(202, json!({ "status": "reading", "cv": cv })))
 }
 
 fn pom_bit(app: &Arc<AppState>, call: &Call) -> Out {
@@ -123,6 +162,7 @@ fn pom_bit(app: &Arc<AppState>, call: &Call) -> Out {
     require_confirmation(&body)?;
     let mut inner = lock(app);
     let address = locomotive_address(&inner, &body)?;
+    check_profile(&inner, &body, cv, None)?;
     super::z21::ready_check(&inner, "Programming")?;
     let frame = commands::pom_write_bit(address, cv, bit as u8, on).map_err(ApiError::unprocessable)?;
     if !inner.z21.send(&frame) {

@@ -113,10 +113,11 @@ test('a route is built from blocks in order on the Routes page', async ({ page }
   await expect(page.getByText('not linked')).toHaveCount(0)
 })
 
-test('the decoder CVs page offers known CVs and keeps Write off until the write is confirmed', async ({ page }) => {
+test('the decoder CVs page offers the CVs of the NMRA profile and keeps Write off until the write is confirmed', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Decoder CVs', exact: true }).first().click()
-  await expect(page.getByRole('heading', { name: 'Known CVs' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Decoder profile' })).toBeVisible()
+  await expect(page.getByRole('combobox').first()).toHaveValue(/.+/)
   await expect(page.getByRole('button', { name: /Short address/ })).toBeVisible()
   const write = page.getByRole('button', { name: 'Write CV' })
   await expect(write).toBeDisabled()
