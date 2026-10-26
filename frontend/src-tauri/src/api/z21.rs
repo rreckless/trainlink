@@ -6,6 +6,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
+use crate::db::{command_stations, layouts};
 use crate::drivers::{Driver, DriverError};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
@@ -14,7 +15,6 @@ use crate::z21::{self, commands, frames::MAX_ADDRESS, Z21};
 const MIN_TURNOUT: i64 = 1;
 const MAX_TURNOUT: i64 = 2048;
 /// How long a turnout output stays active before it is switched off, as the spec's example does
-const THROW: Duration = Duration::from_millis(150);
 /// How long a turnout read waits for the Z21's answers. The Z21 answers on the LAN within milliseconds
 const TURNOUT_REPLY_WAIT: Duration = Duration::from_millis(150);
 
@@ -77,6 +77,32 @@ fn feedback(app: &Arc<AppState>) -> Out {
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
 }
 
+/// The placed piece of the turnout with this number, on the first layout that has it
+fn placed_turnout(inner: &Inner, turnout: i64) -> Result<Option<Value>, ApiError> {
+    for layout in layouts::list(&inner.db)? {
+        let pieces = layout.elements.get("track_pieces").and_then(Value::as_array).cloned().unwrap_or_default();
+        if let Some(placed) = pieces.into_iter().find(|placed| placed.get("dcc_address").and_then(Value::as_i64) == Some(turnout)) {
+            return Ok(Some(placed));
+        }
+    }
+    Ok(None)
+}
+
+/// The name of the command station this device has at the address the Z21 is connected to, if there is one
+fn connected_station(inner: &Inner) -> Result<Option<String>, ApiError> {
+    let address = format!("{}:{}", inner.z21.host, inner.z21.port);
+    Ok(command_stations::list(&inner.db)?.into_iter().find(|station| station.port == address).map(|station| station.name))
+}
+
+/// Refuse a throw for a turnout whose command station is not the one connected
+fn check_station(inner: &Inner, turnout: i64, placed: Option<&Value>) -> Result<(), ApiError> {
+    let Some(station) = placed.and_then(|placed| placed.get("command_station")).and_then(Value::as_str) else { return Ok(()) };
+    if connected_station(inner)?.as_deref() != Some(station) {
+        return Err(ApiError::conflict(format!("Turnout {turnout} is on command station {station}, which is not the one connected")));
+    }
+    Ok(())
+}
+
 /// The answer for a command the driver did not send. `failure` says what went wrong when the command could not be sent
 pub(super) fn driver_error(error: DriverError, failure: &str) -> ApiError {
     match error {
@@ -103,7 +129,7 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
     if !(0..=1).contains(&output) {
         return Err(ApiError::unprocessable("output must be 0 or 1"));
     }
-    {
+    let switching = {
         let mut inner = lock(app);
         if !inner.z21.connected {
             return Err(ApiError::new(503, "Z21 not connected"));
@@ -115,10 +141,18 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
         if !(MIN_TURNOUT..=MAX_TURNOUT).contains(&turnout) {
             return Err(ApiError::bad_request(format!("Turnout must be {MIN_TURNOUT}-{MAX_TURNOUT}")));
         }
+        let placed = placed_turnout(&inner, turnout)?;
+        check_station(&inner, turnout, placed.as_ref())?;
         Driver::throw_turnout(&mut inner.z21, turnout, output as u8, true).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
+        placed.map(|placed| layouts::turnout_settings(&placed)).unwrap_or_else(|| layouts::turnout_settings(&json!({})))
+    };
+    std::thread::sleep(Duration::from_millis(switching["throw_ms"].as_u64().unwrap_or(layouts::DEFAULT_THROW_MS as u64)));
+    let mut inner = lock(app);
+    Driver::throw_turnout(&mut inner.z21, turnout, output as u8, false).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
+    // With position feedback on, ask the Z21 where the turnout is now. The answer updates the turnouts list
+    if switching["feedback"].as_bool().unwrap_or(false) {
+        let _ = inner.z21.request_turnout_info(turnout);
     }
-    std::thread::sleep(THROW);
-    Driver::throw_turnout(&mut lock(app).z21, turnout, output as u8, false).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
     Ok(Reply::json(200, json!({ "status": "throw_sent", "turnout": turnout, "output": output })))
 }
 

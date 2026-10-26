@@ -36,14 +36,23 @@ fn turnout_rows(inner: &Inner) -> Result<Vec<Value>, ApiError> {
             }
             let address = placed.get("dcc_address").and_then(Value::as_i64);
             let straight = placed.get("dcc_output_straight").and_then(Value::as_i64);
+            let settings = layouts_db::turnout_settings(&placed);
+            // The position the Z21 reported, shown only for a turnout with position feedback on
+            let position = match (address, settings["feedback"].as_bool()) {
+                (Some(address), Some(true)) => inner.z21.turnouts.get(&address).copied().flatten(),
+                _ => None,
+            };
             rows.push(json!({
                 "layout_id": layout.id,
                 "layout_name": layout.name,
+                "placed_id": placed.get("id").and_then(Value::as_str),
                 "piece_id": piece_id,
                 "name": piece.get("name").and_then(Value::as_str).unwrap_or(piece_id),
                 "dcc_address": address,
                 "dcc_output_straight": straight,
                 "has_address": address.is_some(),
+                "settings": settings,
+                "position": position,
             }));
         }
     }

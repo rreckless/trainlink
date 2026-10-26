@@ -13,6 +13,7 @@ mod routes;
 mod layouts;
 mod locomotives;
 mod trackside;
+mod turnouts;
 mod z21;
 mod z21_link;
 mod moving;
