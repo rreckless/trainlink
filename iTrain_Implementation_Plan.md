@@ -337,6 +337,104 @@ Entry criteria:
    - ⬜ Refuse values outside the CV's range
    - ⬜ Read the value back after each write and report any mismatch
 
+### Phase 10: LocoLink Parity (Backlog)
+**Goal**: Cover the features seen in LocoLink 2.0.9, built from our own design. Nothing is copied from LocoLink's code, text, icons or images. The full comparison, with what was seen on screen, is in `~/Documents/TrainLink/locolink-vs-trainlink.md`. Not started. Items are grouped by the phase they most depend on, and the order is still to be decided.
+
+**10a. Z21 basics (no new hardware)**
+1. **Turnouts** ⬜
+   - ⬜ Standalone turnout list with search, filters for straight and diverging, and a "no address" warning
+   - ⬜ Turnout types: straight, left, right, three-way, Y, curved left and right, double-slip, single-slip, crossing
+   - ⬜ Manual turnout (no motor) flag, and a per-turnout switching time (default 300 ms, replacing the fixed 150 ms)
+   - ⬜ Per-turnout group, command station and notes
+   - ⬜ Position feedback toggle per turnout
+2. **Locomotives** ⬜
+   - ⬜ Decoder type (DCC 128 and others) and command station per locomotive
+   - ⬜ Locomotive types: steam, diesel, electric, multiple unit, tram, shunt, museum and other
+   - ⬜ Group, maximum speed, reverse direction, and a colour
+   - ⬜ 29 function buttons, replacing 20
+   - ⬜ Photos up to 16 MB, replacing 2 MB
+   - ⬜ Locomotive import from another app
+3. **Import review** ⬜
+   - ⬜ After an AnyRail import, a list of items to check later: turnouts without an address, turnout symbols without a link, and blocks without a sensor
+4. **Setup checklist** ⬜
+   - ⬜ Guided steps: command station, locomotives, first manual run, track plan, blocks and sensors, turnouts, and routes
+
+**10b. Blocks and sensors (needs Phase 2)**
+5. **Blocks** ⬜
+   - ⬜ Blocks page with filters for all, occupied, reserved, free and problems
+   - ⬜ Block properties: group, length, max speed, borders on, sensors, signals, brake and stop positions
+   - ⬜ Link entry, middle and exit sensors, and signal addresses
+6. **Feedback monitor** ⬜
+   - ⬜ 128 sensor addresses in 8 modules, with known, occupied, free and not-linked counts
+   - ⬜ Read now, and a list of the latest reports
+7. **Diagnostics** ⬜
+   - ⬜ Project and layout diagnostics: blocks without sensors, turnouts without addresses, with a "check again" action
+   - ⬜ A health score and a category view (command stations, locomotives, blocks, routes, cameras, recovery)
+   - ⬜ Connection log and a copyable support package
+8. **Accessory keyboard** ⬜
+   - ⬜ Grid of accessory addresses, with two outputs each, showing what uses each address
+   - ⬜ Range, grid size, "only in use" filter, and a safe test mode that locks empty addresses
+
+**10c. Automation (needs 10b)**
+9. **Routes** ⬜
+   - ⬜ Routes built from blocks and turnout steps, with an icon, colour and a route button
+   - ⬜ Build from the track plan, and a validation overview
+10. **Automatic driving** ⬜
+    - ⬜ Autopilot with pause and stop all, routes and rides
+    - ⬜ Choose blocks, assign a locomotive, and start the ride
+    - ⬜ Safety checks: ghost trains, stuck rides and non-arrival (configurable times), and an emergency stop that can switch power off
+    - ⬜ Wait for a busy block, with a configurable time
+11. **Stations** ⬜
+    - ⬜ A station as a group of blocks, with free and occupied counts
+12. **Timetables** ⬜
+    - ⬜ Operating session with a model clock and a clock factor from 0.5x to 120x
+    - ⬜ Timetables with running days, notes and trip entries (model time, train and action)
+13. **Dispatch and warrants** ⬜
+    - ⬜ Warrants with priority, locomotive, from and to blocks, stop at the end, shunting allowed, and a dispatcher and notes
+    - ⬜ Open and under-way counts. A warrant without a locomotive and end block is a note only, and is not checked
+14. **Trip logs and maintenance** ⬜
+    - ⬜ Trip log with rides, time and distance, and a day-by-day view
+    - ⬜ Maintenance records with a service interval (default 50 hours) and alerts
+
+**10d. Decoder programming (needs Phase 9)**
+15. **Wizards** ⬜
+    - ⬜ Locomotive wizard: place on the programming track, read the address, choose short or long, write, read back
+    - ⬜ Turnout and signal wizards: learning-mode steps, with the send button enabled only after the learning mode is confirmed
+16. **Decoder CVs** ⬜
+    - ⬜ CV editor with known CVs, ranges, read-only CVs, and read and write on the programming track and the main track
+    - ⬜ Decoder workshop: backups, speed tables and motor settings
+
+**10e. Extras (may need hardware or library decisions)**
+17. **3D workbench** ⬜ (needs a rendering choice)
+    - ⬜ 3D view of the track plan, with saved views and layers
+    - ⬜ Click a turnout in 3D to operate it, and highlight the active route
+18. **Cameras** ⬜ (needs a camera source choice)
+    - ⬜ Camera monitoring with camera areas, and block occupancy from camera images
+19. **Controllers** ⬜ (needs a controller library choice)
+    - ⬜ USB and wireless game controllers, with mapping of speed, direction and functions
+    - ⬜ Emergency stop cannot be mapped to a button that could be pressed by accident
+20. **Sound** ⬜
+    - ⬜ Per-locomotive sounds, app sounds, and muting
+21. **Wagons and freight** ⬜
+    - ⬜ Wagon model with class, article number, era, livery, length, weight, decoder and functions
+    - ⬜ Consists that mix locomotives and wagons, and a freight and switching area
+22. **Other command stations** ⬜ (each needs a driver, per Phase 7)
+    - ⬜ ECoS, CS2/CS3 and DCC-EX
+23. **Web panel and webhooks** ⬜
+    - ⬜ A shareable web panel and webhook addresses, with router settings
+24. **Backups** ⬜
+    - ⬜ Automatic backups before updates, a manual backup, and restore with a list of versions
+25. **Settings sweep** ⬜
+    - ⬜ Display mode, accent colour, picture style, interface size, language, and sidebar customisation
+    - ⬜ Command station management, auto-connect at start-up, and a Wi-Fi setup assistant
+    - ⬜ Experience, systems, data and demo settings: not yet reviewed in LocoLink
+26. **Multi-language** ⬜
+    - ⬜ Interface translation (LocoLink ships English, Dutch, German, French and others)
+27. **Recovery** ⬜
+    - ⬜ Recovery snapshot after an interruption, with a decision per item to keep occupied or release
+
+**Not yet reviewed in LocoLink** (add when seen): Macros, Shuttles, Drivers, Freight & switching, the Consists tab on Wagons & trains, Command Truth, Projects' Save as and Export, and the Experience, Systems, Data and Demo settings.
+
 ---
 
 ## Immediate Priorities
