@@ -153,20 +153,22 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 ### Phase 3: Automation & Routes (3-4 weeks)
 **Goal**: Route-based automation
 
-1. **Route Management** 🟡
+1. **Route Management** ✅
    - ✅ Route model and REST routes exist, with a sequence of blocks that cannot repeat a block and must stay on one layout
-   - ✅ Route definition (sequence of blocks): the Route Manager builds a route from blocks in order, with move up, move down and remove
-   - 🧪 Steps that do not follow a block's next-block link are shown on the Route Manager and in the route's `unlinked_steps`. Not yet required before a route is saved
-   - 🟡 Route creation: a form on the Route Manager, not a wizard yet
-   - ⬜ Advanced route options (speed limits, dwell times)
-   - 🟡 Route visualization: the steps in order, with each block's live state. Not yet drawn on the layout
-   - ⬜ Run and Stop on the Route Manager. The Run button is shown but disabled, and the backend refuses to run a route until automatic driving is built
+   - ✅ Route definition (sequence of blocks): a wizard on the Route Manager, with blocks in order (move up, move down, remove), then options, then review
+   - ✅ Steps that do not follow a block's next-block link are flagged on the Route Manager and in the route's `unlinked_steps`. Not required before a route is saved
+   - ✅ Route creation wizard: blocks, options, and review. The review draws the route on the layout with its blocks outlined
+   - ✅ Advanced route options: a speed for each block (blank for the block's maximum), a wait in seconds at each block, and auto-return. Checked on the server: one entry per block, speed 0 to 126, wait 0 to 3600 seconds
+   - ✅ Route visualization: the steps in order with each block's live state, and the route outlined on the layout
+   - 🧪 Run and Stop on the Route Manager, through automatic driving (below). Tested with the fake Z21. **Open:** check on a real layout
 
-2. **Automatic Driving** ⬜
-   - ⬜ Simple automatic mode (follow route)
-   - ⬜ Speed management
-   - ⬜ Stop at destinations
-   - ⬜ Route completion handling
+2. **Automatic Driving** 🧪
+   - 🧪 Simple automatic mode (follow route): a run starts a route with a locomotive in its first block, and moves on as the train enters each block. Tested with the fake Z21
+   - 🧪 Speed management: each block's speed from the route's speed profile, or the block's maximum speed
+   - 🧪 Stop at destinations: a run stops at the last block of its route, or turns round with auto-return
+   - 🧪 Route completion handling: a route that completes is no longer running. A run that was not started in this session is stopped at start-up
+   - ⬜ Waiting for a busy block, with a configurable time (the run does not yet check whether the next block is free before it moves)
+   - **Open:** check on a real layout. Collision avoidance (item 3) must come before runs on a shared layout
 
 3. **Collision Avoidance** ⬜
    - ⬜ Block occupancy tracking

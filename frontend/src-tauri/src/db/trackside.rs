@@ -366,14 +366,20 @@ pub fn insert_route(conn: &Connection, route: &NewRoute) -> rusqlite::Result<i64
 
 pub fn save_route(conn: &Connection, route: &Route) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE routes SET name = ?2, block_sequence = ?3, speed_profile = ?4, enabled = ?5, updated_at = ?6
+        "UPDATE routes SET name = ?2, block_sequence = ?3, speed_profile = ?4, dwell_times = ?5, auto_return = ?6,
+             enabled = ?7, is_running = ?8, current_block_index = ?9, current_locomotive_id = ?10, updated_at = ?11
          WHERE id = ?1",
         params![
             route.id,
             route.name,
             serde_json::to_string(&route.block_sequence).unwrap_or_default(),
             route.speed_profile.as_ref().map(|value| value.to_string()),
+            route.dwell_times.as_ref().map(|value| value.to_string()),
+            route.auto_return,
             route.enabled,
+            route.is_running,
+            route.current_block_index,
+            route.current_locomotive_id,
             now()
         ],
     )?;

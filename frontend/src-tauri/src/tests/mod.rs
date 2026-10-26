@@ -12,6 +12,7 @@ mod z21;
 mod z21_link;
 mod moving;
 mod anyrail;
+mod automation;
 mod auth;
 mod server;
 mod sync;

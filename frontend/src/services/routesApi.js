@@ -7,4 +7,7 @@ export const routesApi = {
   create: (body) => request('POST', '/api/routes', body),
   update: (id, body) => request('PATCH', `/api/routes/${id}`, body),
   remove: (id) => request('DELETE', `/api/routes/${id}`),
+  // Start a route with a locomotive in its first block, or stop it
+  run: (id, locomotiveId) => request('POST', `/api/routes/${id}/run`, { locomotive_id: locomotiveId }),
+  stop: (id) => request('POST', `/api/routes/${id}/stop`),
 }

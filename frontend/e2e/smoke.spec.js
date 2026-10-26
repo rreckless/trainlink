@@ -104,9 +104,11 @@ test('a route is built from blocks in order on the Routes page', async ({ page }
   await page.getByRole('button', { name: 'Add block' }).click()
   await page.getByRole('combobox').nth(1).selectOption({ label: 'Route B' })
   await page.getByRole('button', { name: 'Add block' }).click()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Next' }).click()
   await page.getByRole('button', { name: 'Save route' }).click()
 
   await expect(page.getByText('Created Up')).toBeVisible()
-  await expect(page.getByText('2 blocks')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Up\s+2 blocks/ })).toBeVisible()
   await expect(page.getByText('not linked')).toHaveCount(0)
 })

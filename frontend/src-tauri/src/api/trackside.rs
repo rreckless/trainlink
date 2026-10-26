@@ -299,6 +299,8 @@ pub fn routes(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
             Ok(Reply::json(200, route_value(&inner.db, &route)?))
         }
         ("PATCH", [id]) => update_route(app, super::id_segment(id)?, call),
+        ("POST", [id, "run"]) => run_route(app, super::id_segment(id)?, call),
+        ("POST", [id, "stop"]) => stop_route(app, super::id_segment(id)?),
         ("DELETE", [id]) => {
             let id = super::id_segment(id)?;
             let inner = lock(app);
@@ -370,8 +372,8 @@ fn create_route(app: &Arc<AppState>, call: &Call) -> Out {
         .get("block_sequence")
         .map(sequence_of)
         .unwrap_or_else(|| Err(ApiError::unprocessable("block_sequence is required")))?;
-    let speed_profile = body.get("speed_profile").filter(|value| !value.is_null()).cloned();
-    let dwell_times = body.get("dwell_times").filter(|value| !value.is_null()).cloned();
+    let speed_profile = step_profile(body.get("speed_profile"), sequence.len(), "speed_profile")?;
+    let dwell_times = step_profile(body.get("dwell_times"), sequence.len(), "dwell_times")?;
     let auto_return = fields::optional_bool(&body, "auto_return")?.unwrap_or(false);
 
     let inner = lock(app);
@@ -392,26 +394,79 @@ fn create_route(app: &Arc<AppState>, call: &Call) -> Out {
     Ok(Reply::json(201, route_value(&inner.db, &route)?))
 }
 
+/// Start a route with a locomotive, which is in the route's first block. The Z21 must be ready
+fn run_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
+    let body = call.json_body()?;
+    let locomotive_id = fields::required_int(&body, "locomotive_id")?;
+    let mut inner = lock(app);
+    super::z21::ready_check(&inner, "Route")?;
+    crate::automation::start(&mut inner, id, locomotive_id, std::time::Instant::now())?;
+    let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
+    Ok(Reply::json(200, route_value(&inner.db, &route)?))
+}
+
+fn stop_route(app: &Arc<AppState>, id: i64) -> Out {
+    let mut inner = lock(app);
+    crate::automation::stop(&mut inner, id, std::time::Instant::now())?;
+    let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
+    Ok(Reply::json(200, route_value(&inner.db, &route)?))
+}
+
+/// A list with one entry per block of a route: each entry is null, meaning the block's own setting, or a value
+/// within the range. A null list means the route has none
+fn step_profile(value: Option<&Value>, len: usize, key: &str) -> Result<Option<Value>, ApiError> {
+    let Some(value) = value.filter(|value| !value.is_null()) else { return Ok(None) };
+    let items = value.as_array().ok_or_else(|| ApiError::unprocessable(format!("{key} must be a list, one entry per block")))?;
+    if items.len() != len {
+        return Err(ApiError::unprocessable(format!("{key} needs one entry per block ({len})")));
+    }
+    for item in items {
+        let valid = match key {
+            "speed_profile" => item.is_null() || item.as_i64().is_some_and(|speed| (0..=126).contains(&speed)),
+            _ => item.is_null() || item.as_f64().is_some_and(|seconds| (0.0..=3600.0).contains(&seconds)),
+        };
+        if !valid {
+            let range = if key == "speed_profile" { "a speed from 0 to 126" } else { "seconds from 0 to 3600" };
+            return Err(ApiError::unprocessable(format!("Each {key} entry must be null or {range}")));
+        }
+    }
+    Ok(Some(value.clone()))
+}
+
 fn update_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let body = call.json_body()?;
     if body.contains_key("is_running") {
-        return Err(ApiError::bad_request("Route execution is not built yet"));
+        return Err(ApiError::bad_request("Start and stop a route with its run endpoints"));
     }
-    let changes: Body = fields::changes(&body, &["name", "block_sequence", "speed_profile", "enabled"]);
+    let changes: Body = fields::changes(&body, &["name", "block_sequence", "speed_profile", "dwell_times", "auto_return", "enabled"]);
     fields::reject_nulls(&changes)?;
 
     let inner = lock(app);
     let mut route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
-    if let Some(value) = changes.get("block_sequence") {
-        let sequence = sequence_of(value)?;
-        check_sequence(&inner.db, route.layout_id, &sequence)?;
-        route.block_sequence = sequence;
+    let editing_plan = ["block_sequence", "speed_profile", "dwell_times", "auto_return"].iter().any(|key| changes.contains_key(*key));
+    if route.is_running && editing_plan {
+        return Err(ApiError::conflict("Stop the route before changing its blocks or options"));
+    }
+    let sequence = match changes.get("block_sequence") {
+        Some(value) => {
+            let sequence = sequence_of(value)?;
+            check_sequence(&inner.db, route.layout_id, &sequence)?;
+            route.block_sequence = sequence.clone();
+            sequence
+        }
+        None => route.block_sequence.clone(),
+    };
+    if let Some(profile) = changes.get("speed_profile") {
+        route.speed_profile = step_profile(Some(profile), sequence.len(), "speed_profile")?;
+    }
+    if let Some(times) = changes.get("dwell_times") {
+        route.dwell_times = step_profile(Some(times), sequence.len(), "dwell_times")?;
+    }
+    if let Some(auto_return) = fields::optional_bool(&changes, "auto_return")? {
+        route.auto_return = auto_return;
     }
     if let Some(name) = fields::optional_str(&changes, "name")? {
         route.name = name;
-    }
-    if let Some(profile) = changes.get("speed_profile") {
-        route.speed_profile = Some(profile.clone());
     }
     if let Some(enabled) = fields::optional_bool(&changes, "enabled")? {
         route.enabled = enabled;

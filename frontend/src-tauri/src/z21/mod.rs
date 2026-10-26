@@ -185,7 +185,7 @@ pub fn apply(inner: &mut Inner, frame: &[u8], now: Instant) {
     }
     let header = u16::from_le_bytes([frame[2], frame[3]]);
     inner.z21.last_heartbeat = db::now();
-    let Inner { db, z21, moving } = inner;
+    let Inner { db, z21, moving, .. } = inner;
 
     if header == LAN_X_HEADER && frame.len() >= 7 && frame[4] == XBUS_STATUS_CHANGED && frame[5] == XBUS_STATUS_DB0 {
         set_central_state(z21, frame[6]);

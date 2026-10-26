@@ -6,6 +6,7 @@ pub mod anyrail;
 pub mod auth;
 pub mod bridge;
 pub mod api;
+pub mod automation;
 pub mod db;
 pub mod fields;
 pub mod http;
@@ -80,6 +81,7 @@ pub fn run() {
             let connection = db::open(&folder.join("trainlink.db"))?;
             let state = Arc::new(AppState::new(connection, folder.join("locomotive_images")));
             sync::spawn_loop(state.clone());
+            automation::spawn_loop(state.clone());
             app.manage(state);
             Ok(())
         })
