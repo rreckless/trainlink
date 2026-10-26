@@ -6,9 +6,10 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
+use crate::drivers::Driver;
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
-use crate::z21::{self, commands, frames::MAX_ADDRESS};
+use crate::z21::{self, commands, frames::MAX_ADDRESS, Z21};
 
 const MIN_TURNOUT: i64 = 1;
 const MAX_TURNOUT: i64 = 2048;
@@ -25,7 +26,7 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("POST", ["connect"]) => connect(app, call),
         ("POST", ["disconnect"]) => {
-            lock(app).z21.disconnect();
+            Driver::disconnect(&mut lock(app).z21);
             Ok(Reply::json(200, json!({ "status": "disconnected" })))
         }
         ("GET", ["status"]) => status(app),
@@ -51,7 +52,7 @@ fn connect(app: &Arc<AppState>, call: &Call) -> Out {
     }
     let port = crate::fields::optional_int(&body, "port")?.unwrap_or(z21::DEFAULT_PORT as i64);
     let port = u16::try_from(port).map_err(|_| ApiError::unprocessable("port must be 0 to 65535"))?;
-    if !z21::connect(app, &host, port) {
+    if !<Z21 as Driver>::connect(app, &host, port) {
         return Err(ApiError::internal(format!("Failed to connect to Z21 at {host}:{port}")));
     }
     Ok(Reply::json(200, json!({ "status": "connected", "host": host, "port": port })))
@@ -65,16 +66,12 @@ fn status(app: &Arc<AppState>) -> Out {
 
 fn feedback(app: &Arc<AppState>) -> Out {
     let inner = lock(app);
-    if inner.z21.connected {
-        for group in commands::RBUS_GROUPS {
-            inner.z21.send(&commands::rbus_getdata(group));
-        }
-    }
+    inner.z21.request_feedback();
     let inputs: Vec<Value> = inner
         .z21
-        .feedback
+        .feedback_inputs()
         .iter()
-        .map(|((module, number), occupied)| json!({ "module": module, "input": number, "occupied": occupied }))
+        .map(|input| json!({ "module": input.module, "input": input.input, "occupied": input.occupied }))
         .collect();
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
 }

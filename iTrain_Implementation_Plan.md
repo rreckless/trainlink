@@ -277,8 +277,8 @@ Entry criteria:
    - 🧪 Driver trait (`drivers/mod.rs`): station type, connected, features, drive, functions, emergency stop, track power. The Z21 implements it, and the commands are checked against the same frames as before
    - 🧪 Feature negotiation: the Z21 reports its features through the trait, from its hardware and firmware
    - 🧪 Driver registry: the station types with a driver, which a command station is saved with
-   - ⬜ Connect, disconnect and feedback events are not in the trait yet. The API still calls the Z21 directly, and moving it onto the trait is the next step
-   - ⬜ Shared mock command station: the fake Z21 in the link tests is the pattern, and it is not yet in a module other drivers can use
+   - 🧪 Connect, disconnect, and feedback (request and read) are on the trait, and the API's connect, disconnect and feedback routes call it. The other API routes still call the Z21 directly
+   - 🧪 Shared fake command station: `tests/fake_z21.rs` records the frames the app sends, and is used by the link and driver tests
    - **Phase 6 gate not met.** Phase 6 is unbuilt. The start was chosen knowing this
 
 2. **Märklin 6051 / P50x** ⬜
