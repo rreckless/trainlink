@@ -287,14 +287,16 @@ pub fn routes(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", []) => {
             let inner = lock(app);
-            Ok(Reply::json(200, json!(trackside::routes(&inner.db, optional_layout_id(call)?)?)))
+            let routes = trackside::routes(&inner.db, optional_layout_id(call)?)?;
+            let values = routes.iter().map(|route| route_value(&inner.db, route)).collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(Reply::json(200, json!(values)))
         }
         ("POST", []) => create_route(app, call),
         ("GET", [id]) => {
             let id = super::id_segment(id)?;
             let inner = lock(app);
             let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Route", id))?;
-            Ok(Reply::json(200, json!(route)))
+            Ok(Reply::json(200, route_value(&inner.db, &route)?))
         }
         ("PATCH", [id]) => update_route(app, super::id_segment(id)?, call),
         ("DELETE", [id]) => {
@@ -316,6 +318,9 @@ fn check_sequence(db: &rusqlite::Connection, layout_id: i64, sequence: &[i64]) -
     if sequence.is_empty() {
         return Err(ApiError::bad_request("Route needs at least one block"));
     }
+    if sequence.iter().enumerate().any(|(index, id)| sequence[..index].contains(id)) {
+        return Err(ApiError::unprocessable("A block can appear only once in a route"));
+    }
     let known: Vec<i64> = trackside::blocks(db, Some(layout_id))?.iter().map(|block| block.id).collect();
     let missing: Vec<i64> = sequence.iter().copied().filter(|id| !known.contains(id)).collect();
     if !missing.is_empty() {
@@ -326,6 +331,28 @@ fn check_sequence(db: &rusqlite::Connection, layout_id: i64, sequence: &[i64]) -
         )));
     }
     Ok(())
+}
+
+/// The steps of a route that do not follow the block's own next-block link, as [from, to] pairs. A route is still
+/// allowed to have them, but the Route Manager shows them, so the route is checked before it is run
+fn unlinked_steps(db: &rusqlite::Connection, sequence: &[i64]) -> rusqlite::Result<Vec<[i64; 2]>> {
+    let mut steps = Vec::new();
+    for pair in sequence.windows(2) {
+        let next: Option<i64> = db
+            .query_row("SELECT next_block_id FROM blocks WHERE id = ?1", [pair[0]], |row| row.get(0))
+            .unwrap_or(None);
+        if next != Some(pair[1]) {
+            steps.push([pair[0], pair[1]]);
+        }
+    }
+    Ok(steps)
+}
+
+/// A route as the API shows it: the stored fields, and the steps that are not linked
+fn route_value(db: &rusqlite::Connection, route: &trackside::Route) -> rusqlite::Result<Value> {
+    let mut value = json!(route);
+    value["unlinked_steps"] = json!(unlinked_steps(db, &route.block_sequence)?);
+    Ok(value)
 }
 
 fn sequence_of(value: &Value) -> Result<Vec<i64>, ApiError> {
@@ -362,7 +389,7 @@ fn create_route(app: &Arc<AppState>, call: &Call) -> Out {
         },
     )?;
     let route = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::internal("Route was not saved"))?;
-    Ok(Reply::json(201, json!(route)))
+    Ok(Reply::json(201, route_value(&inner.db, &route)?))
 }
 
 fn update_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
@@ -391,7 +418,7 @@ fn update_route(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     }
     trackside::save_route(&inner.db, &route)?;
     let saved = trackside::route(&inner.db, id)?.ok_or_else(|| ApiError::internal("Route was not saved"))?;
-    Ok(Reply::json(200, json!(saved)))
+    Ok(Reply::json(200, route_value(&inner.db, &saved)?))
 }
 
 /// A list of whole-number ids from a request, or None if the request did not give the list

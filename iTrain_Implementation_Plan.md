@@ -153,13 +153,14 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 ### Phase 3: Automation & Routes (3-4 weeks)
 **Goal**: Route-based automation
 
-1. **Route Management** ⬜
-   - 🟡 Route model and REST routes exist, Route Manager UI is a placeholder
-   - ⬜ Route definition (sequence of blocks)
-   - ⬜ Route creation UI with wizard
+1. **Route Management** 🟡
+   - ✅ Route model and REST routes exist, with a sequence of blocks that cannot repeat a block and must stay on one layout
+   - ✅ Route definition (sequence of blocks): the Route Manager builds a route from blocks in order, with move up, move down and remove
+   - 🧪 Steps that do not follow a block's next-block link are shown on the Route Manager and in the route's `unlinked_steps`. Not yet required before a route is saved
+   - 🟡 Route creation: a form on the Route Manager, not a wizard yet
    - ⬜ Advanced route options (speed limits, dwell times)
-   - ⬜ Route visualization
-   - ⬜ Run and Stop on the Route Manager. The Run button does nothing yet, and the backend refuses to run a route until automatic driving is built
+   - 🟡 Route visualization: the steps in order, with each block's live state. Not yet drawn on the layout
+   - ⬜ Run and Stop on the Route Manager. The Run button is shown but disabled, and the backend refuses to run a route until automatic driving is built
 
 2. **Automatic Driving** ⬜
    - ⬜ Simple automatic mode (follow route)

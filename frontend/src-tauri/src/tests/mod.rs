@@ -4,6 +4,7 @@ mod command_stations;
 mod consists;
 mod occupancy;
 mod overview;
+mod routes;
 mod layouts;
 mod locomotives;
 mod trackside;
