@@ -104,6 +104,7 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let body: Body = call.json_body()?;
     let inner = lock(app);
     let mut station = load(&inner.db, id)?;
+    let old_name = station.name.clone();
     if let Some(name) = fields::optional_str(&body, "name")? {
         station.name = check_name(&name)?;
     }
@@ -124,6 +125,13 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
             error.into()
         }
     })?;
+    if station.name != old_name {
+        // Locomotives refer to their station by name, so each one is sent again with the new name
+        inner.db.execute(
+            "UPDATE locomotives SET dirty = 1, updated_at = ?2 WHERE command_station_id = ?1",
+            rusqlite::params![id, crate::db::now()],
+        )?;
+    }
     Ok(Reply::json(200, json!(load(&inner.db, id)?)))
 }
 

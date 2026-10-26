@@ -26,7 +26,6 @@ pub struct Locomotive {
     pub created_at: String,
     #[serde(skip)]
     pub image_file: Option<String>,
-    #[serde(skip)]
     pub command_station_id: Option<i64>,
     /// The decoder profile this locomotive's decoder follows, if one is chosen
     pub decoder_profile_id: Option<i64>,
