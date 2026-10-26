@@ -62,7 +62,6 @@ export default function LayoutCanvas({
   onEndDrag,
   onPieceDrag,
   onCanvasClick,
-  onDropPiece,
   onCursor,
   onSelect,
   onMove,
@@ -144,27 +143,6 @@ export default function LayoutCanvas({
 
   const handleMove = (event) => {
     onCursor(pointerOf(event))
-  }
-
-  // Where a drag event is on the layout, in layout units
-  const dropPoint = (event) => {
-    const stage = stageRef.current
-    if (!stage) return null
-    const rect = stage.container().getBoundingClientRect()
-    return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom }
-  }
-
-  const handleDragOver = (event) => {
-    if (!onDropPiece) return
-    // Allowing the drop is what makes the sheet a drop target
-    event.preventDefault()
-    onCursor(dropPoint(event))
-  }
-
-  const handleDrop = (event) => {
-    if (!onDropPiece) return
-    event.preventDefault()
-    onDropPiece(dropPoint(event))
   }
 
   // A press on empty canvas starts a pan. A press on a piece, item, or handle does not
@@ -274,9 +252,6 @@ export default function LayoutCanvas({
       <div
         ref={scroller}
         onMouseDown={startPan}
-        onDragOver={handleDragOver}
-        onDragLeave={(event) => !event.currentTarget.contains(event.relatedTarget) && onCursor(null)}
-        onDrop={handleDrop}
         className="overflow-auto"
         style={{ maxHeight: 'calc(100vh - 16rem)' }}
       >

@@ -43,8 +43,8 @@ export function useLayoutEditor() {
   const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
   const [importReport, setImportReport] = useState(null)
   const [tool, setTool] = useState('select')
-  // The piece being dragged from the list onto the layout, or null
-  const [pieceToPlace, setPieceToPlace] = useState(null)
+  // The piece picked from the list to place next, or null
+  const [pieceId, setPieceId] = useState(null)
   // When on, a piece is placed where it is dropped, without joining to open ends
   const [freePlace, setFreePlace] = useState(false)
   const [selectedKey, setSelectedKey] = useState(null)
@@ -92,12 +92,12 @@ export function useLayoutEditor() {
     [pieces, libraryById, trackSystem, freePlace]
   )
 
-  // The ghost is what the dragged piece would become if dropped under the pointer. Null when nothing valid is shown
+  // Where the picked piece would go if clicked now. Null when there is nothing valid to show
   const ghost = useMemo(() => {
-    if (!pieceToPlace || !cursor) return null
-    const result = placementAt(pieceToPlace, cursor)
+    if (tool !== 'piece' || !cursor || !pieceId) return null
+    const result = placementAt(pieceId, cursor)
     return result.error ? null : result
-  }, [pieceToPlace, cursor, placementAt])
+  }, [tool, cursor, pieceId, placementAt])
 
   const refreshLayouts = useCallback(async () => {
     try {
@@ -271,35 +271,24 @@ export function useLayoutEditor() {
         setSelectedKey(null)
         return
       }
+      if (tool === 'piece') {
+        if (!pieceId) return setError('Choose a track piece from the list first')
+        if (!ghost) return setError('Move the cursor next to an open track end to place this piece, or tick "Place without connecting"')
+        setError('')
+        setPieces((prev) => [...prev, { id: newId('p'), piece_id: ghost.piece.id, ...ghost.placement }])
+        return
+      }
       addItem(tool, snapPoint(rawPoint))
     },
-    [tool, addItem]
+    [tool, pieceId, ghost, addItem]
   )
 
-  // A piece is dragged from the list. Dragging over the layout shows where it would go, and dropping places it
-  const startPieceDrag = useCallback((id) => {
-    setPieceToPlace(id)
-    setCursor(null)
+  // Choosing a piece from the list is how the next click places one
+  const choosePiece = useCallback((id) => {
+    setPieceId(id)
+    setTool('piece')
     setError('')
   }, [])
-
-  const endPieceDrag = useCallback(() => {
-    setPieceToPlace(null)
-    setCursor(null)
-  }, [])
-
-  const dropPiece = useCallback(
-    (rawPoint) => {
-      if (!pieceToPlace) return
-      const result = placementAt(pieceToPlace, rawPoint)
-      setPieceToPlace(null)
-      setCursor(null)
-      if (result.error) return setError(result.error)
-      setError('')
-      setPieces((prev) => [...prev, { id: newId('p'), piece_id: result.piece.id, ...result.placement }])
-    },
-    [pieceToPlace, placementAt]
-  )
 
   const moveItem = useCallback((key, rawPoint) => {
     const point = snapPoint(rawPoint)
@@ -329,7 +318,6 @@ export function useLayoutEditor() {
 
   const chooseTool = useCallback((next) => {
     setTool(next)
-    setPieceToPlace(null)
     setCursor(null)
   }, [])
 
@@ -533,7 +521,7 @@ export function useLayoutEditor() {
     pieces,
     trackSystem,
     tool,
-    pieceToPlace,
+    pieceId,
     ghost,
     selectedKey,
     selectedItem,
@@ -547,10 +535,8 @@ export function useLayoutEditor() {
     setSelectedKey,
     setCursor,
     chooseTool,
+    choosePiece,
     handleCanvasClick,
-    startPieceDrag,
-    endPieceDrag,
-    dropPiece,
     moveItem,
     renameSelected,
     deleteSelected,

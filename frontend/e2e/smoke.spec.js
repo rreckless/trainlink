@@ -157,8 +157,8 @@ test('the start card shows on an empty layout and goes once a piece is on it', a
   await expect(page.getByText('Start the track plan')).toHaveCount(0)
 })
 
-test('a piece dragged from the list onto the layout is placed, and Save keeps it', async ({ page }) => {
-  const name = `Drop ${Date.now()}`
+test('a piece picked from the list is placed by clicking the layout, and Save keeps it', async ({ page }) => {
+  const name = `Place ${Date.now()}`
   const created = await page.request.post('/api/layouts', { data: { name, width: 800, height: 400, scale: 'N' } })
   const id = (await created.json()).id
 
@@ -168,25 +168,12 @@ test('a piece dragged from the list onto the layout is placed, and Save keeps it
   await page.waitForLoadState('networkidle')
   await expect(page.getByRole('button', { name: 'Draw track' })).toHaveCount(0)
 
-  // Playwright cannot drive a native browser drag reliably, so the drag events are sent with the data a browser sends
-  await page.evaluate(async () => {
-    // A short pause between the events lets the page update between them, as it does during a real drag
-    const pause = () => new Promise((resolve) => setTimeout(resolve, 50))
-    const source = [...document.querySelectorAll('[draggable="true"]')].find((element) => element.textContent.includes('SL-300F'))
-    const canvas = document.querySelector('canvas')
-    const sheet = canvas.closest('.overflow-auto')
-    const rect = canvas.getBoundingClientRect()
-    const clientX = rect.left + 200
-    const clientY = rect.top + 150
-    const dataTransfer = new DataTransfer()
-    source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }))
-    await pause()
-    sheet.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer }))
-    await pause()
-    sheet.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer }))
-    await pause()
-    source.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer }))
-  })
+  await page.locator('button', { hasText: 'SL-300F' }).first().click()
+  const box = await page.locator('canvas').first().boundingBox()
+  // Moving over the layout first shows where the piece would go, and the click then places it there
+  await page.mouse.move(box.x + 200, box.y + 150)
+  await page.waitForTimeout(100)
+  await page.mouse.click(box.x + 200, box.y + 150)
   await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled()
 
   await page.getByRole('button', { name: 'Save' }).click()

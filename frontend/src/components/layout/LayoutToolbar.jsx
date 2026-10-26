@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Activity, Boxes, Gauge, MousePointer2, Pencil, Plus, Radio, Trash2, Upload } from 'lucide-react'
+import { Activity, Boxes, Gauge, MousePointer2, Pencil, Plus, Puzzle, Radio, Trash2, Upload } from 'lucide-react'
 import { askText } from '../../services/dialogs'
 import EditDialog, { DialogSection } from '../shell/EditDialog'
 
-// The tools for the track plan, then the tools that mark what the layout is for. Pieces are placed by dragging them
-// from the list, so there is no tool for that
+// The tools for the track plan, then the tools that mark what the layout is for
 const DRAW_TOOLS = [
   { id: 'select', label: 'Select', icon: MousePointer2 },
+  { id: 'piece', label: 'Place piece', icon: Puzzle },
   { id: 'operate', label: 'Operate', icon: Gauge },
 ]
 const MARK_TOOLS = [

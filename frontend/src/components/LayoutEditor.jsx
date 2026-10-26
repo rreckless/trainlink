@@ -11,6 +11,7 @@ import EditDialog from './shell/EditDialog'
 
 const HINTS = {
   select: 'Click to select. Drag to move. Delete removes the selection.',
+  piece: 'Pick a piece from the list, then click to place it. Near an open end (orange) it joins, unless "Place without connecting" is ticked.',
   operate: 'Click a turnout with a DCC address to switch it. Orange means diverging.',
   block: 'Choose a block, then click the track it covers.',
   signal: 'Choose a signal, then click where it stands.',
@@ -38,7 +39,7 @@ function NoSelection() {
 }
 
 // What to do first on an empty layout. It sits over the canvas and goes once something is on it
-function EmptyStart({ onImport }) {
+function EmptyStart({ onPlace, onImport }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
       <div className="pointer-events-auto w-full max-w-md rounded-xl border border-slate-700 bg-slate-900/95 p-6 text-center shadow-2xl">
@@ -46,9 +47,12 @@ function EmptyStart({ onImport }) {
           <Spline className="w-6 h-6 text-white" aria-hidden="true" />
         </span>
         <h3 className="text-lg font-semibold">Start the track plan</h3>
-        <p className="mt-1 text-sm text-slate-400">Drag pieces from the list onto the layout, or import an AnyRail file. Save keeps your changes.</p>
+        <p className="mt-1 text-sm text-slate-400">Place pieces from the library, or import an AnyRail file. Save keeps your changes.</p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
-          <button onClick={onImport} className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-sm font-semibold hover:bg-blue-500">
+          <button onClick={onPlace} className="px-4 py-2 rounded-md bg-blue-600 text-sm font-semibold hover:bg-blue-500">
+            Place a piece
+          </button>
+          <button onClick={onImport} className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-slate-700 text-sm hover:bg-slate-600">
             <Upload className="w-4 h-4" aria-hidden="true" />
             Import AnyRail
           </button>
@@ -83,9 +87,9 @@ export default function LayoutEditor() {
   }, [editor.deleteSelected, editor.setSelectedKey, editor.selectedPlaced, editor.rotatePiece])
 
   const selected = Boolean(editor.selectedItem || editor.selectedTrack || editor.selectedPlaced)
-  // The start card shows until something is on the layout
+  // The start card shows until something is on the layout, or a tool other than Select is chosen to start one
   const drawn = editor.tracks.length + editor.items.length + editor.pieces.length
-  const showStart = drawn === 0
+  const showStart = drawn === 0 && editor.tool === 'select'
 
   return (
     <div className="flex flex-col gap-3">
@@ -129,14 +133,13 @@ export default function LayoutEditor() {
 
       {editor.layout ? (
         <div className="grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_18rem]">
-          {/* Palette: the pieces to drag onto the layout */}
+          {/* Palette: the pieces to place */}
           <aside className="rounded-xl border border-slate-800 bg-slate-900 p-3 lg:max-h-[calc(100vh-14rem)] lg:overflow-y-auto">
             <TrackPicker
               library={editor.library}
               trackSystem={editor.trackSystem}
-              dragging={editor.pieceToPlace}
-              onDragStart={editor.startPieceDrag}
-              onDragEnd={editor.endPieceDrag}
+              pieceId={editor.pieceId}
+              onPick={editor.choosePiece}
               freePlace={editor.freePlace}
               onToggleFree={editor.setFreePlace}
             />
@@ -165,14 +168,13 @@ export default function LayoutEditor() {
                   onEndDrag={editor.dragPlacedEnd}
                   onPieceDrag={editor.dragPiece}
                   onCanvasClick={editor.handleCanvasClick}
-                  onDropPiece={editor.dropPiece}
                   onCursor={editor.setCursor}
                   onSelect={editor.setSelectedKey}
                   onMove={editor.moveItem}
                 />
               </div>
               {showStart && (
-                <EmptyStart onImport={() => setImporting(true)} />
+                <EmptyStart onPlace={() => editor.chooseTool('piece')} onImport={() => setImporting(true)} />
               )}
             </div>
             <footer className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-400">
