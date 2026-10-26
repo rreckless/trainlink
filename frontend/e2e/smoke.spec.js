@@ -285,3 +285,14 @@ test('a turnout leg with no track is listed on Health until the review is cleare
   await page.getByRole('button', { name: 'Clear review' }).first().click()
   await expect(page.getByText('Every turnout leg has track on the other side')).toBeVisible()
 })
+
+test('the setup checklist lists the steps in order, and each step opens its page', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Setup', exact: true }).first().click()
+  await expect(page.getByText(/\d+ of 7 done/)).toBeVisible()
+  for (const label of ['Add a command station', 'Add locomotives', 'Make a first manual run', 'Draw or import the track plan', 'Create routes']) {
+    await expect(page.getByText(label, { exact: false })).toBeVisible()
+  }
+  await page.getByRole('button', { name: 'Open' }).first().click()
+  await expect(page.getByText('Z21 connection', { exact: false }).first()).toBeVisible()
+})

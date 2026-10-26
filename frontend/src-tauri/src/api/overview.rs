@@ -19,8 +19,59 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", ["turnouts"]) => turnouts(app),
         ("GET", ["health"]) => health(app),
+        ("GET", ["setup"]) => setup(app),
         _ => Err(ApiError::new(405, "Method not allowed")),
     }
+}
+
+/// The setup checklist: each step is done when the data for it exists, and names the page where it is done
+fn setup(app: &Arc<AppState>) -> Out {
+    let inner = lock(app);
+    let stations: i64 = inner.db.query_row("SELECT COUNT(*) FROM command_stations", [], |row| row.get(0))?;
+    let locomotives = crate::db::locomotives::list(&inner.db)?;
+    let moved = locomotives.iter().any(|loco| loco.travelled_time > 0.0);
+    let placed = layouts_db::list(&inner.db)?.iter().any(|layout| {
+        let pieces = layout.elements.get("track_pieces").and_then(Value::as_array).is_some_and(|items| !items.is_empty());
+        let tracks = layout.elements.get("tracks").and_then(Value::as_array).is_some_and(|items| !items.is_empty());
+        pieces || tracks
+    });
+    let blocks: i64 = inner.db.query_row("SELECT COUNT(*) FROM blocks", [], |row| row.get(0))?;
+    let blocks_missing: i64 = inner.db.query_row(
+        "SELECT COUNT(*) FROM blocks WHERE id NOT IN (SELECT block_id FROM block_feedbacks)",
+        [],
+        |row| row.get(0),
+    )?;
+    let turnouts = turnout_rows(&inner)?;
+    let turnouts_missing = turnouts.iter().filter(|row| row["has_address"] == Value::Bool(false)).count();
+    let routes: i64 = inner.db.query_row("SELECT COUNT(*) FROM routes", [], |row| row.get(0))?;
+
+    let steps = vec![
+        step("command_station", "Add a command station", stations > 0, format!("{stations} command station(s)"), "settings"),
+        step("locomotives", "Add locomotives", !locomotives.is_empty(), format!("{} locomotive(s)", locomotives.len()), "locomotives"),
+        step("first_run", "Make a first manual run", moved, "A locomotive has moved under TrainLink control".into(), "control"),
+        step("track_plan", "Draw or import the track plan", placed, "A layout has track on it".into(), "editor"),
+        step(
+            "blocks",
+            "Set up blocks and sensors",
+            blocks > 0 && blocks_missing == 0,
+            format!("{blocks} block(s), {blocks_missing} without a sensor"),
+            "blocks",
+        ),
+        step(
+            "turnouts",
+            "Give every turnout a DCC address",
+            !turnouts.is_empty() && turnouts_missing == 0,
+            format!("{} turnout(s), {turnouts_missing} without an address", turnouts.len()),
+            "turnouts",
+        ),
+        step("routes", "Create routes", routes > 0, format!("{routes} route(s)"), "routes"),
+    ];
+    let done = steps.iter().filter(|item| item["done"] == Value::Bool(true)).count();
+    Ok(Reply::json(200, json!({ "steps": steps, "done": done, "total": steps.len() })))
+}
+
+fn step(id: &str, label: &str, done: bool, detail: String, page: &str) -> Value {
+    json!({ "id": id, "label": label, "done": done, "detail": detail, "page": page })
 }
 
 /// Every turnout placed on every layout, with its DCC address if it has one
