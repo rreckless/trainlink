@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use crate::db;
 use crate::state::{AppState, Inner};
 use commands::{
+    XBUS_CV_NACK_SC_OR_NACK, XBUS_CV_RESULT,
     broadcast_flags, rbus_getdata, status_request, LAN_RMBUS_DATACHANGED, LAN_SYSTEMSTATE_DATACHANGED,
     RBUS_GROUPS, SYSTEMSTATE_CENTRAL_STATE_OFFSET, XBUS_STATUS_CHANGED, XBUS_STATUS_DB0, XBUS_LOCO_INFO_REPLY,
     XBUS_TURNOUT_INFO,
@@ -55,6 +56,8 @@ pub struct Z21 {
     pub turnouts: BTreeMap<i64, Option<u8>>,
     pub locos: BTreeMap<i64, LocoState>,
     pub last_heartbeat: String,
+    /// The programming operation in progress and the last one that finished
+    pub programming: Programming,
     socket: Option<Arc<UdpSocket>>,
     stop: Option<Arc<AtomicBool>>,
 }
@@ -72,6 +75,7 @@ impl Z21 {
             last_heartbeat: db::now(),
             socket: None,
             stop: None,
+            programming: Programming::default(),
         }
     }
 
@@ -199,9 +203,65 @@ pub fn apply(inner: &mut Inner, frame: &[u8], now: Instant) {
         z21.turnouts.insert(turnout, output);
     } else if header == LAN_SYSTEMSTATE_DATACHANGED && frame.len() > SYSTEMSTATE_CENTRAL_STATE_OFFSET {
         set_central_state(z21, frame[SYSTEMSTATE_CENTRAL_STATE_OFFSET]);
+    } else if header == LAN_X_HEADER && frame.len() >= 6 && frame[4] == XBUS_CV_NACK_SC_OR_NACK {
+        // 0x12: the programming track is short-circuited. 0x13: the decoder did not acknowledge
+        let error = if frame[5] == 0x12 {
+            "The programming track is short-circuited"
+        } else {
+            "The decoder did not acknowledge the command"
+        };
+        z21.programming.finish_with_error(error);
+    } else if header == LAN_X_HEADER && frame.len() >= 10 && frame[4] == XBUS_CV_RESULT && frame[5] == 0x14 {
+        let cv = ((frame[6] as u16) << 8 | frame[7] as u16) + 1;
+        z21.programming.finish_with_value(cv, frame[8]);
     } else if header == LAN_RMBUS_DATACHANGED && frame.len() >= 15 {
         if let Some(states) = replies::rbus_feedback(frame[4], &frame[5..15]) {
             z21.feedback.extend(states);
+        }
+    }
+}
+
+/// Programming operations: one at a time, and the last result is kept until the next one starts
+#[derive(Debug, Clone, Default)]
+pub struct Programming {
+    pub pending: Option<Pending>,
+    pub last: Option<Outcome>,
+}
+
+/// An operation waiting for the Z21's answer
+#[derive(Debug, Clone)]
+pub struct Pending {
+    pub cv: u16,
+    pub kind: &'static str,
+    pub value: Option<u8>,
+    pub started: Instant,
+}
+
+/// The answer to an operation: a value for a read, the value written for a write, or an error
+#[derive(Debug, Clone)]
+pub struct Outcome {
+    pub cv: u16,
+    pub kind: &'static str,
+    pub value: Option<u8>,
+    pub error: Option<String>,
+}
+
+impl Programming {
+    pub fn start(&mut self, cv: u16, kind: &'static str, value: Option<u8>, now: Instant) {
+        self.pending = Some(Pending { cv, kind, value, started: now });
+    }
+
+    /// The Z21 answered a read or a write with a value
+    pub fn finish_with_value(&mut self, cv: u16, value: u8) {
+        let kind = self.pending.as_ref().map_or("read", |pending| pending.kind);
+        self.pending = None;
+        self.last = Some(Outcome { cv, kind, value: Some(value), error: None });
+    }
+
+    /// The Z21 refused, or no answer came
+    pub fn finish_with_error(&mut self, error: &str) {
+        if let Some(pending) = self.pending.take() {
+            self.last = Some(Outcome { cv: pending.cv, kind: pending.kind, value: None, error: Some(error.into()) });
         }
     }
 }

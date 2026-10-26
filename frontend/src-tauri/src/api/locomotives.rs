@@ -145,6 +145,15 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let functions = fields::optional_int(&changes, "functions")?;
     let address = fields::optional_int(&changes, "dcc_address")?;
     let labels = changes.get("function_labels").map(parse_labels).transpose()?;
+    // The profile is read from the body, not the changes, because null clears it
+    let profile = match body.get("decoder_profile_id") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(value) => {
+            let id = value.as_i64().ok_or_else(|| ApiError::unprocessable("decoder_profile_id must be a whole number or null"))?;
+            Some(Some(id))
+        }
+    };
 
     let inner = lock(app);
     let mut locomotive = load(&inner.db, id)?;
@@ -165,6 +174,14 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     }
     if let Some(labels) = labels {
         locomotive.function_labels = labels;
+    }
+    if let Some(profile) = profile {
+        if let Some(id) = profile {
+            if crate::db::decoder_profiles::get(&inner.db, id)?.is_none() {
+                return Err(ApiError::not_found("Decoder profile", id));
+            }
+        }
+        locomotive.decoder_profile_id = profile;
     }
     locomotives::save(&inner.db, &locomotive).map_err(|error| {
         if is_unique_violation(&error) {

@@ -112,3 +112,17 @@ test('a route is built from blocks in order on the Routes page', async ({ page }
   await expect(page.getByRole('button', { name: /Up\s+2 blocks/ })).toBeVisible()
   await expect(page.getByText('not linked')).toHaveCount(0)
 })
+
+test('the decoder CVs page offers the CVs of the NMRA profile and keeps Write off until the write is confirmed', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Decoder CVs', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Decoder profile' })).toBeVisible()
+  await expect(page.getByRole('combobox').first()).toHaveValue(/.+/)
+  await expect(page.getByRole('button', { name: /Short address/ })).toBeVisible()
+  const write = page.getByRole('button', { name: 'Write CV' })
+  await expect(write).toBeDisabled()
+  await page.getByLabel('New value (0 to 255)').fill('6')
+  await expect(write).toBeDisabled()
+  await page.getByLabel('I have checked the CV number and the value').check()
+  await expect(write).toBeEnabled()
+})

@@ -232,9 +232,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - 🟡 Track power on, with resume after a short circuit. Track power off not built
    - ⬜ Feature detection
 
-3. **Locomotive Decoder Management** ⬜
+3. **Locomotive Decoder Management** 🟡
    - ⬜ Import locomotive definitions
-   - ⬜ Store locomotive profiles
+   - 🧪 Store decoder profiles: the CVs (number, name, range, read-only) and function names. Imported from JSON, and listed, read and deleted through the API. The NMRA standard profile is built in and cannot be deleted. A locomotive can choose a profile (`decoder_profile_id`)
    - ⬜ DCC address assignment
    - ⬜ Function mapping
 
@@ -330,20 +330,24 @@ Entry criteria:
 
 ### Phase 9: Decoder Programming (3-4 weeks)
 **Goal**: Read and write decoder settings (CVs) on the programming track
-**Needs Phase 5 decoder profiles first.** Writing a wrong CV can stop a decoder working, so every write is checked.
+**Decoder profiles are stored (Phase 5, item 3).** The CV browser shows the CVs of the chosen profile, which starts as the NMRA standard, or the locomotive's own profile. Writing a wrong CV can stop a decoder working, so every write is confirmed, limited to the profile's CVs and ranges, and checked where the Z21 allows it.
 
-1. **Programming Track** ⬜
-   - ⬜ Read and write CVs with the Z21 programming commands. Check the command codes in the spec v1.13 before implementing
-   - ⬜ Direct mode on the programming track, and POM mode on the main track if the spec and decoder allow it
+1. **Programming Track** 🧪
+   - 🧪 Direct-mode CV read and write on the programming track (spec v1.13, sections 6.1 to 6.5). The frames are checked against the spec's bytes in tests. **Open:** check on a real decoder
+   - 🧪 POM write of a CV and of one bit on the main track, for a locomotive on the roster (spec 6.6 and 6.7). The Z21 gives no answer, so these cannot be checked
+   - 🧪 POM read on the main track (spec 6.8), for a locomotive on the roster. It needs RailCom in the Z21 and the decoder, so the answer may never come. **Open:** check on a real decoder
+   - 🧪 Only one operation runs at a time, and an operation with no answer from the Z21 in 30 seconds is reported as failed
 
-2. **CV Browser** ⬜
-   - ⬜ List CVs with names and ranges from the decoder profile
-   - ⬜ Show the current value, and edit it
+2. **CV Browser** 🟡
+   - 🧪 CVs with names and ranges from the chosen decoder profile. Profiles can be imported from JSON, and a locomotive can use one. Functions are listed too. **Open:** the JSON format for importing a profile is not yet documented for users
+   - 🧪 Show the value read from the decoder, and write a new one
 
-3. **Safety** ⬜
-   - ⬜ Confirmation before every write
-   - ⬜ Refuse values outside the CV's range
-   - ⬜ Read the value back after each write and report any mismatch
+3. **Safety** ✅
+   - ✅ Confirmation before every write: the write is refused unless `confirm` is set, and the page needs the box ticked
+   - ✅ Values and CV numbers outside their range are refused (0 to 255, CV 1 to 1024, bit 0 to 7)
+   - ✅ Direct-mode writes are read back and any mismatch is reported. POM writes cannot be read back, and the page says so
+   - 🧪 With a profile, a write is refused for a CV that is not in it, a read-only CV, or a value outside the CV's range
+   - 🧪 A write needs a ready track. Tested with the fake Z21
 
 ### Phase 10: LocoLink Parity (Backlog)
 **Goal**: Cover the features seen in LocoLink 2.0.9, built from our own design. Nothing is copied from LocoLink's code, text, icons or images. The full comparison, with what was seen on screen, is in `~/Documents/TrainLink/locolink-vs-trainlink.md`. Not started. Items are grouped by the phase they most depend on, and the order is still to be decided.
