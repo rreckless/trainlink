@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::{app, send};
-use crate::drivers::{self, Driver};
-use crate::z21::{self, commands, features::HardwareInfo};
+use crate::drivers::{self, Driver, DriverError};
+use crate::z21::{self, commands, features::HardwareInfo, Z21};
 
 #[test]
 fn only_station_types_with_a_driver_are_accepted() {
@@ -34,9 +34,9 @@ fn a_driver_refuses_commands_while_the_station_is_not_connected() {
     let app = app();
     let mut inner = app.inner.lock().unwrap();
     assert!(!inner.z21.connected());
-    assert_eq!(Driver::drive(&mut inner.z21, 3, 50, true).unwrap_err(), "Z21 not connected");
-    assert_eq!(Driver::emergency_stop(&mut inner.z21).unwrap_err(), "Z21 not connected");
-    assert_eq!(Driver::track_power(&mut inner.z21, false).unwrap_err(), "Z21 not connected");
+    assert_eq!(Driver::drive(&mut inner.z21, 3, 50, true).unwrap_err(), DriverError::NotConnected);
+    assert_eq!(Driver::emergency_stop(&mut inner.z21).unwrap_err(), DriverError::NotConnected);
+    assert_eq!(Driver::track_power(&mut inner.z21, false).unwrap_err(), DriverError::NotConnected);
 }
 
 #[test]
@@ -79,6 +79,42 @@ fn commands_through_the_driver_reach_the_z21_as_the_command_builders_make_them()
         commands::emergency_stop(),
     ] {
         assert!(received.contains(&expected), "{expected:02x?} was not sent");
+    }
+    app.inner.lock().unwrap().z21.disconnect();
+}
+
+#[test]
+fn a_driver_connects_to_a_station_and_disconnects_from_it() {
+    let fake = super::fake_z21::fake_z21();
+    let app = app();
+    assert!(<Z21 as Driver>::connect(&app, "127.0.0.1", fake.port));
+    assert!(app.inner.lock().unwrap().z21.connected());
+    assert!(fake.wait_for(&commands::status_request()), "connecting asks the station for its status");
+
+    Driver::disconnect(&mut app.inner.lock().unwrap().z21);
+    assert!(!app.inner.lock().unwrap().z21.connected());
+}
+
+#[test]
+fn a_driver_asks_for_feedback_and_reports_the_inputs_it_has_seen() {
+    let fake = super::fake_z21::fake_z21();
+    let app = app();
+    assert!(<Z21 as Driver>::connect(&app, "127.0.0.1", fake.port));
+    {
+        let mut inner = app.inner.lock().unwrap();
+        inner.z21.feedback.insert((1, 2), true);
+        inner.z21.feedback.insert((1, 3), false);
+        assert_eq!(
+            inner.z21.feedback_inputs(),
+            vec![
+                drivers::FeedbackInput { module: 1, input: 2, occupied: true },
+                drivers::FeedbackInput { module: 1, input: 3, occupied: false },
+            ]
+        );
+        inner.z21.request_feedback();
+    }
+    for group in commands::RBUS_GROUPS {
+        assert!(fake.wait_for(&commands::rbus_getdata(group)), "feedback group {group} is asked for");
     }
     app.inner.lock().unwrap().z21.disconnect();
 }

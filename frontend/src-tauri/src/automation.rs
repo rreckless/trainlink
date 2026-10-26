@@ -15,11 +15,11 @@ use std::time::{Duration, Instant};
 use rusqlite::Connection;
 use serde_json::Value;
 
+use crate::drivers::Driver;
 use crate::db::{locomotives, trackside};
 use crate::http::ApiError;
 use crate::occupancy;
 use crate::state::{AppState, Inner};
-use crate::z21::commands;
 
 /// How often running routes are checked
 pub const TICK: Duration = Duration::from_millis(500);
@@ -88,9 +88,8 @@ fn next_index(route: &trackside::Route, index: usize, forward: bool) -> Option<u
 
 /// Send a speed and direction to a locomotive, and note it as moving for the moving-time record
 fn send_drive(inner: &mut Inner, address: i64, speed: i64, forward: bool, now: Instant) {
-    if let Ok(frame) = commands::loco_drive(address, speed, forward) {
-        inner.z21.send(&frame);
-    }
+    // A command the station does not take is not retried here; the moving time is kept either way
+    let _ = Driver::drive(&mut inner.z21, address, speed, forward);
     let Inner { db, moving, .. } = inner;
     moving.observe(db, address, Some(speed), now);
 }

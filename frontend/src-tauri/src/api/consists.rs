@@ -8,6 +8,7 @@ use std::time::Instant;
 use serde_json::{json, Value};
 
 use super::Call;
+use crate::drivers::Driver;
 use crate::db::consists::{self, Consist, MemberInput, ADDRESS_MAX, ADDRESS_MIN};
 use crate::db::is_unique_violation;
 use crate::db::locomotives;
@@ -192,19 +193,13 @@ fn set_speed(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let mut inner = lock(app);
     super::z21::ready_check(&inner, "Consist")?;
     let consist = load(&inner.db, id)?;
-    let frames = consist
-        .members
-        .iter()
-        .map(|member| {
-            let member_forward = forward != member.reversed;
-            commands::loco_drive(member.dcc_address, speed, member_forward)
-                .map_err(ApiError::bad_request)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    for frame in &frames {
-        if !inner.z21.send(frame) {
-            return Err(ApiError::internal("Failed to set consist speed"));
-        }
+    // Every member is checked before any locomotive moves, so one bad address leaves the whole consist where it was
+    for member in &consist.members {
+        commands::loco_drive(member.dcc_address, speed, forward != member.reversed).map_err(ApiError::bad_request)?;
+    }
+    for member in &consist.members {
+        Driver::drive(&mut inner.z21, member.dcc_address, speed, forward != member.reversed)
+            .map_err(|error| super::z21::driver_error(error, "Failed to set consist speed"))?;
     }
     let inner = &mut *inner;
     let Inner { db, moving, .. } = inner;
@@ -223,18 +218,15 @@ fn set_function(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     if !(0..=commands::MAX_FUNCTION as i64).contains(&index) {
         return Err(ApiError::unprocessable(format!("function must be 0 to {}", commands::MAX_FUNCTION)));
     }
-    let inner = lock(app);
+    let mut inner = lock(app);
     super::z21::ready_check(&inner, "Consist")?;
     let consist = load(&inner.db, id)?;
-    let frames = consist
-        .members
-        .iter()
-        .map(|member| commands::set_function(member.dcc_address, index as u8, on).map_err(ApiError::bad_request))
-        .collect::<Result<Vec<_>, _>>()?;
-    for frame in &frames {
-        if !inner.z21.send(frame) {
-            return Err(ApiError::internal("Failed to set consist function"));
-        }
+    for member in &consist.members {
+        commands::set_function(member.dcc_address, index as u8, on).map_err(ApiError::bad_request)?;
+    }
+    for member in &consist.members {
+        Driver::set_function(&mut inner.z21, member.dcc_address, index as u8, on)
+            .map_err(|error| super::z21::driver_error(error, "Failed to set consist function"))?;
     }
     Ok(Reply::json(200, json!({ "status": "function_set", "consist_id": id, "function": index, "on": on })))
 }
