@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 
 use super::Call;
 use crate::db::command_stations::{self, CommandStation};
+use crate::drivers;
 use crate::db::is_unique_violation;
 use crate::fields::{self, Body};
 use crate::http::{ApiError, Out, Reply};
@@ -14,7 +15,6 @@ use crate::state::{AppState, Inner};
 use crate::z21;
 
 const NAME_MAX: usize = 40;
-const SUPPORTED_TYPES: [&str; 1] = ["z21"];
 
 fn lock(app: &Arc<AppState>) -> std::sync::MutexGuard<'_, Inner> {
     app.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -54,8 +54,8 @@ fn check_name(name: &str) -> Result<String, ApiError> {
 }
 
 fn check_type(station_type: &str) -> Result<String, ApiError> {
-    if !SUPPORTED_TYPES.contains(&station_type) {
-        return Err(ApiError::unprocessable(format!("Station type must be one of: {}", SUPPORTED_TYPES.join(", "))));
+    if !drivers::is_supported(station_type) {
+        return Err(ApiError::unprocessable(format!("Station type must be one of: {}", drivers::SUPPORTED_TYPES.join(", "))));
     }
     Ok(station_type.to_string())
 }

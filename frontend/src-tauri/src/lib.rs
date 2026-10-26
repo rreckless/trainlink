@@ -8,6 +8,7 @@ pub mod bridge;
 pub mod api;
 pub mod automation;
 pub mod db;
+pub mod drivers;
 pub mod fields;
 pub mod http;
 pub mod import_file;

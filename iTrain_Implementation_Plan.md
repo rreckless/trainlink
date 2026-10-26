@@ -274,10 +274,13 @@ Entry criteria:
 - [ ] Base driver interface extracted from the Z21 driver and covered by tests
 - [ ] Mock command station pattern in place, reusable for each new protocol
 
-1. **Base Driver Interface** ⬜
-   - ⬜ Extract `base_driver.py` from the Z21 driver (connect, disconnect, speed, direction, functions, feedback events)
-   - ⬜ Feature negotiation: each driver declares what it supports
-   - ⬜ Driver registry and selection from CommandStation config
+1. **Base Driver Interface** 🧪
+   - 🧪 Driver trait (`drivers/mod.rs`): station type, connected, features, drive, functions, emergency stop, track power. The Z21 implements it, and the commands are checked against the same frames as before
+   - 🧪 Feature negotiation: the Z21 reports its features through the trait, from its hardware and firmware
+   - 🧪 Driver registry: the station types with a driver, which a command station is saved with
+   - ⬜ Connect, disconnect and feedback events are not in the trait yet. The API still calls the Z21 directly, and moving it onto the trait is the next step
+   - ⬜ Shared mock command station: the fake Z21 in the link tests is the pattern, and it is not yet in a module other drivers can use
+   - **Entry criteria not met.** Phase 6 is unbuilt and the Z21 is not verified on real hardware. The start was chosen knowing this
 
 2. **Märklin 6051 / P50x** ⬜
    - ⬜ Serial communication (PySerial)
