@@ -21,6 +21,8 @@ async function sendForm(method, path, file) {
 // Locomotive roster, setup, and Z21 locomotive commands
 export const locomotiveApi = {
   list: () => request('GET', '/api/locomotives'),
+  // The lowest DCC address no locomotive uses
+  nextAddress: () => request('GET', '/api/locomotives/next-address'),
   create: (body) => request('POST', '/api/locomotives', body),
   update: (id, body) => request('PATCH', `/api/locomotives/${id}`, body),
   remove: (id) => request('DELETE', `/api/locomotives/${id}`),

@@ -235,8 +235,8 @@ Build a web-based replica of iTrain, a digital model railroad control system for
 3. **Locomotive Decoder Management** 🟡
    - ⬜ Import locomotive definitions
    - 🧪 Store decoder profiles: the CVs (number, name, range, read-only) and function names. Imported from JSON, and listed, read and deleted through the API. The NMRA standard profile is built in and cannot be deleted. A locomotive can choose a profile (`decoder_profile_id`)
-   - ⬜ DCC address assignment
-   - ⬜ Function mapping
+   - 🧪 DCC address assignment: addresses must be unique and 1-9999, and "Next free" on the locomotive form gives the lowest unused one. Reading the address from a decoder is not built
+   - 🧪 Function mapping: linking a decoder profile names the function buttons it defines. Labels a user has already changed are kept
 
 ### Phase 6: Polish & Export (2 weeks)
 **Goal**: Production-ready application for Z21

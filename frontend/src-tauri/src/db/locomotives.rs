@@ -41,6 +41,26 @@ pub fn default_labels() -> Value {
     Value::Array(labels)
 }
 
+/// The default labels, with the names a decoder profile gives its functions. Functions past the buttons are left out
+pub fn labels_from_profile(functions: &Value) -> Value {
+    let mut labels = default_labels();
+    for function in functions.as_array().into_iter().flatten() {
+        let index = function.get("index").and_then(Value::as_u64).unwrap_or(u64::MAX);
+        let Some(label) = function.get("label").and_then(Value::as_str) else { continue };
+        if let Some(slot) = labels.get_mut(index as usize).filter(|_| index < FUNCTION_BUTTONS as u64) {
+            slot["label"] = json!(label);
+        }
+    }
+    labels
+}
+
+/// The lowest DCC address from 1 that no locomotive uses
+pub fn next_free_address(conn: &Connection) -> rusqlite::Result<i64> {
+    let mut statement = conn.prepare("SELECT dcc_address FROM locomotives ORDER BY dcc_address")?;
+    let used: Vec<i64> = statement.query_map([], |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
+    Ok(used.iter().enumerate().find(|(index, address)| **address != *index as i64 + 1).map_or(used.len() as i64 + 1, |(index, _)| index as i64 + 1))
+}
+
 const COLUMNS: &str = "id, name, dcc_address, locomotive_type, length, speed, direction, functions,
     function_labels, image_file, travelled_time, travelled_distance, command_station_id, decoder_profile_id, created_at";
 

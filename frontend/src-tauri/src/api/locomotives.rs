@@ -28,6 +28,7 @@ const IMAGE_TYPES: [(&str, &str, &[u8]); 3] = [
 pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
     match (call.method, rest) {
         ("GET", []) => list(app),
+        ("GET", ["next-address"]) => next_address(app),
         ("POST", []) => create(app, call),
         ("GET", [id]) => get(app, super::id_segment(id)?),
         ("PATCH", [id]) => update(app, super::id_segment(id)?, call),
@@ -44,6 +45,12 @@ fn check_address(address: i64) -> Result<(), ApiError> {
         return Err(ApiError::bad_request(format!("DCC address must be {MIN_ADDRESS}-{MAX_ADDRESS}")));
     }
     Ok(())
+}
+
+/// The lowest DCC address no locomotive uses, for a new locomotive to take
+fn next_address(app: &Arc<AppState>) -> Out {
+    let inner = lock(app);
+    Ok(Reply::json(200, json!({ "dcc_address": locomotives::next_free_address(&inner.db)? })))
 }
 
 fn list(app: &Arc<AppState>) -> Out {
@@ -172,13 +179,16 @@ fn update(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     if let Some(functions) = functions {
         locomotive.functions = functions;
     }
+    let labels_given = labels.is_some();
     if let Some(labels) = labels {
         locomotive.function_labels = labels;
     }
     if let Some(profile) = profile {
         if let Some(id) = profile {
-            if crate::db::decoder_profiles::get(&inner.db, id)?.is_none() {
-                return Err(ApiError::not_found("Decoder profile", id));
+            let chosen = crate::db::decoder_profiles::get(&inner.db, id)?.ok_or_else(|| ApiError::not_found("Decoder profile", id))?;
+            // Named functions come from the profile, unless the labels were set in this change or already customised
+            if !labels_given && locomotive.function_labels == locomotives::default_labels() {
+                locomotive.function_labels = locomotives::labels_from_profile(&chosen.functions);
             }
         }
         locomotive.decoder_profile_id = profile;
