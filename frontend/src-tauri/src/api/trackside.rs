@@ -85,6 +85,18 @@ fn create_block(app: &Arc<AppState>, call: &Call) -> Out {
     Ok(Reply::json(201, json!(block)))
 }
 
+/// A distance along a block in cm: 0 or more, or null to clear it
+fn distance_cm(value: &Value, key: &str) -> Result<Option<f64>, ApiError> {
+    match value {
+        Value::Null => Ok(None),
+        Value::Number(number) => match number.as_f64() {
+            Some(cm) if cm.is_finite() && cm >= 0.0 => Ok(Some(cm)),
+            _ => Err(ApiError::unprocessable(format!("{key} must be 0 or more centimetres"))),
+        },
+        _ => Err(ApiError::unprocessable(format!("{key} must be a number or null"))),
+    }
+}
+
 fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     let body = call.json_body()?;
     let changes: Body = fields::changes(&body, &["name", "x", "y", "max_speed", "state", "feedback_ids", "signal_ids"]);
@@ -110,6 +122,49 @@ fn update_block(app: &Arc<AppState>, id: i64, call: &Call) -> Out {
     if let Some(state) = fields::optional_str(&changes, "state")? {
         block.occupied = state == "occupied";
         block.state = state;
+    }
+    if let Some(value) = body.get("brake_cm") {
+        block.brake_cm = distance_cm(value, "brake_cm")?;
+    }
+    if let Some(value) = body.get("stop_cm") {
+        block.stop_cm = distance_cm(value, "stop_cm")?;
+    }
+    if let (Some(brake), Some(stop)) = (block.brake_cm, block.stop_cm) {
+        if brake > stop {
+            return Err(ApiError::unprocessable("The brake point cannot be after the stop point"));
+        }
+    }
+    if let Some(value) = body.get("length") {
+        block.length = match value {
+            Value::Null => None,
+            _ => match distance_cm(value, "length")? {
+                Some(cm) if cm > 0.0 => Some(cm),
+                _ => return Err(ApiError::unprocessable("length must be more than 0 centimetres")),
+            },
+        };
+    }
+    if let (Some(stop), Some(length)) = (block.stop_cm, block.length) {
+        if stop > length {
+            return Err(ApiError::unprocessable("The stop point cannot be past the end of the block"));
+        }
+    }
+    if let Some(value) = body.get("border_block_ids") {
+        let neighbours: Vec<i64> = value
+            .as_array()
+            .ok_or_else(|| ApiError::unprocessable("border_block_ids must be a list"))?
+            .iter()
+            .map(|item| item.as_i64().ok_or_else(|| ApiError::unprocessable("border_block_ids must be whole numbers")))
+            .collect::<Result<_, _>>()?;
+        for neighbour in &neighbours {
+            if *neighbour == id {
+                return Err(ApiError::bad_request("A block cannot border itself"));
+            }
+            let other = trackside::block(&inner.db, *neighbour)?.ok_or_else(|| ApiError::not_found("Block", *neighbour))?;
+            if other.layout_id != block.layout_id {
+                return Err(ApiError::bad_request("A bordering block must be on the same layout"));
+            }
+        }
+        trackside::set_block_borders(&inner.db, id, &neighbours)?;
     }
     if let Some(group) = body.get("group_name") {
         block.group_name = match group {

@@ -377,11 +377,11 @@ Entry criteria:
    - 🧪 Guided steps: command station, locomotives, first manual run, track plan, blocks and sensors, turnouts, and routes. Each step is done when its data exists and opens its page. A first manual run is done once a locomotive has recorded moving time
 
 **10b. Blocks and sensors (needs Phase 2)**
-5. **Blocks** 🟡
+5. **Blocks** 🧪
    - 🧪 Blocks page with filters for all, occupied, reserved, free and problems. Problems are blocks with no sensor linked, the same blocks Health lists
-   - 🟡 Block properties: group (🧪), length, max speed, sensors and signals are set. Borders on, brake and stop positions are not yet built
+   - 🧪 Block properties: group, length, max speed, sensors and signals. Borders are neighbouring blocks, set both ways and synced. Length, brake point and stop point are in cm. The stop point cannot be past the end of the block, and the brake point cannot be after the stop point. Borders, roles, brake and stop points, and length sync between devices. **Open:** automatic driving does not read the brake and stop points yet, because automatic driving is not built (item 10 in Phase 10c)
    - 🧪 Entry, middle and exit roles on each linked sensor, kept when the sensor list changes. **Open:** the roles are not synced to the cloud yet, and no route or signal reads them yet
-   - ⬜ Link entry, middle and exit sensors, and signal addresses
+   - ⬜ Signal addresses: moved to item 30 (Signals), which decides how signals are addressed
 6. **Feedback monitor** ⬜
    - ⬜ 128 sensor addresses in 8 modules, with known, occupied, free and not-linked counts
    - ⬜ Read now, and a list of the latest reports

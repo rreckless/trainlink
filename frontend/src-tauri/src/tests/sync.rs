@@ -484,3 +484,49 @@ fn the_sync_status_lists_the_locomotives_the_last_sync_skipped() {
     assert_eq!(status, 200);
     assert_eq!(value["skipped"][0], "Class 37: DCC address 3 is already used by Local on this command station");
 }
+
+#[test]
+fn borders_roles_and_stop_points_reach_the_other_device_and_removals_too() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b) = (device("a-borders"), device("b-borders"));
+    let (_, layout) = send(&a, "POST", "/api/layouts", Some(json!({ "name": "Borders", "width": 800, "height": 400, "scale": "N" })));
+    let layout_id = layout["id"].as_i64().unwrap();
+    let (_, first) = send(&a, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Entry", "x": 1, "y": 2 })));
+    let (_, second) = send(&a, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Next", "x": 3, "y": 2 })));
+    let (_, feedback) = send(&a, "POST", "/api/feedbacks", Some(json!({ "layout_id": layout_id, "name": "Sensor", "x": 1, "y": 1, "feedback_number": 9 })));
+    let (first_id, second_id, feedback_id) = (first["id"].as_i64().unwrap(), second["id"].as_i64().unwrap(), feedback["id"].as_i64().unwrap());
+    let (status, _) = send(&a, "PATCH", &format!("/api/blocks/{first_id}"), Some(json!({
+        "border_block_ids": [second_id],
+        "feedback_ids": [feedback_id],
+        "feedback_roles": { feedback_id.to_string(): "entry" },
+        "length": 200,
+        "brake_cm": 120,
+        "stop_cm": 150,
+    })));
+    assert_eq!(status, 200);
+    sync(&a, &cloud);
+    sync(&b, &cloud);
+
+    let (_, b_blocks) = send(&b, "GET", "/api/blocks", None);
+    let b_entry = b_blocks.as_array().unwrap().iter().find(|block| block["name"] == "Entry").unwrap().clone();
+    let b_next = b_blocks.as_array().unwrap().iter().find(|block| block["name"] == "Next").unwrap().clone();
+    assert_eq!(b_entry["border_block_ids"], json!([b_next["id"]]), "the border reaches B");
+    assert_eq!(b_next["border_block_ids"], json!([b_entry["id"]]), "and is two-way on B");
+    let (_, b_feedbacks) = send(&b, "GET", "/api/feedbacks", None);
+    let b_sensor = b_feedbacks[0]["id"].clone();
+    assert_eq!(b_entry["feedback_roles"][b_sensor.to_string()], "entry", "the role reaches B");
+    assert_eq!(b_entry["brake_cm"], 120.0);
+    assert_eq!(b_entry["stop_cm"], 150.0);
+    assert_eq!(b_entry["length"], 200.0);
+
+    tick();
+    let (status, _) = send(&a, "PATCH", &format!("/api/blocks/{first_id}"), Some(json!({ "border_block_ids": [], "feedback_roles": { feedback_id.to_string(): null }, "brake_cm": null })));
+    assert_eq!(status, 200);
+    sync(&a, &cloud);
+    sync(&b, &cloud);
+    let (_, b_blocks) = send(&b, "GET", "/api/blocks", None);
+    let b_entry = b_blocks.as_array().unwrap().iter().find(|block| block["name"] == "Entry").unwrap();
+    assert_eq!(b_entry["border_block_ids"], json!([]), "a removed border reaches B");
+    assert!(b_entry["feedback_roles"].as_object().unwrap().is_empty(), "a cleared role reaches B");
+    assert!(b_entry["brake_cm"].is_null(), "a cleared brake point reaches B");
+}

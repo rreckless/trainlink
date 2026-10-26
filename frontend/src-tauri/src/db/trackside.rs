@@ -22,12 +22,18 @@ pub struct Block {
     pub next_block_id: Option<i64>,
     /// The group the block belongs to on the Blocks page, if any
     pub group_name: Option<String>,
+    /// The blocks on either side of this one. Borders are two-way, so each neighbour lists this block too
+    pub border_block_ids: Vec<i64>,
+    /// Where braking starts, in cm from the entry end of the block
+    pub brake_cm: Option<f64>,
+    /// Where the train stops, in cm from the entry end of the block
+    pub stop_cm: Option<f64>,
     pub signal_ids: Vec<i64>,
     pub feedback_ids: Vec<i64>,
     /// The role of each sensor, keyed by feedback id: entry, middle or exit. A sensor without a role is not in the map
     pub feedback_roles: BTreeMap<String, String>,
     pub created_at: String,
-    #[serde(skip)]
+    /// The length of the block in cm, if it is known. The stop point must be within it
     pub length: Option<f64>,
     #[serde(skip)]
     pub occupancy_locomotive_id: Option<i64>,
@@ -89,7 +95,7 @@ fn ids(conn: &Connection, sql: &str, id: i64) -> rusqlite::Result<Vec<i64>> {
 
 // Blocks
 
-const BLOCK_COLUMNS: &str = "id, layout_id, name, x, y, state, occupied, max_speed, next_block_id, group_name, length, occupancy_locomotive_id, created_at";
+const BLOCK_COLUMNS: &str = "id, layout_id, name, x, y, state, occupied, max_speed, next_block_id, group_name, brake_cm, stop_cm, length, occupancy_locomotive_id, created_at";
 
 fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
     Ok(Block {
@@ -103,6 +109,9 @@ fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
         max_speed: row.get("max_speed")?,
         next_block_id: row.get("next_block_id")?,
         group_name: row.get("group_name")?,
+        border_block_ids: Vec::new(),
+        brake_cm: row.get("brake_cm")?,
+        stop_cm: row.get("stop_cm")?,
         signal_ids: Vec::new(),
         feedback_ids: Vec::new(),
         feedback_roles: BTreeMap::new(),
@@ -115,6 +124,7 @@ fn block_from_row(row: &Row) -> rusqlite::Result<Block> {
 fn with_links(conn: &Connection, mut block: Block) -> rusqlite::Result<Block> {
     block.signal_ids = ids(conn, "SELECT signal_id FROM block_signals WHERE block_id = ?1 ORDER BY signal_id", block.id)?;
     block.feedback_ids = ids(conn, "SELECT feedback_id FROM block_feedbacks WHERE block_id = ?1 ORDER BY feedback_id", block.id)?;
+    block.border_block_ids = ids(conn, "SELECT neighbour_id FROM block_borders WHERE block_id = ?1 ORDER BY neighbour_id", block.id)?;
     let mut statement = conn.prepare("SELECT feedback_id, role FROM block_feedbacks WHERE block_id = ?1 AND role IS NOT NULL")?;
     let roles = statement.query_map([block.id], |row| Ok((row.get::<_, i64>(0)?.to_string(), row.get::<_, String>(1)?)))?;
     block.feedback_roles = roles.collect::<rusqlite::Result<_>>()?;
@@ -160,8 +170,11 @@ pub fn insert_block(conn: &Connection, block: &NewBlock) -> rusqlite::Result<i64
 pub fn save_block(conn: &Connection, block: &Block) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE blocks SET name = ?2, x = ?3, y = ?4, max_speed = ?5, state = ?6, occupied = ?7, next_block_id = ?8, updated_at = ?9,
-             group_name = ?10 WHERE id = ?1",
-        params![block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, block.next_block_id, now(), block.group_name],
+             group_name = ?10, brake_cm = ?11, stop_cm = ?12, length = ?13 WHERE id = ?1",
+        params![
+            block.id, block.name, block.x, block.y, block.max_speed, block.state, block.occupied, block.next_block_id, now(),
+            block.group_name, block.brake_cm, block.stop_cm, block.length
+        ],
     )?;
     sync::mark_changed(conn, "blocks", block.id)?;
     Ok(())
@@ -463,6 +476,23 @@ pub fn set_signal_blocks(conn: &Connection, signal_id: i64, block_ids: &[i64]) -
 }
 
 /// Add the columns that newer versions need to a database made before them
+/// Replace the blocks this block borders. Each border is written both ways, so the other block lists this one too.
+/// Both blocks are marked changed, so the other side's list is sent too, including when a border is removed
+pub fn set_block_borders(conn: &Connection, block_id: i64, neighbours: &[i64]) -> rusqlite::Result<()> {
+    let mut affected = ids(conn, "SELECT neighbour_id FROM block_borders WHERE block_id = ?1", block_id)?;
+    conn.execute("DELETE FROM block_borders WHERE block_id = ?1 OR neighbour_id = ?1", [block_id])?;
+    for neighbour in neighbours {
+        conn.execute("INSERT INTO block_borders (block_id, neighbour_id) VALUES (?1, ?2)", params![block_id, neighbour])?;
+        conn.execute("INSERT INTO block_borders (block_id, neighbour_id) VALUES (?1, ?2)", params![neighbour, block_id])?;
+        affected.push(*neighbour);
+    }
+    sync::mark_changed(conn, "blocks", block_id)?;
+    for neighbour in affected {
+        sync::mark_changed(conn, "blocks", neighbour)?;
+    }
+    Ok(())
+}
+
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let columns: Vec<String> = conn
         .prepare("PRAGMA table_info(blocks)")?
@@ -473,6 +503,11 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     }
     if !columns.iter().any(|column| column == "group_name") {
         conn.execute_batch("ALTER TABLE blocks ADD COLUMN group_name TEXT;")?;
+    }
+    for column in ["brake_cm", "stop_cm"] {
+        if !columns.iter().any(|existing| existing == column) {
+            conn.execute_batch(&format!("ALTER TABLE blocks ADD COLUMN {column} REAL;"))?;
+        }
     }
     let sensor_columns: Vec<String> = conn
         .prepare("PRAGMA table_info(block_feedbacks)")?

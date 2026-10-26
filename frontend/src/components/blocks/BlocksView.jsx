@@ -72,6 +72,10 @@ export default function BlocksView() {
       max_speed: selected.max_speed,
       group_name: selected.group_name ?? '',
       feedback_roles: { ...selected.feedback_roles },
+      border_block_ids: selected.border_block_ids,
+      length: selected.length ?? '',
+      brake_cm: selected.brake_cm ?? '',
+      stop_cm: selected.stop_cm ?? '',
       state: selected.state,
       next_block_id: selected.next_block_id ?? '',
       feedback_ids: selected.feedback_ids,
@@ -110,6 +114,10 @@ export default function BlocksView() {
         name: draft.name.trim(),
         max_speed: Number(draft.max_speed),
         group_name: draft.group_name.trim(),
+        border_block_ids: draft.border_block_ids,
+        length: draft.length === '' ? null : Number(draft.length),
+        brake_cm: draft.brake_cm === '' ? null : Number(draft.brake_cm),
+        stop_cm: draft.stop_cm === '' ? null : Number(draft.stop_cm),
         // Only sensors that are still linked can have a role. A cleared role is sent as null
         feedback_roles: Object.fromEntries(
           draft.feedback_ids.filter((id) => String(id) in draft.feedback_roles).map((id) => [id, draft.feedback_roles[id]])
@@ -224,6 +232,42 @@ export default function BlocksView() {
             />
           </label>
           <label className="space-y-1 text-sm text-slate-300">
+            Length (cm, optional)
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={draft.length}
+              onChange={(event) => setDraft({ ...draft, length: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
+            Brake point (cm from the entry)
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={draft.brake_cm}
+              onChange={(event) => setDraft({ ...draft, brake_cm: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
+            Stop point (cm from the entry)
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={draft.stop_cm}
+              onChange={(event) => setDraft({ ...draft, stop_cm: event.target.value })}
+              disabled={busy}
+              className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-slate-300">
             Maximum speed
             <input
               type="number"
@@ -267,6 +311,25 @@ export default function BlocksView() {
             </select>
           </label>
         </div>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-slate-300 mb-1">Neighbouring blocks, on either side</legend>
+          {sameLayout.blocks.length === 0 ? (
+            <p className="text-xs text-slate-400">No other blocks on this layout yet.</p>
+          ) : (
+            sameLayout.blocks.map((block) => (
+              <label key={block.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.border_block_ids.includes(block.id)}
+                  onChange={() => toggle('border_block_ids', block.id)}
+                  disabled={busy}
+                />
+                {block.name}
+              </label>
+            ))
+          )}
+        </fieldset>
 
         <fieldset className="space-y-2">
           <legend className="text-sm text-slate-300 mb-1">Feedbacks that show this block occupied</legend>

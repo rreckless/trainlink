@@ -32,15 +32,15 @@ pub fn apply_block(conn: &Connection, row: &Value) -> rusqlite::Result<bool> {
     match decision {
         None => {
             conn.execute(
-                "INSERT INTO blocks (sync_id, layout_id, name, x, y, max_speed, length, state, occupied, occupancy_locomotive_id, created_at, updated_at, dirty)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0)",
-                params![sync_id, layout, text(row, "name"), num(row, "x"), num(row, "y"), int(row, "max_speed"), row.get("length").and_then(Value::as_f64), state, occupied, locomotive, normalize(&text(row, "created_at").unwrap_or_default()), updated],
+                "INSERT INTO blocks (sync_id, layout_id, name, x, y, max_speed, length, state, occupied, occupancy_locomotive_id, created_at, updated_at, brake_cm, stop_cm, dirty)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0)",
+                params![sync_id, layout, text(row, "name"), num(row, "x"), num(row, "y"), int(row, "max_speed"), row.get("length").and_then(Value::as_f64), state, occupied, locomotive, normalize(&text(row, "created_at").unwrap_or_default()), updated, row.get("brake_cm").and_then(Value::as_f64), row.get("stop_cm").and_then(Value::as_f64)],
             )?;
         }
         Some(id) => {
             conn.execute(
-                "UPDATE blocks SET layout_id = ?2, name = ?3, x = ?4, y = ?5, max_speed = ?6, length = ?7, state = ?8, occupied = ?9, occupancy_locomotive_id = ?10, updated_at = ?11, dirty = 0 WHERE id = ?1",
-                params![id, layout, text(row, "name"), num(row, "x"), num(row, "y"), int(row, "max_speed"), row.get("length").and_then(Value::as_f64), state, occupied, locomotive, updated],
+                "UPDATE blocks SET layout_id = ?2, name = ?3, x = ?4, y = ?5, max_speed = ?6, length = ?7, state = ?8, occupied = ?9, occupancy_locomotive_id = ?10, updated_at = ?11, brake_cm = ?12, stop_cm = ?13, dirty = 0 WHERE id = ?1",
+                params![id, layout, text(row, "name"), num(row, "x"), num(row, "y"), int(row, "max_speed"), row.get("length").and_then(Value::as_f64), state, occupied, locomotive, updated, row.get("brake_cm").and_then(Value::as_f64), row.get("stop_cm").and_then(Value::as_f64)],
             )?;
         }
     }
@@ -94,6 +94,19 @@ pub fn relink_blocks(conn: &Connection, rows: &[Value]) -> rusqlite::Result<()> 
                 conn.execute("INSERT OR IGNORE INTO block_signals (block_id, signal_id) VALUES (?1, ?2)", params![block, signal])?;
             }
         }
+        // Each block sends its own list of borders, and the other block sends its side, so this block only sets its own rows
+        conn.execute("DELETE FROM block_borders WHERE block_id = ?1", [block])?;
+        for sync in strings(row, "border_block_ids") {
+            if let Some(neighbour) = local_id_of(conn, "blocks", &sync)? {
+                conn.execute("INSERT OR IGNORE INTO block_borders (block_id, neighbour_id) VALUES (?1, ?2)", params![block, neighbour])?;
+            }
+        }
+        // Roles are set after the sensors above, so a sensor that was just linked can take its role
+        for (sync, role) in row.get("feedback_roles").and_then(Value::as_object).into_iter().flatten() {
+            if let (Some(feedback), Some(role)) = (local_id_of(conn, "feedbacks", sync)?, role.as_str()) {
+                conn.execute("UPDATE block_feedbacks SET role = ?3 WHERE block_id = ?1 AND feedback_id = ?2", params![block, feedback, role])?;
+            }
+        }
     }
     Ok(())
 }
@@ -134,6 +147,15 @@ pub fn block_outbound(conn: &Connection, user: &str) -> rusqlite::Result<Vec<(i6
         };
         let feedback_syncs = linked_sync_ids(conn, "SELECT feedback_id FROM block_feedbacks WHERE block_id = ?1", "feedbacks", id)?;
         let signal_syncs = linked_sync_ids(conn, "SELECT signal_id FROM block_signals WHERE block_id = ?1", "signals", id)?;
+        let border_syncs = linked_sync_ids(conn, "SELECT neighbour_id FROM block_borders WHERE block_id = ?1", "blocks", id)?;
+        let mut roles = serde_json::Map::new();
+        let mut role_rows = conn.prepare("SELECT feedback_id, role FROM block_feedbacks WHERE block_id = ?1 AND role IS NOT NULL")?;
+        for (feedback, role) in role_rows.query_map([id], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()? {
+            if let Some(sync) = sync_id_of(conn, "feedbacks", feedback)? {
+                roles.insert(sync, Value::String(role));
+            }
+        }
+        let (brake, stop): (Option<f64>, Option<f64>) = conn.query_row("SELECT brake_cm, stop_cm FROM blocks WHERE id = ?1", [id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         out.push((id, stamp.clone(), json!({
             "id": sync_id,
             "user_id": user,
@@ -148,6 +170,10 @@ pub fn block_outbound(conn: &Connection, user: &str) -> rusqlite::Result<Vec<(i6
             "next_block_id": next_sync,
             "feedback_ids": feedback_syncs,
             "signal_ids": signal_syncs,
+            "border_block_ids": border_syncs,
+            "feedback_roles": roles,
+            "brake_cm": brake,
+            "stop_cm": stop,
             "created_at": to_cloud(&created),
             "updated_at": to_cloud(&stamp),
             "deleted_at": Value::Null,
