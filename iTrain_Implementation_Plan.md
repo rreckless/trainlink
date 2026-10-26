@@ -89,10 +89,10 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ✅ Connection status display (Z21 heartbeat)
    - ✅ Settings UI (Z21 host and port), shared with the Control page
 
-4. **Testing Infrastructure** 🟡
+4. **Testing Infrastructure** ✅
    - ✅ Core tests (`src-tauri/`, 112 passing with `cargo test`, 2 ignored)
    - ✅ Frontend unit tests (`npm test`, 60 passing)
-   - 🟡 Integration tests: driver tests run against the mock, but browser tests still run from a scratch Playwright script outside the repo. To finish: add them under `frontend/`, with a script in `package.json`, and a way to start the web server they test against
+   - ✅ Integration tests: driver tests run against the mock. Browser tests (Playwright, `npm run test:e2e` in `frontend/`) run against the real core on a fresh data folder. A test session is written by `e2e/prepare-session.mjs`, so the tests do not contact the sign-in service
    - ✅ Fake Z21 on localhost for testing (`src-tauri/src/tests/z21_link.rs`)
    - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13, and checked on hardware from the desktop app
 
