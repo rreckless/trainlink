@@ -55,3 +55,30 @@ test('the switchboard lists a block with its live state and a signal with its as
   await expect(page.getByText('Home 9')).toBeVisible()
   await expect(page.getByText('go', { exact: true })).toBeVisible()
 })
+
+test('a block can be linked to its next block and a signal on the Blocks page', async ({ page }) => {
+  const layout = await (await page.request.post('/api/layouts', {
+    data: { name: 'Blocks test', width: 800, height: 600, scale: 'N' },
+  })).json()
+  const first = await (await page.request.post('/api/blocks', {
+    data: { layout_id: layout.id, name: 'Entry block', x: 0, y: 0 },
+  })).json()
+  const second = await (await page.request.post('/api/blocks', {
+    data: { layout_id: layout.id, name: 'Exit block', x: 10, y: 0 },
+  })).json()
+  await page.request.post('/api/signals', {
+    data: { layout_id: layout.id, name: 'Entry signal', x: 1, y: 1, signal_type: 'main' },
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Blocks', exact: true }).first().click()
+  await page.getByRole('button', { name: /Entry block/ }).click()
+  await page.getByLabel('Next block').selectOption({ label: 'Exit block' })
+  await page.getByLabel('Entry signal').check()
+  await page.getByRole('button', { name: 'Save block' }).click()
+
+  await expect(page.getByText('Saved Entry block')).toBeVisible()
+  const saved = await (await page.request.get(`/api/blocks/${first.id}`)).json()
+  expect(saved.next_block_id).toBe(second.id)
+  expect(saved.signal_ids.length).toBe(1)
+})

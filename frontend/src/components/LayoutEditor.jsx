@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLayoutEditor } from '../hooks/useLayoutEditor'
+import { useLiveTrackside } from '../hooks/useLiveTrackside'
 import AnyRailImport from './layout/AnyRailImport'
 import LayoutCanvas from './layout/LayoutCanvas'
 import LayoutToolbar from './layout/LayoutToolbar'
@@ -15,6 +16,7 @@ const HINTS = {
 
 export default function LayoutEditor() {
   const editor = useLayoutEditor()
+  const live = useLiveTrackside()
   const [importing, setImporting] = useState(false)
 
   // Keyboard shortcuts: Delete removes the selection, Escape cancels track drawing
@@ -78,6 +80,8 @@ export default function LayoutEditor() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <div className="lg:col-span-3 bg-slate-800 rounded-lg p-2">
             <LayoutCanvas
+              liveOccupied={live.occupied}
+              liveAspects={live.aspects}
               layout={editor.layout}
               tracks={editor.tracks}
               pieces={editor.pieces}

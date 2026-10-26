@@ -1,4 +1,4 @@
-import { Gauge, GitBranch, Layers, PenTool, Route, Settings, Split, Stethoscope, TrainFront } from 'lucide-react'
+import { Boxes, Gauge, GitBranch, Layers, PenTool, Route, Settings, Split, Stethoscope, TrainFront } from 'lucide-react'
 
 // The pages, grouped as they appear in the side navigation. Colour is the accent of the page's icon tile
 export const NAV_GROUPS = [
@@ -14,6 +14,7 @@ export const NAV_GROUPS = [
     title: 'Layout',
     items: [
       { id: 'switchboard', label: 'Switchboard', icon: GitBranch, accent: 'bg-blue-500', subtitle: 'Throw turnouts and watch the track' },
+      { id: 'blocks', label: 'Blocks', icon: Boxes, accent: 'bg-cyan-500', subtitle: 'Block properties, and what each block is linked to' },
       { id: 'turnouts', label: 'Turnouts', icon: Split, accent: 'bg-blue-400', subtitle: 'Every turnout on every layout, and which have an address' },
       { id: 'routes', label: 'Routes', icon: Route, accent: 'bg-teal-500', subtitle: 'Routes through the blocks of a layout' },
       { id: 'editor', label: 'Layout Editor', icon: PenTool, accent: 'bg-sky-500', subtitle: 'Draw the track and place its pieces' },

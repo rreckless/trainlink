@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import LayoutCanvas from '../layout/LayoutCanvas'
 import { layoutApi } from '../../services/layoutApi'
 import { useTurnoutControl } from '../../hooks/useTurnoutControl'
+import { useLiveTrackside } from '../../hooks/useLiveTrackside'
 
 const noop = () => {}
 
@@ -40,6 +41,7 @@ export default function OperatePanel() {
   const tracks = useMemo(() => layout?.elements?.tracks ?? [], [layout])
   const reportError = useCallback((message) => setError(message), [])
   const { turnoutStates, throwPlaced } = useTurnoutControl(pieces, layout !== null, reportError)
+  const live = useLiveTrackside()
 
   if (layouts.length === 0) {
     return (
@@ -76,6 +78,8 @@ export default function OperatePanel() {
       {layout && (
         <>
           <LayoutCanvas
+            liveOccupied={live.occupied}
+            liveAspects={live.aspects}
             layout={layout}
             tracks={tracks}
             pieces={pieces}

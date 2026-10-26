@@ -49,6 +49,8 @@ export default function LayoutCanvas({
   libraryById,
   ghost,
   items,
+  liveOccupied = {},
+  liveAspects = {},
   tool,
   selectedKey,
   pendingStart,
@@ -402,7 +404,7 @@ export default function LayoutCanvas({
                   y={item.y - BLOCK_HEIGHT / 2}
                   width={BLOCK_WIDTH}
                   height={BLOCK_HEIGHT}
-                  fill={item.state === 'occupied' ? '#b45309' : '#1e40af'}
+                  fill={(liveOccupied[item.id] ?? item.state === 'occupied') ? '#b45309' : '#1e40af'}
                   stroke={selected ? '#38bdf8' : '#334155'}
                   strokeWidth={selected ? 3 : 1}
                   cornerRadius={3}
@@ -425,7 +427,7 @@ export default function LayoutCanvas({
                   x={item.x}
                   y={item.y}
                   radius={8}
-                  fill={signalColor(item.aspect)}
+                  fill={signalColor(liveAspects[item.id] ?? item.aspect)}
                   stroke={selected ? '#38bdf8' : '#0f172a'}
                   strokeWidth={selected ? 3 : 1}
                   listening={listening}
