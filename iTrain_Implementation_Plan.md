@@ -450,7 +450,7 @@ Entry criteria:
     - 🧪 A consist has its own consist address (1 to 127), stored and checked so no two consists share one. Built on branch `consist-address`, not yet pushed
     - ⬜ Each locomotive's CV19 is set to the consist address, so the decoders run together. Needs Phase 9 CV programming
     - 🧪 A minimum of two locomotives per consist, with a reversed flag for each. Existing one-locomotive consists keep working but cannot be edited down to one
-    - ⬜ A consist window that the layout remembers. The single speed slider for the whole consist exists in the Control page
+    - 🧪 A Consists page in the side menu, under Drive, for making and driving consists, with one speed slider for the whole consist. Not yet in a separate window that the layout remembers
     - ⬜ A consist address that routes and automation can refer to (Phase 3)
 32. **Trains** ⬜ (builds on item 21)
     - ⬜ A train is one locomotive plus an ordered list of wagons, with a name, group, weight class and train type

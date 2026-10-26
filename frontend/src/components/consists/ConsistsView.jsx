@@ -1,31 +1,50 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useStore } from '../../store'
 import { confirmAction } from '../../services/dialogs'
 import { consistApi } from '../../services/consistApi'
+import { locomotiveApi } from '../../services/locomotiveApi'
+import { refreshZ21Status } from '../../hooks/useZ21Status'
 
 const FUNCTION_MAX = 31
+const MEMBERS_MIN = 2
 
-// Groups of locomotives that run together. Create one from the locomotives ticked in the roster; the first ticked leads
-export default function ConsistPanel({ roster, controlsEnabled, onError }) {
-  const { locomotives, selectedLocomotives, busy, setBusy } = roster
+// Consists: make a consist from locomotives, give it a consist address, and drive it as one group
+export default function ConsistsView() {
+  const z21 = useStore((state) => state.z21)
+  const controlsEnabled = z21.state === 'ready'
+  const [locomotives, setLocomotives] = useState([])
   const [consists, setConsists] = useState([])
-  // What was last sent to each consist this session: { id: { speed, direction } }
-  const [commanded, setCommanded] = useState({})
+  // The locomotives ticked for the consist being made, in the order they were ticked. The first leads
+  const [picked, setPicked] = useState([])
+  // Members of the consist being made that run reversed, by locomotive id
+  const [reversed, setReversed] = useState(new Set())
   const [name, setName] = useState('')
   // The DCC consist address the new consist is given. The server refuses one another consist already uses
   const [address, setAddress] = useState(1)
-  // Members of the consist being made that run reversed, by locomotive id
-  const [reversed, setReversed] = useState(new Set())
   const [functionIndex, setFunctionIndex] = useState(0)
+  // What was last sent to each consist this session: { id: { speed, direction } }
+  const [commanded, setCommanded] = useState({})
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
-  const refresh = useCallback(
-    () => consistApi.list().then(setConsists).catch((err) => onError(`Could not load consists: ${err.message}`)),
-    [onError]
-  )
+  const refresh = useCallback(async () => {
+    try {
+      const [locos, groups] = await Promise.all([locomotiveApi.list(), consistApi.list()])
+      setLocomotives(locos)
+      setConsists(groups)
+    } catch (err) {
+      setError(`Could not load consists: ${err.message}`)
+    }
+  }, [])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
+  const isPicked = (id) => picked.includes(id)
+  const togglePicked = (id) =>
+    setPicked((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
   const toggleReversed = (id) =>
     setReversed((prev) => {
       const next = new Set(prev)
@@ -37,30 +56,30 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
   // Run one request, showing its error and refreshing the list afterwards
   const run = async (action, success) => {
     setBusy(true)
-    onError('')
-    roster.setMessage('')
+    setError('')
+    setMessage('')
     try {
       const result = await action()
-      if (success) roster.setMessage(success(result))
+      if (success) setMessage(success(result))
       await refresh()
       return result
     } catch (err) {
-      onError(err.message)
+      setError(err.message)
       return null
     } finally {
       setBusy(false)
     }
   }
 
-  const createConsist = () => {
-    const members = selectedLocomotives.map((loc) => ({ locomotive_id: loc.id, reversed: reversed.has(loc.id) }))
-    return run(() => consistApi.create({ name, address, members }), (created) => `Created ${created.name}`).then((created) => {
-      if (created) {
-        setName('')
-        setAddress(1)
-        setReversed(new Set())
-      }
-    })
+  const createConsist = async () => {
+    const members = picked.map((id) => ({ locomotive_id: id, reversed: reversed.has(id) }))
+    const created = await run(() => consistApi.create({ name, address, members }), (result) => `Created ${result.name}`)
+    if (created) {
+      setName('')
+      setAddress(1)
+      setPicked([])
+      setReversed(new Set())
+    }
   }
 
   const changeAddress = (consist, value) =>
@@ -75,7 +94,7 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
   }
 
   const removeConsist = async (consist) => {
-    if (!(await confirmAction(`Delete the consist ${consist.name}? Its locomotives stay on the roster.`, { okLabel: 'Delete', danger: true }))) return
+    if (!(await confirmAction(`Delete the consist ${consist.name}? Its locomotives stay in the roster.`, { okLabel: 'Delete', danger: true }))) return
     run(() => consistApi.remove(consist.id), () => `Deleted ${consist.name}`)
   }
 
@@ -92,71 +111,94 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
       () => `F${functionIndex} ${on ? 'on' : 'off'} for ${consist.name}`
     )
 
+  const pickedLocomotives = picked.map((id) => locomotives.find((loc) => loc.id === id)).filter(Boolean)
   const disabled = busy || !controlsEnabled
 
   return (
-    <div className="bg-slate-800 rounded-lg p-4 space-y-4">
-      <h3 className="text-lg font-semibold">Consists</h3>
-      <p className="text-xs text-slate-400">
-        A consist needs at least two locomotives. TrainLink drives each one in turn, so the decoders do not follow the
-        consist address yet. Their CV19 (multiple-unit address) is not set by TrainLink.
-      </p>
+    <div className="space-y-4">
+      <div className="bg-slate-800 rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">New consist</h3>
+          {!controlsEnabled && <span className="text-xs text-amber-300">Connect the Z21 to drive a consist</span>}
+        </div>
+        <p className="text-xs text-slate-400">
+          A consist needs at least two locomotives. TrainLink drives each one in turn, so the decoders do not follow the
+          consist address yet. Their CV19 (multiple-unit address) is not set by TrainLink.
+        </p>
 
-      <div className="space-y-2 bg-slate-700 rounded p-3">
-        <p className="text-sm text-slate-300">New consist from the locomotives ticked in the roster</p>
-        {selectedLocomotives.length < 2 ? (
-          <p className="text-xs text-slate-400">Tick at least two locomotives in the roster first</p>
+        {locomotives.length === 0 ? (
+          <p className="text-sm text-slate-400">No locomotives yet. Add them in the Locomotives section.</p>
         ) : (
           <ul className="space-y-1">
-            {selectedLocomotives.map((loc, index) => (
-              <li key={loc.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1">
-                  {loc.name}
-                  {index === 0 && <span className="ml-2 text-xs text-amber-300">lead</span>}
-                </span>
-                <label className="flex items-center gap-1 text-xs text-slate-300">
-                  <input type="checkbox" checked={reversed.has(loc.id)} onChange={() => toggleReversed(loc.id)} disabled={busy} />
-                  Reversed
-                </label>
-              </li>
-            ))}
+            {locomotives.map((loc) => {
+              const index = picked.indexOf(loc.id)
+              return (
+                <li key={loc.id} className="flex items-center gap-2 text-sm">
+                  <label className="flex flex-1 items-center gap-2">
+                    <input type="checkbox" checked={isPicked(loc.id)} onChange={() => togglePicked(loc.id)} disabled={busy} />
+                    <span>{loc.name}</span>
+                    <span className="text-xs text-slate-400">address {loc.dcc_address}</span>
+                    {index === 0 && <span className="text-xs text-amber-300">lead</span>}
+                  </label>
+                  {isPicked(loc.id) && (
+                    <label className="flex items-center gap-1 text-xs text-slate-300">
+                      <input type="checkbox" checked={reversed.has(loc.id)} onChange={() => toggleReversed(loc.id)} disabled={busy} />
+                      Reversed
+                    </label>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
-        <div className="flex gap-2">
+
+        <div className="flex flex-wrap gap-2">
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Consist name"
             maxLength={40}
             disabled={busy}
-            className="flex-1 px-3 py-1 bg-slate-800 rounded border border-slate-600 text-white"
+            className="flex-1 min-w-40 px-3 py-1 bg-slate-700 rounded border border-slate-600 text-white"
           />
-          <input
-            type="number"
-            min="1"
-            max="127"
-            value={address}
-            onChange={(event) => setAddress(Number(event.target.value))}
-            disabled={busy}
-            aria-label="Consist address"
-            className="w-20 px-2 py-1 bg-slate-800 rounded border border-slate-600 text-white"
-          />
+          <label className="flex items-center gap-1 text-sm text-slate-300">
+            Address
+            <input
+              type="number"
+              min="1"
+              max="127"
+              value={address}
+              onChange={(event) => setAddress(Number(event.target.value))}
+              disabled={busy}
+              aria-label="Consist address"
+              className="w-20 px-2 py-1 bg-slate-700 rounded border border-slate-600 text-white"
+            />
+          </label>
           <button
             onClick={createConsist}
-            disabled={busy || name.trim() === '' || selectedLocomotives.length < 2}
-            className="px-3 py-1 bg-green-600 rounded font-semibold hover:bg-green-700 disabled:opacity-50"
+            disabled={busy || name.trim() === '' || pickedLocomotives.length < MEMBERS_MIN}
+            className="px-4 py-1 bg-green-600 rounded font-semibold hover:bg-green-700 disabled:opacity-50"
           >
-            Create
+            Create consist
           </button>
         </div>
+        {pickedLocomotives.length > 0 && pickedLocomotives.length < MEMBERS_MIN && (
+          <p className="text-xs text-slate-400">Pick one more locomotive</p>
+        )}
       </div>
 
-      {consists.length === 0 ? (
-        <p className="text-sm text-slate-400">No consists yet.</p>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm">
-            <label className="text-slate-300">Function</label>
+      {error && (
+        <div className="bg-red-900 border border-red-700 rounded p-3">
+          <p className="text-red-200 text-sm">{error}</p>
+        </div>
+      )}
+      {message && <p className="text-sm text-green-300">{message}</p>}
+
+      <div className="bg-slate-800 rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Consists</h3>
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            Function
             <input
               type="number"
               min="0"
@@ -164,14 +206,19 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
               value={functionIndex}
               onChange={(event) => setFunctionIndex(Math.min(FUNCTION_MAX, Math.max(0, Number(event.target.value) || 0)))}
               disabled={disabled}
-              className="w-20 px-2 py-1 bg-slate-800 rounded border border-slate-600 text-white"
+              className="w-20 px-2 py-1 bg-slate-700 rounded border border-slate-600 text-white"
             />
-          </div>
-          {consists.map((consist) => {
+          </label>
+        </div>
+
+        {consists.length === 0 ? (
+          <p className="text-sm text-slate-400">No consists yet.</p>
+        ) : (
+          consists.map((consist) => {
             const state = commanded[consist.id] ?? { speed: 0, direction: 'stop' }
             return (
               <div key={consist.id} className="bg-slate-700 rounded p-3 space-y-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold flex-1">{consist.name}</p>
                   <label className="flex items-center gap-1 text-xs text-slate-300">
                     Address
@@ -264,10 +311,15 @@ export default function ConsistPanel({ roster, controlsEnabled, onError }) {
                 </div>
               </div>
             )
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
+      {!controlsEnabled && consists.length > 0 && (
+        <button onClick={refreshZ21Status} className="text-xs text-slate-400 underline">
+          Check the Z21 connection
+        </button>
+      )}
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { PAGES } from './components/shell/navigation'
 import Switchboard from './components/Switchboard'
 import ControlView from './components/control/ControlView'
 import LocomotiveSetup from './components/locomotives/LocomotiveSetup'
+import ConsistsView from './components/consists/ConsistsView'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
 import SystemSettings from './components/SystemSettings'
@@ -19,6 +20,7 @@ const PAGE_VIEWS = {
   switchboard: Switchboard,
   control: ControlView,
   locomotives: LocomotiveSetup,
+  consists: ConsistsView,
   routes: RouteManager,
   editor: LayoutEditor,
   settings: SystemSettings,
