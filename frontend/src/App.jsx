@@ -10,6 +10,8 @@ import Switchboard from './components/Switchboard'
 import ControlView from './components/control/ControlView'
 import LocomotiveSetup from './components/locomotives/LocomotiveSetup'
 import ConsistsView from './components/consists/ConsistsView'
+import TurnoutsView from './components/turnouts/TurnoutsView'
+import HealthView from './components/health/HealthView'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
 import SystemSettings from './components/SystemSettings'
@@ -21,6 +23,8 @@ const PAGE_VIEWS = {
   control: ControlView,
   locomotives: LocomotiveSetup,
   consists: ConsistsView,
+  turnouts: TurnoutsView,
+  health: HealthView,
   routes: RouteManager,
   editor: LayoutEditor,
   settings: SystemSettings,
