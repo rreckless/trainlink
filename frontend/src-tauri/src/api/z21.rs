@@ -1,16 +1,21 @@
 //! Z21 endpoints: connection, track state, turnouts, locomotives, and emergency stop
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
-use crate::db::{command_stations, layouts, locomotives};
+use crate::db::{command_stations, layouts, locomotives, trackside};
 use crate::drivers::{Driver, DriverError};
 use crate::http::{ApiError, Out, Reply};
+use crate::occupancy::INPUTS_PER_MODULE;
 use crate::state::{AppState, Inner};
 use crate::z21::{self, commands, frames::MAX_ADDRESS, Z21};
+
+/// The feedback monitor shows 128 addresses: 16 modules of 8 inputs
+const MONITOR_MODULES: i64 = 16;
 
 const MIN_TURNOUT: i64 = 1;
 const MAX_TURNOUT: i64 = 2048;
@@ -31,6 +36,7 @@ pub fn route(app: &Arc<AppState>, call: &Call, rest: &[&str]) -> Out {
         }
         ("GET", ["status"]) => status(app),
         ("GET", ["feedback"]) => feedback(app),
+        ("GET", ["feedback", "monitor"]) => feedback_monitor(app),
         ("POST", ["turnouts", turnout, "throw"]) => throw(app, super::id_segment(turnout)?, call),
         ("GET", ["turnouts"]) => turnouts(app, call),
         ("POST", ["loco", "function"]) => set_function(app, call),
@@ -75,6 +81,54 @@ fn feedback(app: &Arc<AppState>) -> Out {
         .map(|input| json!({ "module": input.module, "input": input.input, "occupied": input.occupied }))
         .collect();
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
+}
+
+/// The feedback monitor: feedback numbers 1 to 128, in modules of 8 inputs, each with its state and the feedback that uses
+/// it, and the latest reports the Z21 sent while the app has been running
+fn feedback_monitor(app: &Arc<AppState>) -> Out {
+    let inner = lock(app);
+    inner.z21.request_feedback();
+    let mut linked: BTreeMap<i64, Value> = BTreeMap::new();
+    for feedback in trackside::feedbacks(&inner.db, None)? {
+        linked.entry(feedback.feedback_number).or_insert(json!({ "id": feedback.id, "name": feedback.name, "layout_id": feedback.layout_id }));
+    }
+    let mut inputs = Vec::new();
+    let (mut known, mut occupied, mut free, mut not_linked) = (0, 0, 0, 0);
+    for module in 1..=MONITOR_MODULES {
+        for input in 1..=INPUTS_PER_MODULE {
+            let number = (module - 1) * INPUTS_PER_MODULE + input;
+            let state = match inner.z21.feedback.get(&(module, input)) {
+                Some(true) => "occupied",
+                Some(false) => "free",
+                None => "unknown",
+            };
+            known += i64::from(state != "unknown");
+            occupied += i64::from(state == "occupied");
+            free += i64::from(state == "free");
+            let feedback = linked.get(&number).cloned();
+            not_linked += i64::from(feedback.is_none());
+            inputs.push(json!({ "module": module, "input": input, "number": number, "state": state, "feedback": feedback }));
+        }
+    }
+    let reports: Vec<Value> = inner
+        .z21
+        .reports
+        .iter()
+        .rev()
+        .map(|report| {
+            let number = (report.module - 1) * INPUTS_PER_MODULE + report.input;
+            json!({ "module": report.module, "input": report.input, "number": number, "occupied": report.occupied, "at": report.at, "feedback": linked.get(&number) })
+        })
+        .collect();
+    Ok(Reply::json(
+        200,
+        json!({
+            "connected": inner.z21.connected,
+            "counts": { "addresses": inputs.len(), "known": known, "occupied": occupied, "free": free, "not_linked": not_linked },
+            "inputs": inputs,
+            "reports": reports,
+        }),
+    ))
 }
 
 /// The placed piece of the turnout with this number, on the first layout that has it

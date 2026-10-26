@@ -1,4 +1,4 @@
-import { Boxes, Cpu, Gauge, GitBranch, Layers, ListChecks, PenTool, Route, Settings, Split, Stethoscope, TrainFront } from 'lucide-react'
+import { Boxes, Cpu, Gauge, GitBranch, Layers, ListChecks, PenTool, Radio, Route, Settings, Split, Stethoscope, TrainFront } from 'lucide-react'
 
 // The side navigation, as LocoLink lays it out: three sections that open and close, and within Basics a group of less
 // common pages that is closed until it is opened. Colour is the accent of the page's icon tile
@@ -13,6 +13,7 @@ const PAGE = {
   routes: { id: 'routes', label: 'Routes', icon: Route, accent: 'bg-teal-500', subtitle: 'Routes through the blocks of a layout' },
   editor: { id: 'editor', label: 'Layout Editor', icon: PenTool, accent: 'bg-sky-500', subtitle: 'Draw the track and place its pieces' },
   setup: { id: 'setup', label: 'Setup', icon: ListChecks, accent: 'bg-green-500', subtitle: 'The steps to a working setup, and which are done' },
+  feedback: { id: 'feedback', label: 'Feedback monitor', icon: Radio, accent: 'bg-rose-500', subtitle: 'The 128 sensor addresses, and the latest reports from the Z21' },
   health: { id: 'health', label: 'Health', icon: Stethoscope, accent: 'bg-emerald-500', subtitle: 'What is missing before automatic driving works' },
   settings: { id: 'settings', label: 'Settings', icon: Settings, accent: 'bg-slate-500', subtitle: 'The Z21 connection and the app' },
 }
@@ -27,7 +28,7 @@ export const NAV_SECTIONS = [
   {
     id: 'advanced',
     title: 'Advanced',
-    items: [PAGE.editor, PAGE.blocks],
+    items: [PAGE.editor, PAGE.blocks, PAGE.feedback],
     more: null,
   },
   {

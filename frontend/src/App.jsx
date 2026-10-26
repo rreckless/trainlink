@@ -14,6 +14,7 @@ import TurnoutsView from './components/turnouts/TurnoutsView'
 import BlocksView from './components/blocks/BlocksView'
 import HealthView from './components/health/HealthView'
 import SetupView from './components/setup/SetupView'
+import FeedbackMonitorView from './components/feedback/FeedbackMonitorView'
 import ProgrammingView from './components/programming/ProgrammingView'
 import LayoutEditor from './components/LayoutEditor'
 import RouteManager from './components/RouteManager'
@@ -30,6 +31,7 @@ const PAGE_VIEWS = {
   turnouts: TurnoutsView,
   health: HealthView,
   setup: SetupView,
+  feedback: FeedbackMonitorView,
   decoder: ProgrammingView,
   routes: RouteManager,
   editor: LayoutEditor,
