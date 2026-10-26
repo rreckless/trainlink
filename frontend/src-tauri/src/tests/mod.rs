@@ -1,5 +1,6 @@
 //! Contract tests for the API, run against an in-memory database. None of them opens a socket to the Z21
 
+mod addresses;
 mod command_stations;
 mod decoder_profiles;
 mod consists;

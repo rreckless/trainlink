@@ -128,25 +128,37 @@ pub fn picture_path(user: &str, sync_id: &str, file: &str) -> String {
     format!("{user}/{sync_id}.{extension}")
 }
 
+/// The local command station with this name. A locomotive refers to its station by name: each device keeps its own
+/// record of a station, with the address of its own network, so the records are not shared. None if this device has no
+/// station of that name
+fn station_named(conn: &Connection, name: Option<String>) -> rusqlite::Result<Option<i64>> {
+    let Some(name) = name else { return Ok(None) };
+    conn.query_row("SELECT id FROM command_stations WHERE name = ?1", [name], |row| row.get(0)).optional()
+}
+
 pub fn apply_locomotive(conn: &Connection, row: &Value, images: &Path, downloads: &mut Vec<(i64, String)>) -> rusqlite::Result<bool> {
     let sync_id = text(row, "id").unwrap_or_default();
     let Some(decision) = decide(conn, "locomotives", &sync_id, &text(row, "updated_at").unwrap_or_default())? else { return Ok(false) };
     let labels = json_text(row, "function_labels");
     let created = normalize(&text(row, "created_at").unwrap_or_default());
     let updated = normalize(&text(row, "updated_at").unwrap_or_default());
+    // A station this device does not have is kept by name, so sending the locomotive again does not clear it here
+    let named = text(row, "command_station");
+    let station = station_named(conn, named.clone())?;
+    let pending = if station.is_none() { named } else { None };
     let id = match decision {
         None => {
             conn.execute(
-                "INSERT INTO locomotives (sync_id, name, dcc_address, locomotive_type, length, function_labels, created_at, updated_at, dirty)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0)",
-                params![sync_id, text(row, "name"), int(row, "dcc_address"), text(row, "locomotive_type"), row.get("length").and_then(Value::as_f64), labels, created, updated],
+                "INSERT INTO locomotives (sync_id, name, dcc_address, locomotive_type, length, function_labels, created_at, updated_at, dirty, command_station_id, pending_command_station)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10)",
+                params![sync_id, text(row, "name"), int(row, "dcc_address"), text(row, "locomotive_type"), row.get("length").and_then(Value::as_f64), labels, created, updated, station, pending],
             )?;
             conn.last_insert_rowid()
         }
         Some(id) => {
             conn.execute(
-                "UPDATE locomotives SET name = ?2, dcc_address = ?3, locomotive_type = ?4, length = ?5, function_labels = ?6, updated_at = ?7, dirty = 0 WHERE id = ?1",
-                params![id, text(row, "name"), int(row, "dcc_address"), text(row, "locomotive_type"), row.get("length").and_then(Value::as_f64), labels, updated],
+                "UPDATE locomotives SET name = ?2, dcc_address = ?3, locomotive_type = ?4, length = ?5, function_labels = ?6, updated_at = ?7, dirty = 0, command_station_id = ?8, pending_command_station = ?9 WHERE id = ?1",
+                params![id, text(row, "name"), int(row, "dcc_address"), text(row, "locomotive_type"), row.get("length").and_then(Value::as_f64), labels, updated, station, pending],
             )?;
             id
         }
@@ -171,7 +183,11 @@ pub fn apply_locomotive(conn: &Connection, row: &Value, images: &Path, downloads
 }
 
 pub fn locomotive_outbound(conn: &Connection, user: &str, images: &Path, uploads: &mut Vec<(String, std::path::PathBuf)>) -> rusqlite::Result<Vec<(i64, String, Value)>> {
-    let mut statement = conn.prepare("SELECT id, sync_id, name, dcc_address, locomotive_type, length, function_labels, image_file, created_at, updated_at FROM locomotives WHERE dirty = 1")?;
+    let mut statement = conn.prepare(
+        "SELECT id, sync_id, name, dcc_address, locomotive_type, length, function_labels, image_file, created_at, updated_at,
+            COALESCE((SELECT name FROM command_stations WHERE command_stations.id = locomotives.command_station_id), pending_command_station)
+         FROM locomotives WHERE dirty = 1",
+    )?;
     let rows: Vec<_> = statement
         .query_map([], |row| {
             let labels: Option<String> = row.get(6)?;
@@ -187,11 +203,12 @@ pub fn locomotive_outbound(conn: &Connection, user: &str, images: &Path, uploads
                 labels,
                 row.get::<_, Option<String>>(7)?,
                 row.get::<_, String>(8)?,
+                row.get::<_, Option<String>>(10)?,
             ))
         })?
         .collect::<rusqlite::Result<_>>()?;
     let mut out = Vec::new();
-    for (id, stamp, sync_id, name, address, kind, length, labels, image, created) in rows {
+    for (id, stamp, sync_id, name, address, kind, length, labels, image, created, station) in rows {
         let picture = image.as_ref().map(|file| picture_path(user, &sync_id, file));
         if let (Some(file), Some(path)) = (&image, &picture) {
             uploads.push((path.clone(), images.join(file)));
@@ -207,6 +224,7 @@ pub fn locomotive_outbound(conn: &Connection, user: &str, images: &Path, uploads
                 "locomotive_type": kind,
                 "length": length,
                 "function_labels": labels.and_then(|text| serde_json::from_str::<Value>(&text).ok()),
+                "command_station": station,
                 "picture_path": picture,
                 "created_at": to_cloud(&created),
                 "updated_at": to_cloud(&stamp),

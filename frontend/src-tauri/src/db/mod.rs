@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS decoder_profiles (
 CREATE TABLE IF NOT EXISTS locomotives (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
-    dcc_address INTEGER NOT NULL UNIQUE,
+    dcc_address INTEGER NOT NULL,
     locomotive_type TEXT NOT NULL,
     length REAL,
     speed INTEGER NOT NULL DEFAULT 0,
@@ -187,14 +187,75 @@ pub fn is_unique_violation(error: &Error) -> bool {
     matches!(error, Error::SqliteFailure(failure, _) if failure.code == ErrorCode::ConstraintViolation)
 }
 
-/// Add the decoder profile column to a database made before it existed
-fn locomotives_migrate(conn: &Connection) -> rusqlite::Result<()> {
-    let columns: Vec<String> = conn
-        .prepare("PRAGMA table_info(locomotives)")?
-        .query_map([], |row| row.get::<_, String>(1))?
-        .collect::<rusqlite::Result<_>>()?;
-    if !columns.iter().any(|column| column == "decoder_profile_id") {
-        conn.execute_batch("ALTER TABLE locomotives ADD COLUMN decoder_profile_id INTEGER REFERENCES decoder_profiles(id);")?;
+/// The locomotives table as it is now, with the sync columns. A database made before some of these columns existed is
+/// rebuilt to this shape, which keeps every column it had
+const LOCOMOTIVES_TABLE: &str = "(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    dcc_address INTEGER NOT NULL,
+    locomotive_type TEXT NOT NULL,
+    length REAL,
+    speed INTEGER NOT NULL DEFAULT 0,
+    direction TEXT NOT NULL DEFAULT 'stop',
+    functions INTEGER NOT NULL DEFAULT 0,
+    function_labels TEXT,
+    image_file TEXT,
+    travelled_time REAL NOT NULL DEFAULT 0,
+    travelled_distance REAL NOT NULL DEFAULT 0,
+    command_station_id INTEGER REFERENCES command_stations(id),
+    decoder_profile_id INTEGER REFERENCES decoder_profiles(id),
+    pending_command_station TEXT,
+    sync_id TEXT,
+    dirty INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)";
+
+/// Bring an older locomotives table up to date: no single address for all stations, the columns added since, and the
+/// address index that makes each command station's addresses unique
+pub(crate) fn locomotives_migrate(conn: &Connection) -> rusqlite::Result<()> {
+    let table_sql: String = conn.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'locomotives'", [], |row| row.get(0))?;
+    if table_sql.contains("dcc_address INTEGER NOT NULL UNIQUE") {
+        rebuild_locomotives_without_global_address(conn)?;
     }
-    Ok(())
+    let columns = table_columns(conn, "locomotives")?;
+    for (column, definition) in [("decoder_profile_id", "INTEGER REFERENCES decoder_profiles(id)"), ("pending_command_station", "TEXT")] {
+        if !columns.iter().any(|known| known == column) {
+            conn.execute_batch(&format!("ALTER TABLE locomotives ADD COLUMN {column} {definition};"))?;
+        }
+    }
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS locomotives_station_address ON locomotives (COALESCE(command_station_id, 0), dcc_address);",
+    )
+}
+
+fn table_columns(conn: &Connection, table: &str) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(&format!("PRAGMA table_info({table})"))?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect()
+}
+
+/// SQLite cannot drop a UNIQUE constraint, so the table is copied into one without it, as SQLite's own guide describes.
+/// Every column that exists is copied, and every index is made again. Foreign keys are off while the table is replaced,
+/// so the rows that refer to locomotives are not deleted with the old table
+fn rebuild_locomotives_without_global_address(conn: &Connection) -> rusqlite::Result<()> {
+    let columns = table_columns(conn, "locomotives")?.join(", ");
+    let indexes: Vec<String> = conn
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'locomotives' AND sql IS NOT NULL")?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut copy = format!(
+        "BEGIN; CREATE TABLE locomotives_new {LOCOMOTIVES_TABLE}; INSERT INTO locomotives_new ({columns}) SELECT {columns} FROM locomotives; DROP TABLE locomotives; ALTER TABLE locomotives_new RENAME TO locomotives;"
+    );
+    for index in indexes {
+        copy.push_str(&format!("{index};"));
+    }
+    copy.push_str(" COMMIT;");
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let result = conn.execute_batch(&copy);
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK;");
+    }
+    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+    result
 }

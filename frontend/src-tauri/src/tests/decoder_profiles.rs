@@ -90,3 +90,56 @@ fn deleting_a_profile_unlinks_the_locomotives_that_used_it() {
     assert_eq!(send(&app, "DELETE", &format!("/api/decoder-profiles/{profile_id}"), None).0, 204);
     assert!(send(&app, "GET", &format!("/api/locomotives/{loco_id}"), None).1["decoder_profile_id"].is_null());
 }
+
+fn add_loco(app: &std::sync::Arc<crate::state::AppState>, name: &str, address: i64) -> i64 {
+    let (status, loco) = send(app, "POST", "/api/locomotives", Some(json!({ "name": name, "dcc_address": address, "locomotive_type": "diesel" })));
+    assert_eq!(status, 201, "{loco}");
+    loco["id"].as_i64().unwrap()
+}
+
+#[test]
+fn the_next_address_is_the_lowest_one_no_locomotive_uses() {
+    let app = app();
+    assert_eq!(send(&app, "GET", "/api/locomotives/next-address", None).1["dcc_address"], 1);
+    add_loco(&app, "One", 1);
+    add_loco(&app, "Two", 2);
+    assert_eq!(send(&app, "GET", "/api/locomotives/next-address", None).1["dcc_address"], 3);
+    add_loco(&app, "Gap", 4);
+    add_loco(&app, "Far", 9);
+    add_loco(&app, "Filled", 3);
+    assert_eq!(send(&app, "GET", "/api/locomotives/next-address", None).1["dcc_address"], 5);
+}
+
+#[test]
+fn linking_a_profile_names_the_function_buttons_it_defines() {
+    let app = app();
+    let (_, created) = send(
+        &app,
+        "POST",
+        "/api/decoder-profiles",
+        Some(json!({ "name": "Sound", "cvs": [{ "cv": 3, "name": "Acceleration" }], "functions": [{ "index": 0, "label": "Headlight" }, { "index": 3, "label": "Horn" }, { "index": 25, "label": "Past the buttons" }] })),
+    );
+    let profile_id = created["id"].as_i64().unwrap();
+    let loco_id = add_loco(&app, "Class 37", 3);
+
+    let (status, linked) = send(&app, "PATCH", &format!("/api/locomotives/{loco_id}"), Some(json!({ "decoder_profile_id": profile_id })));
+    assert_eq!(status, 200, "{linked}");
+    let labels = &linked["function_labels"];
+    assert_eq!(labels[0]["label"], "Headlight");
+    assert_eq!(labels[3]["label"], "Horn");
+    assert_eq!(labels[1]["label"], "F1", "a function the profile does not name keeps its default");
+    assert_eq!(labels.as_array().unwrap().len(), 20, "functions past the buttons are not added");
+}
+
+#[test]
+fn custom_function_labels_are_not_replaced_by_a_profile() {
+    let app = app();
+    let (_, created) = send(&app, "POST", "/api/decoder-profiles", Some(json!({ "name": "Sound", "cvs": [{ "cv": 3, "name": "Acceleration" }], "functions": [{ "index": 0, "label": "Headlight" }] })));
+    let profile_id = created["id"].as_i64().unwrap();
+    let loco_id = add_loco(&app, "Class 37", 3);
+    let custom: Vec<_> = (0..20).map(|index| json!({ "label": if index == 0 { "Cab light".to_string() } else { format!("F{index}") }, "momentary": false })).collect();
+    let custom = json!({ "function_labels": custom });
+    send(&app, "PATCH", &format!("/api/locomotives/{loco_id}"), Some(custom));
+    let (_, linked) = send(&app, "PATCH", &format!("/api/locomotives/{loco_id}"), Some(json!({ "decoder_profile_id": profile_id })));
+    assert_eq!(linked["function_labels"][0]["label"], "Cab light");
+}

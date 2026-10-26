@@ -389,3 +389,63 @@ fn block_links_reach_the_other_device_and_removals_too() {
     assert_eq!(b_platform["feedback_ids"], json!([]), "removed links reach B");
     assert_eq!(b_platform["signal_ids"], json!([]));
 }
+
+#[test]
+fn a_locomotive_keeps_its_command_station_by_name_on_each_device() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b, c) = (device("a-station"), device("b-station"), device("c-station"));
+    let (_, shed) = send(&a, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "10.0.0.111:21105" })));
+    send(&a, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel", "command_station_id": shed["id"].clone() })));
+    sync(&a, &cloud);
+
+    // Device b has its own record of a station called Shed, on its own address
+    let (_, shed_b) = send(&b, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "192.168.1.20:21105" })));
+    sync(&b, &cloud);
+    let on_b = send(&b, "GET", "/api/locomotives", None).1[0].clone();
+    assert_eq!(on_b["command_station_id"], shed_b["id"], "the station it is on, on this device");
+
+    // Device c has no station of that name, so the locomotive has none there
+    sync(&c, &cloud);
+    let on_c = send(&c, "GET", "/api/locomotives", None).1[0].clone();
+    assert!(on_c["command_station_id"].is_null());
+}
+
+#[test]
+fn renaming_a_station_sends_its_locomotives_with_the_new_name() {
+    let cloud = MemoryCloud::new("user-1");
+    let a = device("a-rename");
+    let (_, shed) = send(&a, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "10.0.0.111:21105" })));
+    let station_id = shed["id"].as_i64().unwrap();
+    send(&a, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel", "command_station_id": station_id })));
+    sync(&a, &cloud);
+    assert_eq!(cloud.fetch("locomotives").unwrap()[0]["command_station"], "Shed");
+
+    tick();
+    send(&a, "PATCH", &format!("/api/command-stations/{station_id}"), Some(json!({ "name": "Shed East" })));
+    sync(&a, &cloud);
+    assert_eq!(cloud.fetch("locomotives").unwrap()[0]["command_station"], "Shed East");
+}
+
+#[test]
+fn a_station_this_device_lacks_is_kept_until_the_device_has_one() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b) = (device("a-kept"), device("b-kept"));
+    let (_, shed) = send(&a, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "10.0.0.111:21105" })));
+    send(&a, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel", "command_station_id": shed["id"].clone() })));
+    sync(&a, &cloud);
+
+    // Device b has no Shed. It receives the locomotive, and its own edit is sent back
+    sync(&b, &cloud);
+    let id = send(&b, "GET", "/api/locomotives", None).1[0]["id"].as_i64().unwrap();
+    assert!(send(&b, "GET", &format!("/api/locomotives/{id}"), None).1["command_station_id"].is_null());
+    tick();
+    send(&b, "PATCH", &format!("/api/locomotives/{id}"), Some(json!({ "name": "Class 37 renamed" })));
+    sync(&b, &cloud);
+    let in_cloud = cloud.fetch("locomotives").unwrap()[0].clone();
+    assert_eq!(in_cloud["name"], "Class 37 renamed");
+    assert_eq!(in_cloud["command_station"], "Shed", "the edit did not clear the station");
+
+    // Once device b has a Shed, the locomotive is on it
+    let (_, shed_b) = send(&b, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "192.168.1.20:21105" })));
+    assert_eq!(send(&b, "GET", &format!("/api/locomotives/{id}"), None).1["command_station_id"], shed_b["id"]);
+}

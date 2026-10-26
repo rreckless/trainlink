@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FUNCTION_COUNT, functionLabel } from '../../hooks/useLocomotiveRoster'
 import { NATIVE_FILE_PICKER } from '../../services/api'
 import { pickPictureInDesktop } from '../../services/desktopFiles'
-import { pictureUrl } from '../../services/locomotiveApi'
+import { locomotiveApi, pictureUrl } from '../../services/locomotiveApi'
 
 const LOCOMOTIVE_TYPES = ['diesel', 'steam', 'electric', 'other']
 const LABEL_MAX = 24
@@ -23,6 +23,17 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
   const [functions, setFunctions] = useState(locomotive?.function_labels ?? defaultFunctions())
   const [picture, setPicture] = useState(null)
   const [error, setError] = useState('')
+
+  // The lowest address no locomotive uses yet
+  const useNextAddress = async () => {
+    setError('')
+    try {
+      const { dcc_address: next } = await locomotiveApi.nextAddress()
+      setAddress(String(next))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   // The desktop app's own dialog. A cancelled dialog keeps the picture already chosen
   const choosePicture = async () => {
@@ -66,18 +77,25 @@ export default function LocomotiveForm({ locomotive, busy, onSave, onCancel, onR
             className="mt-1 w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
           />
         </label>
-        <label className="text-sm text-slate-300">
-          DCC address (1-9999)
-          <input
-            type="number"
-            min="1"
-            max="9999"
-            required
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            className="mt-1 w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
-          />
-        </label>
+        <div className="text-sm text-slate-300">
+          <label className="block">
+            DCC address (1-9999)
+            <div className="mt-1 flex gap-2">
+              <input
+                type="number"
+                min="1"
+                max="9999"
+                required
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                className="w-full px-3 py-2 bg-slate-800 rounded border border-slate-600 text-white"
+              />
+              <button type="button" onClick={useNextAddress} disabled={busy} className="px-3 py-2 bg-slate-700 rounded hover:bg-slate-600 disabled:opacity-50 whitespace-nowrap">
+                Next free
+              </button>
+            </div>
+          </label>
+        </div>
         <label className="text-sm text-slate-300">
           Type
           <select

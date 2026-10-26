@@ -26,6 +26,9 @@ fn duplicate_name_or_address_is_refused() {
     send(&app, "POST", "/api/locomotives", Some(loco("Class 37", 3)));
     let (status, value) = send(&app, "POST", "/api/locomotives", Some(loco("Other", 3)));
     assert_eq!(status, 409);
+    assert_eq!(detail(&value), "DCC address 3 is already used by Class 37 on this command station");
+    let (status, value) = send(&app, "POST", "/api/locomotives", Some(loco("Class 37", 4)));
+    assert_eq!(status, 409);
     assert_eq!(detail(&value), "Locomotive name or DCC address already exists");
 }
 
