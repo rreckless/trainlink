@@ -3,6 +3,7 @@
 mod addresses;
 mod command_stations;
 mod decoder_profiles;
+mod drivers;
 mod consists;
 mod occupancy;
 mod overview;
