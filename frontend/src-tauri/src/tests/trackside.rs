@@ -184,3 +184,78 @@ fn sensor_roles_are_kept_when_the_sensors_change_and_checked() {
     assert_eq!(status, 422, "{value}");
     assert_eq!(detail(&value), "Only a sensor the block reads from can have a role");
 }
+
+#[test]
+fn bordering_blocks_are_two_way_and_must_be_on_the_same_layout() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let other_layout = layout(&app, "Other");
+    let make = |layout: i64, name: &str| -> i64 {
+        let (_, block) = send(&app, "POST", "/api/blocks", Some(json!({ "layout_id": layout, "name": name, "x": 0, "y": 0 })));
+        block["id"].as_i64().unwrap()
+    };
+    let (a, b, c) = (make(layout_id, "A"), make(layout_id, "B"), make(layout_id, "C"));
+    let elsewhere = make(other_layout, "Elsewhere");
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{a}"), Some(json!({ "border_block_ids": [b] })));
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["border_block_ids"], json!([b]));
+    assert_eq!(send(&app, "GET", &format!("/api/blocks/{b}"), None).1["border_block_ids"], json!([a]), "the other side lists it too");
+
+    send(&app, "PATCH", &format!("/api/blocks/{a}"), Some(json!({ "border_block_ids": [c] })));
+    assert_eq!(send(&app, "GET", &format!("/api/blocks/{b}"), None).1["border_block_ids"], json!([]), "a border that goes is removed both ways");
+    assert_eq!(send(&app, "GET", &format!("/api/blocks/{c}"), None).1["border_block_ids"], json!([a]));
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{a}"), Some(json!({ "border_block_ids": [a] })));
+    assert_eq!(status, 400);
+    assert_eq!(detail(&value), "A block cannot border itself");
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{a}"), Some(json!({ "border_block_ids": [elsewhere] })));
+    assert_eq!(status, 400);
+    assert_eq!(detail(&value), "A bordering block must be on the same layout");
+}
+
+#[test]
+fn brake_and_stop_points_are_centimetres_from_the_entry_in_order() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let (_, block) = send(&app, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Platform", "x": 0, "y": 0 })));
+    let id = block["id"].as_i64().unwrap();
+    assert!(block["brake_cm"].is_null() && block["stop_cm"].is_null());
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "brake_cm": 120.5, "stop_cm": 140 })));
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["brake_cm"], 120.5);
+    assert_eq!(value["stop_cm"], 140.0);
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "brake_cm": 150 })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "The brake point cannot be after the stop point");
+    assert_eq!(send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "stop_cm": -1 }))).0, 422);
+    assert_eq!(send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "stop_cm": "far" }))).0, 422);
+
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "brake_cm": null, "stop_cm": null })));
+    assert!(value["brake_cm"].is_null() && value["stop_cm"].is_null(), "null clears both");
+}
+
+#[test]
+fn block_length_is_in_cm_and_the_stop_point_cannot_pass_its_end() {
+    let app = app();
+    let layout_id = layout(&app, "Main");
+    let (_, block) = send(&app, "POST", "/api/blocks", Some(json!({ "layout_id": layout_id, "name": "Platform", "x": 0, "y": 0 })));
+    let id = block["id"].as_i64().unwrap();
+    assert!(block["length"].is_null());
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "length": 200, "stop_cm": 150 })));
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["length"], 200.0);
+    assert_eq!(value["stop_cm"], 150.0);
+
+    let (status, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "stop_cm": 250 })));
+    assert_eq!(status, 422);
+    assert_eq!(detail(&value), "The stop point cannot be past the end of the block");
+    assert_eq!(send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "length": 0 }))).0, 422);
+    assert_eq!(send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "length": -5 }))).0, 422);
+
+    let (_, value) = send(&app, "PATCH", &format!("/api/blocks/{id}"), Some(json!({ "length": null })));
+    assert!(value["length"].is_null(), "null clears the length");
+}

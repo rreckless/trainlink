@@ -136,6 +136,11 @@ CREATE TABLE IF NOT EXISTS block_feedbacks (
     feedback_id INTEGER NOT NULL REFERENCES feedbacks(id) ON DELETE CASCADE,
     PRIMARY KEY (block_id, feedback_id)
 );
+CREATE TABLE IF NOT EXISTS block_borders (
+    block_id INTEGER NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+    neighbour_id INTEGER NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+    PRIMARY KEY (block_id, neighbour_id)
+);
 CREATE TABLE IF NOT EXISTS routes (
     id INTEGER PRIMARY KEY,
     layout_id INTEGER REFERENCES layouts(id),

@@ -330,3 +330,27 @@ test('a sensor on a block takes a role, and the role is saved with the block', a
   const saved = await (await page.request.get(`/api/blocks/${block.id}`)).json()
   expect(saved.feedback_roles[String(feedback.id)]).toBe('exit')
 })
+
+test('a block borders its neighbours both ways, and keeps brake and stop points in cm', async ({ page }) => {
+  const layout = await (await page.request.post('/api/layouts', { data: { name: 'Borders', width: 800, height: 600, scale: 'N' } })).json()
+  const first = await (await page.request.post('/api/blocks', { data: { layout_id: layout.id, name: 'Borders One', x: 0, y: 0 } })).json()
+  const second = await (await page.request.post('/api/blocks', { data: { layout_id: layout.id, name: 'Borders Two', x: 9, y: 9 } })).json()
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Blocks', exact: true }).first().click()
+  await page.getByRole('button', { name: /Borders One/ }).click()
+  await page.getByRole('checkbox', { name: 'Borders Two' }).check()
+  await page.getByLabel('Length (cm, optional)').fill('200')
+  await page.getByLabel('Brake point (cm from the entry)').fill('30')
+  await page.getByLabel('Stop point (cm from the entry)').fill('45')
+  await page.getByRole('button', { name: 'Save block' }).click()
+  await expect(page.getByText('Saved Borders One')).toBeVisible()
+
+  const saved = await (await page.request.get(`/api/blocks/${first.id}`)).json()
+  expect(saved.border_block_ids).toEqual([second.id])
+  expect(saved.brake_cm).toBe(30)
+  expect(saved.stop_cm).toBe(45)
+  expect(saved.length).toBe(200)
+  const other = await (await page.request.get(`/api/blocks/${second.id}`)).json()
+  expect(other.border_block_ids).toEqual([first.id])
+})
