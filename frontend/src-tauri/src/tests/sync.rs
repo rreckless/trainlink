@@ -474,3 +474,13 @@ fn a_locomotive_that_clashes_on_this_device_is_skipped_and_reported() {
     // The next sync reports the same clashes again, and nothing breaks
     assert_eq!(sync(&b, &cloud).skipped.len(), 2);
 }
+
+#[test]
+fn the_sync_status_lists_the_locomotives_the_last_sync_skipped() {
+    let app = device("status-skipped");
+    assert_eq!(send(&app, "GET", "/api/sync/status", None).1["skipped"], json!([]));
+    app.sync.lock().unwrap().skipped = vec!["Class 37: DCC address 3 is already used by Local on this command station".into()];
+    let (status, value) = send(&app, "GET", "/api/sync/status", None);
+    assert_eq!(status, 200);
+    assert_eq!(value["skipped"][0], "Class 37: DCC address 3 is already used by Local on this command station");
+}

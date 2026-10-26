@@ -32,5 +32,6 @@ fn status_json(app: &Arc<AppState>) -> Value {
         "signed_in": app.auth.session().is_some(),
         "last_synced": status.last_synced,
         "last_error": status.last_error,
+        "skipped": status.skipped,
     })
 }
