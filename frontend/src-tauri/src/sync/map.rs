@@ -136,7 +136,13 @@ fn station_named(conn: &Connection, name: Option<String>) -> rusqlite::Result<Op
     conn.query_row("SELECT id FROM command_stations WHERE name = ?1", [name], |row| row.get(0)).optional()
 }
 
-pub fn apply_locomotive(conn: &Connection, row: &Value, images: &Path, downloads: &mut Vec<(i64, String)>) -> rusqlite::Result<bool> {
+pub fn apply_locomotive(
+    conn: &Connection,
+    row: &Value,
+    images: &Path,
+    downloads: &mut Vec<(i64, String)>,
+    skipped: &mut Vec<String>,
+) -> rusqlite::Result<bool> {
     let sync_id = text(row, "id").unwrap_or_default();
     let Some(decision) = decide(conn, "locomotives", &sync_id, &text(row, "updated_at").unwrap_or_default())? else { return Ok(false) };
     let labels = json_text(row, "function_labels");
@@ -146,6 +152,20 @@ pub fn apply_locomotive(conn: &Connection, row: &Value, images: &Path, downloads
     let named = text(row, "command_station");
     let station = station_named(conn, named.clone())?;
     let pending = if station.is_none() { named } else { None };
+    // A clash with a locomotive this device already has is skipped and reported, so it cannot stop the rest of the sync
+    let name = text(row, "name").unwrap_or_default();
+    let address = int(row, "dcc_address");
+    if let Some(other) = crate::db::locomotives::address_user(conn, address, station, decision)? {
+        skipped.push(format!("{name}: DCC address {address} is already used by {other} on this command station"));
+        return Ok(false);
+    }
+    let taken: Option<String> = conn
+        .query_row("SELECT name FROM locomotives WHERE name = ?1 AND id IS NOT ?2", params![name, decision], |row| row.get(0))
+        .optional()?;
+    if let Some(other) = taken {
+        skipped.push(format!("{other}: a locomotive with this name already exists on this device"));
+        return Ok(false);
+    }
     let id = match decision {
         None => {
             conn.execute(

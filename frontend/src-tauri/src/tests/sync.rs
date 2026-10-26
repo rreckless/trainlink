@@ -449,3 +449,38 @@ fn a_station_this_device_lacks_is_kept_until_the_device_has_one() {
     let (_, shed_b) = send(&b, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "192.168.1.20:21105" })));
     assert_eq!(send(&b, "GET", &format!("/api/locomotives/{id}"), None).1["command_station_id"], shed_b["id"]);
 }
+
+#[test]
+fn a_locomotive_that_clashes_on_this_device_is_skipped_and_reported() {
+    let cloud = MemoryCloud::new("user-1");
+    let (a, b) = (device("a-clash"), device("b-clash"));
+    let (_, shed_a) = send(&a, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "10.0.0.111:21105" })));
+    send(&a, "POST", "/api/locomotives", Some(json!({ "name": "Class 37", "dcc_address": 3, "locomotive_type": "diesel", "command_station_id": shed_a["id"].clone() })));
+    send(&a, "POST", "/api/locomotives", Some(json!({ "name": "Class 08", "dcc_address": 8, "locomotive_type": "diesel", "command_station_id": shed_a["id"].clone() })));
+    sync(&a, &cloud);
+
+    // Device b has its own Shed, with a different locomotive on address 3 there, and a locomotive called Class 08 with no station
+    let (_, shed_b) = send(&b, "POST", "/api/command-stations", Some(json!({ "name": "Shed", "port": "192.168.1.20:21105" })));
+    send(&b, "POST", "/api/locomotives", Some(json!({ "name": "Local", "dcc_address": 3, "locomotive_type": "diesel", "command_station_id": shed_b["id"].clone() })));
+    send(&b, "POST", "/api/locomotives", Some(json!({ "name": "Class 08", "dcc_address": 9, "locomotive_type": "diesel" })));
+    let report = sync(&b, &cloud);
+
+    assert_eq!(report.skipped.len(), 2, "{:?}", report.skipped);
+    assert!(report.skipped.iter().any(|reason| reason == "Class 37: DCC address 3 is already used by Local on this command station"));
+    assert!(report.skipped.iter().any(|reason| reason == "Class 08: a locomotive with this name already exists on this device"));
+    let names: Vec<String> = send(&b, "GET", "/api/locomotives", None).1.as_array().unwrap().iter().map(|item| item["name"].as_str().unwrap().to_string()).collect();
+    assert_eq!(names, vec!["Local".to_string(), "Class 08".to_string()], "this device keeps its own locomotives");
+
+    // The next sync reports the same clashes again, and nothing breaks
+    assert_eq!(sync(&b, &cloud).skipped.len(), 2);
+}
+
+#[test]
+fn the_sync_status_lists_the_locomotives_the_last_sync_skipped() {
+    let app = device("status-skipped");
+    assert_eq!(send(&app, "GET", "/api/sync/status", None).1["skipped"], json!([]));
+    app.sync.lock().unwrap().skipped = vec!["Class 37: DCC address 3 is already used by Local on this command station".into()];
+    let (status, value) = send(&app, "GET", "/api/sync/status", None);
+    assert_eq!(status, 200);
+    assert_eq!(value["skipped"][0], "Class 37: DCC address 3 is already used by Local on this command station");
+}

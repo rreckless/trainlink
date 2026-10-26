@@ -34,12 +34,16 @@ const DEBOUNCE: Duration = Duration::from_secs(2);
 pub struct SyncStatus {
     pub last_synced: Option<String>,
     pub last_error: Option<String>,
+    /// Cloud locomotives the last sync skipped, with the reason for each
+    pub skipped: Vec<String>,
 }
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Report {
     pub pulled: usize,
     pub pushed: usize,
+    /// Locomotives from the cloud that were not applied, with the reason. This device keeps its own
+    pub skipped: Vec<String>,
 }
 
 /// One row to send, and the local stamp it had when it was read, so it is only marked clean if unchanged since
@@ -74,11 +78,15 @@ pub fn sync_and_record(app: &AppState) -> Result<Report, ApiError> {
     let result = run_for_session(app);
     let mut status = app.sync.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     match &result {
-        Ok(_) => {
+        Ok(report) => {
             status.last_synced = Some(crate::db::now());
             status.last_error = None;
+            status.skipped = report.skipped.clone();
         }
-        Err(error) => status.last_error = Some(error.detail.clone()),
+        Err(error) => {
+            status.last_error = Some(error.detail.clone());
+            status.skipped.clear();
+        }
     }
     result
 }
@@ -140,7 +148,7 @@ pub fn run(app: &AppState, cloud: &dyn Cloud, images: &Path) -> Result<Report, A
             for row in remote[table].iter().filter(|row| row.get("deleted_at").is_none_or(Value::is_null)) {
                 let applied = match table {
                     "layouts" => map::apply_layout(db, row)?,
-                    "locomotives" => map::apply_locomotive(db, row, images, &mut downloads)?,
+                    "locomotives" => map::apply_locomotive(db, row, images, &mut downloads, &mut report.skipped)?,
                     "blocks" => trackside::apply_block(db, row)?,
                     "signals" => trackside::apply_signal(db, row)?,
                     "feedbacks" => trackside::apply_feedback(db, row)?,
