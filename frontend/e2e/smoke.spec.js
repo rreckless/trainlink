@@ -156,3 +156,24 @@ test('the start card shows on an empty layout and goes once a piece is on it', a
   await page.getByRole('tab', { name }).click()
   await expect(page.getByText('Start the track plan')).toHaveCount(0)
 })
+
+test('draw track: two clicks make a track, and Save keeps it', async ({ page }) => {
+  const name = `Draw ${Date.now()}`
+  const created = await page.request.post('/api/layouts', { data: { name, width: 800, height: 400, scale: 'N' } })
+  const id = (await created.json()).id
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Layout Editor', exact: true }).first().click()
+  await page.getByRole('tab', { name }).click()
+  await page.getByRole('button', { name: 'Draw track' }).first().click()
+  const box = await page.locator('canvas').first().boundingBox()
+  await page.mouse.click(box.x + 100, box.y + 100)
+  await page.mouse.click(box.x + 300, box.y + 100)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
+  const saved = await (await page.request.get(`/api/layouts/${id}`)).json()
+  expect(saved.elements.tracks).toHaveLength(1)
+})
