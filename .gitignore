@@ -84,3 +84,7 @@ frontend/.claude-flow/
 
 # Locomotive pictures uploaded through the app
 backend/data/locomotive_images/
+
+# Playwright
+/frontend/test-results/
+/frontend/playwright-report/

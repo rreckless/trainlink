@@ -4,6 +4,7 @@ use std::path::Path;
 
 use rusqlite::{Connection, Error, ErrorCode};
 
+pub mod command_stations;
 pub mod consists;
 pub mod layouts;
 pub mod locomotives;

@@ -76,25 +76,25 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - Docker Compose for PostgreSQL and Redis (now unused by the app; kept for the old data)
    - Database models defined in SQLite
 
-2. **Backend Foundation** 🟡
+2. **Backend Foundation** ✅
    - ✅ Rust core with the API, and a health check
-   - ⬜ WebSocket endpoint (removed; nothing used it)
-   - 🟡 Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation. REST routes exist for all except CommandStation
-   - 🟡 REST API: Z21, locomotives, blocks, signals, routes, feedbacks, layouts, track library, consists, and project overviews. Command stations still need routes
-   - ⬜ State management (not needed: the core holds state in memory and SQLite)
+   - ✅ WebSocket endpoint: dropped. It was removed because nothing used it
+   - ✅ Database models: Locomotive, Block, Signal, Feedback, Route, Layout, CommandStation, and Consist
+   - ✅ REST API: Z21, locomotives, blocks, signals, routes, feedbacks, layouts, track library, consists, command stations, and project overviews
+   - ✅ State management: dropped. The core holds state in memory and SQLite, which is enough
 
-3. **Frontend Foundation** 🟡
+3. **Frontend Foundation** ✅
    - ✅ Layout editor (drawing, placement, import, zoom, save and load)
-   - 🧪 Control page: locomotive roster and operate layout
+   - ✅ Control page: locomotive roster and operate layout. Driven on hardware from the desktop app (see the desktop plan's checks)
    - ✅ Connection status display (Z21 heartbeat)
    - ✅ Settings UI (Z21 host and port), shared with the Control page
 
-4. **Testing Infrastructure** 🟡
-   - ✅ Core tests (`src-tauri/`, 106 passing with `cargo test`, 2 ignored)
+4. **Testing Infrastructure** ✅
+   - ✅ Core tests (`src-tauri/`, 112 passing with `cargo test`, 2 ignored)
    - ✅ Frontend unit tests (`npm test`, 60 passing)
-   - 🟡 Integration tests (driver tests run against the mock; browser tests run from a scratch Playwright script, not yet in the repo)
+   - ✅ Integration tests: driver tests run against the mock. Browser tests (Playwright, `npm run test:e2e` in `frontend/`) run against the real core on a fresh data folder. A test session is written by `e2e/prepare-session.mjs`, so the tests do not contact the sign-in service
    - ✅ Fake Z21 on localhost for testing (`src-tauri/src/tests/z21_link.rs`)
-   - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13. Real hardware test still pending
+   - ✅ Z21 frame encoding checked against the Z21 LAN Protocol Specification v1.13, and checked on hardware from the desktop app
 
 ### Phase 2: Core Features (3-4 weeks)
 **Goal**: Fundamental train control on real hardware
