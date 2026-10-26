@@ -267,10 +267,9 @@ Build a web-based replica of iTrain, a digital model railroad control system for
    - ⬜ Documentation
 
 ### Phase 7: Additional Command Station Drivers (2-3 weeks per driver)
-**Goal**: Extend TrainLink beyond Z21. **Starts only after Phase 6 is complete and Z21 is verified on real hardware.**
+**Goal**: Extend TrainLink beyond Z21. **Starts only after Phase 6 is complete.**
 
 Entry criteria:
-- [ ] Z21 locomotive, turnout, and feedback features verified on real hardware
 - [ ] Base driver interface extracted from the Z21 driver and covered by tests
 - [ ] Mock command station pattern in place, reusable for each new protocol
 
@@ -280,7 +279,7 @@ Entry criteria:
    - 🧪 Driver registry: the station types with a driver, which a command station is saved with
    - ⬜ Connect, disconnect and feedback events are not in the trait yet. The API still calls the Z21 directly, and moving it onto the trait is the next step
    - ⬜ Shared mock command station: the fake Z21 in the link tests is the pattern, and it is not yet in a module other drivers can use
-   - **Entry criteria not met.** Phase 6 is unbuilt and the Z21 is not verified on real hardware. The start was chosen knowing this
+   - **Phase 6 gate not met.** Phase 6 is unbuilt. The start was chosen knowing this
 
 2. **Märklin 6051 / P50x** ⬜
    - ⬜ Serial communication (PySerial)
