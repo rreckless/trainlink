@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store'
 import { overviewApi } from '../../services/overviewApi'
+import { commandStationApi } from '../../services/commandStationApi'
 
 // The settings a turnout keeps, as the editor shows them. Limits match the server
 const THROW_MS_MIN = 50
@@ -14,13 +15,32 @@ const draftFrom = (settings) => ({
   feedback: settings.feedback,
   group: settings.group,
   notes: settings.notes,
+  turnout_type: settings.turnout_type,
+  command_station: settings.command_station ?? '',
 })
 
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'addressed', label: 'With an address' },
   { id: 'missing', label: 'No address' },
+  { id: 'straight', label: 'Straight' },
+  { id: 'diverging', label: 'Diverging' },
 ]
+
+// The kinds of turnout a turnout can be, in the order the editor shows them
+const TURNOUT_TYPES = [
+  ['straight', 'Straight'],
+  ['left', 'Left hand'],
+  ['right', 'Right hand'],
+  ['three-way', 'Three-way'],
+  ['y', 'Y'],
+  ['curved-left', 'Curved left'],
+  ['curved-right', 'Curved right'],
+  ['double-slip', 'Double slip'],
+  ['single-slip', 'Single slip'],
+  ['crossing', 'Crossing'],
+]
+const typeLabel = (kind) => TURNOUT_TYPES.find(([id]) => id === kind)?.[1] ?? kind
 
 // Every turnout on every layout, with search and a filter for the ones that still need an address
 export default function TurnoutsView() {
@@ -32,6 +52,7 @@ export default function TurnoutsView() {
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [stations, setStations] = useState([])
 
   const load = () =>
     overviewApi
@@ -41,6 +62,7 @@ export default function TurnoutsView() {
 
   useEffect(() => {
     load()
+    commandStationApi.list().then(setStations).catch(() => {})
   }, [])
 
   const key = (turnout) => `${turnout.layout_id}/${turnout.placed_id}`
@@ -63,6 +85,7 @@ export default function TurnoutsView() {
       await overviewApi.updateTurnout(turnout.layout_id, turnout.placed_id, {
         ...draft,
         throw_ms: Number(draft.throw_ms),
+        command_station: draft.command_station === '' ? null : draft.command_station,
       })
       await load()
       closeEditor()
@@ -80,6 +103,8 @@ export default function TurnoutsView() {
       all: turnouts.length,
       addressed: turnouts.filter((turnout) => turnout.has_address).length,
       missing: turnouts.filter((turnout) => !turnout.has_address).length,
+      straight: turnouts.filter((turnout) => turnout.settings.turnout_type === 'straight').length,
+      diverging: turnouts.filter((turnout) => turnout.settings.turnout_type !== 'straight').length,
     }),
     [turnouts]
   )
@@ -87,6 +112,8 @@ export default function TurnoutsView() {
   const shown = turnouts.filter((turnout) => {
     if (filter === 'addressed' && !turnout.has_address) return false
     if (filter === 'missing' && turnout.has_address) return false
+    if (filter === 'straight' && turnout.settings.turnout_type !== 'straight') return false
+    if (filter === 'diverging' && turnout.settings.turnout_type === 'straight') return false
     const text = query.trim().toLowerCase()
     if (text === '') return true
     return [turnout.name, turnout.layout_name, String(turnout.dcc_address ?? '')].some((value) =>
@@ -144,11 +171,18 @@ export default function TurnoutsView() {
                     <p className="font-semibold">{turnout.name}</p>
                     <p className="text-xs text-slate-400">
                       {turnout.layout_name}
+                      {` · ${typeLabel(turnout.settings.turnout_type)}`}
+                      {turnout.settings.command_station && ` · ${turnout.settings.command_station}`}
                       {turnout.settings.group && ` · ${turnout.settings.group}`}
                       {` · ${turnout.settings.throw_ms} ms`}
                       {turnout.settings.manual && ' · manual'}
                       {turnout.settings.feedback && ' · feedback'}
                     </p>
+                    {turnout.settings.feedback && (
+                      <p className="text-xs text-slate-300">
+                        {turnout.position === null || turnout.position === undefined ? 'Position not reported yet' : `Reported output ${turnout.position}`}
+                      </p>
+                    )}
                   </div>
                   {turnout.has_address ? (
                     <span className="text-sm text-green-300">Address {turnout.dcc_address}</span>
@@ -176,6 +210,37 @@ export default function TurnoutsView() {
                         disabled={saving}
                         className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
                       />
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-300">
+                      Type
+                      <select
+                        value={draft.turnout_type}
+                        onChange={(event) => setDraft({ ...draft, turnout_type: event.target.value })}
+                        disabled={saving}
+                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                      >
+                        {TURNOUT_TYPES.map(([id, label]) => (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-300">
+                      Command station
+                      <select
+                        value={draft.command_station}
+                        onChange={(event) => setDraft({ ...draft, command_station: event.target.value })}
+                        disabled={saving}
+                        className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                      >
+                        <option value="">None set</option>
+                        {stations.map((station) => (
+                          <option key={station.id} value={station.name}>
+                            {station.name}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label className="space-y-1 text-sm text-slate-300">
                       Group

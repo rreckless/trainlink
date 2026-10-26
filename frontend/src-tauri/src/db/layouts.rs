@@ -122,13 +122,35 @@ pub fn contents(conn: &Connection, id: i64) -> rusqlite::Result<Vec<&'static str
 /// How long a turnout takes to throw, when its placed piece does not say otherwise
 pub const DEFAULT_THROW_MS: i64 = 300;
 
+/// The kinds of turnout a placed turnout can be. The library records only left and right hand, so the others are set by hand
+pub const TURNOUT_TYPES: [&str; 10] = [
+    "straight", "left", "right", "three-way", "y", "curved-left", "curved-right", "double-slip", "single-slip", "crossing",
+];
+
+/// The type a turnout has when none is set: the hand the library records for its piece
+pub fn default_turnout_type(piece_id: Option<&str>) -> &'static str {
+    let hand = piece_id.and_then(|id| crate::library::library().get(id)).and_then(|part| part.get("hand").and_then(Value::as_str).map(str::to_string));
+    match hand.as_deref() {
+        Some("left") => "left",
+        Some("right") => "right",
+        _ => "straight",
+    }
+}
+
 /// What a turnout's placed piece keeps about it. A setting the piece does not have takes its default
 pub fn turnout_settings(placed: &Value) -> Value {
+    let kind = placed
+        .get("turnout_type")
+        .and_then(Value::as_str)
+        .filter(|kind| TURNOUT_TYPES.contains(kind))
+        .unwrap_or_else(|| default_turnout_type(placed.get("piece_id").and_then(Value::as_str)));
     json!({
         "throw_ms": placed.get("throw_ms").and_then(Value::as_i64).unwrap_or(DEFAULT_THROW_MS),
         "manual": placed.get("manual").and_then(Value::as_bool).unwrap_or(false),
         "feedback": placed.get("feedback").and_then(Value::as_bool).unwrap_or(false),
         "group": placed.get("group").and_then(Value::as_str).unwrap_or(""),
         "notes": placed.get("notes").and_then(Value::as_str).unwrap_or(""),
+        "turnout_type": kind,
+        "command_station": placed.get("command_station").and_then(Value::as_str),
     })
 }

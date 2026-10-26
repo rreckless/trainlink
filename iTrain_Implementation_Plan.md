@@ -355,12 +355,12 @@ Entry criteria:
 **Goal**: Cover the features seen in LocoLink 2.0.9, built from our own design. Nothing is copied from LocoLink's code, text, icons or images. The full comparison, with what was seen on screen, is in `~/Documents/TrainLink/locolink-vs-trainlink.md`. Not started. Items are grouped by the phase they most depend on, and the order is still to be decided.
 
 **10a. Z21 basics (no new hardware)**
-1. **Turnouts** 🟡
-   - 🧪 Standalone turnout list with search, a filter for turnouts with no address, and the warning. **Open:** the straight and diverging filter. The library only records left and right hand, so the filter needs a decision on what it means
-   - ⬜ Turnout types: straight, left, right, three-way, Y, curved left and right, double-slip, single-slip, crossing. **Open:** the library has left and right only, so the other types need library data
-   - 🧪 Manual turnout (no motor) flag, and a per-turnout switching time (default 300 ms, replacing the fixed 150 ms). The throw uses the turnout's own time. Set in the turnouts view
-   - 🧪 Per-turnout group and notes. **Open:** the command station per turnout, which needs station selection (Phase 7)
-   - 🧪 Position feedback toggle per turnout. It is saved, and it does not yet change what the app reads. **Open:** wire it to the feedback reads
+1. **Turnouts** 🧪
+   - 🧪 Standalone turnout list with search, filters for all, with and without an address, straight and diverging, and the no-address warning. Straight means the turnout's type is straight, and diverging is any other type. That meaning is a decision, and it can change
+   - 🧪 Turnout types: straight, left, right, three-way, Y, curved left and right, double slip, single slip, crossing. A turnout starts with the hand the library records (left or right), and can be set to any type. The library has no geometry for the other types, so the drawing does not change
+   - 🧪 Manual turnout (no motor) flag, and a per-turnout switching time (default 300 ms, replacing the fixed 150 ms). The throw uses the turnout's own time
+   - 🧪 Per-turnout group, command station and notes. A throw is refused if the connected Z21 is not the turnout's command station. The station is chosen from the stations this device has
+   - 🧪 Position feedback toggle per turnout. With it on, a throw asks the Z21 for the turnout's position, and the list shows the output the Z21 reports. **Open:** the reported output is not yet mapped to straight or diverging, because that depends on the Z21's output numbering on a real turnout
 2. **Locomotives** ⬜
    - ⬜ Decoder type (DCC 128 and others) and command station per locomotive
    - ⬜ Locomotive types: steam, diesel, electric, multiple unit, tram, shunt, museum and other

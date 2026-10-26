@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{number_list, Call};
-use crate::db::layouts;
+use crate::db::{command_stations, layouts};
 use crate::drivers::{Driver, DriverError};
 use crate::http::{ApiError, Out, Reply};
 use crate::state::{AppState, Inner};
@@ -77,16 +77,30 @@ fn feedback(app: &Arc<AppState>) -> Out {
     Ok(Reply::json(200, json!({ "connected": inner.z21.connected, "inputs": inputs })))
 }
 
-/// How long the turnout with this number takes to throw: the switching time set on its placed piece, on any layout
-fn throw_time(inner: &Inner, turnout: i64) -> Result<Duration, ApiError> {
+/// The placed piece of the turnout with this number, on the first layout that has it
+fn placed_turnout(inner: &Inner, turnout: i64) -> Result<Option<Value>, ApiError> {
     for layout in layouts::list(&inner.db)? {
         let pieces = layout.elements.get("track_pieces").and_then(Value::as_array).cloned().unwrap_or_default();
-        if let Some(placed) = pieces.iter().find(|placed| placed.get("dcc_address").and_then(Value::as_i64) == Some(turnout)) {
-            let settings = layouts::turnout_settings(placed);
-            return Ok(Duration::from_millis(settings["throw_ms"].as_u64().unwrap_or(layouts::DEFAULT_THROW_MS as u64)));
+        if let Some(placed) = pieces.into_iter().find(|placed| placed.get("dcc_address").and_then(Value::as_i64) == Some(turnout)) {
+            return Ok(Some(placed));
         }
     }
-    Ok(Duration::from_millis(layouts::DEFAULT_THROW_MS as u64))
+    Ok(None)
+}
+
+/// The name of the command station this device has at the address the Z21 is connected to, if there is one
+fn connected_station(inner: &Inner) -> Result<Option<String>, ApiError> {
+    let address = format!("{}:{}", inner.z21.host, inner.z21.port);
+    Ok(command_stations::list(&inner.db)?.into_iter().find(|station| station.port == address).map(|station| station.name))
+}
+
+/// Refuse a throw for a turnout whose command station is not the one connected
+fn check_station(inner: &Inner, turnout: i64, placed: Option<&Value>) -> Result<(), ApiError> {
+    let Some(station) = placed.and_then(|placed| placed.get("command_station")).and_then(Value::as_str) else { return Ok(()) };
+    if connected_station(inner)?.as_deref() != Some(station) {
+        return Err(ApiError::conflict(format!("Turnout {turnout} is on command station {station}, which is not the one connected")));
+    }
+    Ok(())
 }
 
 /// The answer for a command the driver did not send. `failure` says what went wrong when the command could not be sent
@@ -127,11 +141,18 @@ fn throw(app: &Arc<AppState>, turnout: i64, call: &Call) -> Out {
         if !(MIN_TURNOUT..=MAX_TURNOUT).contains(&turnout) {
             return Err(ApiError::bad_request(format!("Turnout must be {MIN_TURNOUT}-{MAX_TURNOUT}")));
         }
+        let placed = placed_turnout(&inner, turnout)?;
+        check_station(&inner, turnout, placed.as_ref())?;
         Driver::throw_turnout(&mut inner.z21, turnout, output as u8, true).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
-        throw_time(&inner, turnout)?
+        placed.map(|placed| layouts::turnout_settings(&placed)).unwrap_or_else(|| layouts::turnout_settings(&json!({})))
     };
-    std::thread::sleep(switching);
-    Driver::throw_turnout(&mut lock(app).z21, turnout, output as u8, false).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
+    std::thread::sleep(Duration::from_millis(switching["throw_ms"].as_u64().unwrap_or(layouts::DEFAULT_THROW_MS as u64)));
+    let mut inner = lock(app);
+    Driver::throw_turnout(&mut inner.z21, turnout, output as u8, false).map_err(|error| driver_error(error, "Failed to throw the turnout"))?;
+    // With position feedback on, ask the Z21 where the turnout is now. The answer updates the turnouts list
+    if switching["feedback"].as_bool().unwrap_or(false) {
+        let _ = inner.z21.request_turnout_info(turnout);
+    }
     Ok(Reply::json(200, json!({ "status": "throw_sent", "turnout": turnout, "output": output })))
 }
 

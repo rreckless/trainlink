@@ -55,8 +55,23 @@ fn update_turnout(app: &Arc<AppState>, layout_id: i64, placed_id: &str, call: &C
     if notes.as_ref().is_some_and(|text| text.chars().count() > NOTES_MAX) {
         return Err(ApiError::unprocessable(format!("Notes must be at most {NOTES_MAX} characters")));
     }
+    let turnout_type = fields::optional_str(&body, "turnout_type")?;
+    if turnout_type.as_ref().is_some_and(|kind| !layouts::TURNOUT_TYPES.contains(&kind.as_str())) {
+        return Err(ApiError::unprocessable(format!("Turnout type must be one of: {}", layouts::TURNOUT_TYPES.join(", "))));
+    }
+    // A station is named, or null to clear it. Only a station this device has can be chosen
+    let station: Option<Option<String>> = match body.get("command_station") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(value) => Some(Some(value.as_str().ok_or_else(|| ApiError::unprocessable("command_station must be a station name or null"))?.trim().to_string())),
+    };
 
     let inner = lock(app);
+    if let Some(Some(name)) = &station {
+        if !crate::db::command_stations::list(&inner.db)?.iter().any(|known| &known.name == name) {
+            return Err(ApiError::unprocessable(format!("No command station called {name} on this device")));
+        }
+    }
     let mut layout = layouts::get(&inner.db, layout_id)?.ok_or_else(|| ApiError::not_found("Layout", layout_id))?;
     let placed = layout
         .elements
@@ -84,6 +99,12 @@ fn update_turnout(app: &Arc<AppState>, layout_id: i64, placed_id: &str, call: &C
     }
     if let Some(notes) = notes {
         object.insert("notes".into(), json!(notes.trim()));
+    }
+    if let Some(kind) = turnout_type {
+        object.insert("turnout_type".into(), json!(kind));
+    }
+    if let Some(station) = station {
+        object.insert("command_station".into(), json!(station));
     }
     let settings = layouts::turnout_settings(placed);
     layouts::save(&inner.db, &layout)?;
