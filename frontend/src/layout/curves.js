@@ -95,3 +95,49 @@ export function smoothHandles(shape, length) {
   }
   return build(best.r1, best.r2)
 }
+
+// A circular arc of `radius` that turns through `angleDegrees`, as the flex track that matches it. The ends are the
+// arc's chord, so the length is 2R sin(θ/2). The handles lie along the tangents at the ends, at (4/3) tan(θ/4) R, which
+// is the cubic Bezier that reproduces a circle to about 0.03% up to a quarter turn. A longer bend is two curves, since one
+// cubic is about 1.3% off over a half turn. 'left' bends toward negative y, which is left of the start direction
+export const MAX_CURVE_DEGREES = 90
+
+export function arcCurve(radius, angleDegrees, side) {
+  if (!(radius > 0) || !(angleDegrees > 0 && angleDegrees <= MAX_CURVE_DEGREES)) {
+    throw new Error(`A curve needs a radius above 0 and an angle from 1 to ${MAX_CURVE_DEGREES} degrees`)
+  }
+  const theta = rad(angleDegrees)
+  const length = 2 * radius * Math.sin(theta / 2)
+  const handle = (4 / 3) * Math.tan(theta / 4) * radius
+  const dx = handle * Math.cos(theta / 2)
+  const dy = handle * Math.sin(theta / 2) * (side === 'left' ? -1 : 1)
+  const round = (value) => Math.round(value * 100) / 100
+  return {
+    length: round(length),
+    handles: [
+      { x: round(dx), y: round(dy) },
+      { x: round(length - dx), y: round(dy) },
+    ],
+  }
+}
+
+// The length of the arc itself, which is longer than the ends are apart
+export function arcLength(radius, angleDegrees) {
+  return radius * rad(angleDegrees)
+}
+
+// The arc a flex track follows, read back from its length and handles: its radius, the angle it turns through, and the
+// side it bends to. A track with no bend, or a shape that is not an arc, reads as null. Handles dragged by hand give an
+// arc that fits the shape as closely as its two tangents allow
+export function curveOf(length, handles) {
+  if (!Array.isArray(handles) || handles.length !== 2 || !(length > 0)) return null
+  const [p1, p2] = handles
+  const start = Math.atan2(p1.y, p1.x)
+  const arrive = Math.atan2(-p2.y, length - p2.x)
+  const turn = arrive - start
+  const angle = Math.abs(deg(turn))
+  if (!(angle > 0.05) || angle >= 180) return null
+  const radius = length / (2 * Math.sin(Math.abs(turn) / 2))
+  if (!Number.isFinite(radius)) return null
+  return { radius, angle, side: turn > 0 ? 'left' : 'right' }
+}

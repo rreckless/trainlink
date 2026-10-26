@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ENTITY_KINDS } from '../../layout/model'
+import { MAX_CURVE_DEGREES, arcCurve, arcLength, curveOf } from '../../layout/curves'
 
 const DCC_MAX = 2048
 
@@ -30,6 +31,85 @@ function LengthField({ placed, maxLength, busy, onChange }) {
       />
       <span className="text-xs text-slate-500">Drag an open end to stretch the track and join it to another piece</span>
     </label>
+  )
+}
+
+// The round figure shown for a measured value, to one decimal place
+const shown = (value) => String(Math.round(value * 10) / 10)
+
+// A curve from a radius and an angle. It starts from the curve the track already has, so the figures are the real ones,
+// and the panel shows the length the ends will be apart before anything is changed
+function CurveFields({ current, maxLength, busy, onApply }) {
+  const [radius, setRadius] = useState(current ? shown(current.radius) : '300')
+  const [angle, setAngle] = useState(current ? shown(current.angle) : '90')
+  const [side, setSide] = useState(current ? current.side : 'left')
+  const radiusValue = Number(radius)
+  const angleValue = Number(angle)
+  const valid = Number.isFinite(radiusValue) && radiusValue > 0 && Number.isFinite(angleValue) && angleValue > 0 && angleValue <= MAX_CURVE_DEGREES
+  let preview = null
+  if (valid) preview = arcCurve(radiusValue, angleValue, side)
+  const fits = preview !== null && preview.length >= 10 && preview.length <= maxLength
+  return (
+    <div className="space-y-2">
+      <p className="text-slate-300">Curve from radius and angle</p>
+      <p className="text-xs text-slate-400">
+        {current
+          ? `Now: radius ${shown(current.radius)} mm, ${shown(current.angle)}°, bends ${current.side}`
+          : 'Now: straight'}
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block text-xs text-slate-400">
+          Radius (mm)
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={radius}
+            onChange={(event) => setRadius(event.target.value)}
+            disabled={busy}
+            className="mt-1 w-full px-2 py-1.5 bg-slate-700 rounded border border-slate-600 text-white"
+          />
+        </label>
+        <label className="block text-xs text-slate-400">
+          Angle (1 to {MAX_CURVE_DEGREES}°)
+          <input
+            type="number"
+            min="1"
+            max={MAX_CURVE_DEGREES}
+            step="1"
+            value={angle}
+            onChange={(event) => setAngle(event.target.value)}
+            disabled={busy}
+            className="mt-1 w-full px-2 py-1.5 bg-slate-700 rounded border border-slate-600 text-white"
+          />
+        </label>
+      </div>
+      <select
+        value={side}
+        onChange={(event) => setSide(event.target.value)}
+        disabled={busy}
+        className="w-full px-2 py-1.5 bg-slate-700 rounded border border-slate-600 text-white"
+      >
+        <option value="left">Bends left</option>
+        <option value="right">Bends right</option>
+      </select>
+      {!valid && <p className="text-xs text-red-300">The radius must be above 0, and the angle from 1 to {MAX_CURVE_DEGREES}°</p>}
+      {valid && (
+        <p className={`text-xs ${fits ? 'text-slate-400' : 'text-amber-300'}`}>
+          {fits
+            ? `Ends ${preview.length} mm apart, along an arc of ${Math.round(arcLength(radiusValue, angleValue))} mm`
+            : `The ends would be ${preview.length} mm apart. They must be 10 to ${maxLength} mm`}
+        </p>
+      )}
+      <p className="text-xs text-slate-500">A bend over {MAX_CURVE_DEGREES}° is two curves, one after the other.</p>
+      <button
+        onClick={() => onApply({ radius: radiusValue, angle: angleValue, side })}
+        disabled={busy || !valid || !fits}
+        className="w-full px-3 py-2 bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-50"
+      >
+        Apply curve
+      </button>
+    </div>
   )
 }
 
@@ -83,7 +163,7 @@ const KIND_NOTES = {
   feedback: 'Set by the Z21 once the feedback is linked to hardware.',
 }
 
-export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onMakeCurved, onStraighten, onSetLength, onSmooth, onRotate, onDelete }) {
+export default function LayoutProperties({ item, track, placed, piece, busy, onRename, onSetDcc, onMakeCurved, onStraighten, onSetLength, onSmooth, onArc, onRotate, onDelete }) {
   if (placed && piece) {
     return (
       <div className="space-y-3 text-sm">
@@ -118,6 +198,15 @@ export default function LayoutProperties({ item, track, placed, piece, busy, onR
         )}
         {piece.type === 'flex' && onSetLength && (
           <LengthField key={placed.id} placed={placed} maxLength={piece.length} busy={busy} onChange={onSetLength} />
+        )}
+        {piece.type === 'flex' && onArc && (
+          <CurveFields
+            key={`arc-${placed.id}`}
+            current={curveOf(placed.length ?? piece.length, placed.handles)}
+            maxLength={piece.length}
+            busy={busy}
+            onApply={onArc}
+          />
         )}
         {piece.type === 'flex' && onMakeCurved && (
           <div className="space-y-2">

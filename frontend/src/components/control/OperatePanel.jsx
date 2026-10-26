@@ -88,7 +88,6 @@ export default function OperatePanel() {
             items={[]}
             tool="operate"
             selectedKey={null}
-            pendingStart={null}
             cursor={null}
             operating
             turnoutStates={turnoutStates}

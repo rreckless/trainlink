@@ -23,7 +23,7 @@ import {
   rotatedPiecePlacement,
 } from '../layout/track'
 import { useTurnoutControl } from './useTurnoutControl'
-import { smoothHandles } from '../layout/curves'
+import { arcCurve, smoothHandles } from '../layout/curves'
 
 const KINDS = Object.keys(ENTITY_KINDS)
 
@@ -43,11 +43,11 @@ export function useLayoutEditor() {
   const [saved, setSaved] = useState({ items: new Map(), tracks: '[]', pieces: '[]', size: null })
   const [importReport, setImportReport] = useState(null)
   const [tool, setTool] = useState('select')
+  // The piece picked from the list to place next, or null
   const [pieceId, setPieceId] = useState(null)
   // When on, a piece is placed where it is dropped, without joining to open ends
   const [freePlace, setFreePlace] = useState(false)
   const [selectedKey, setSelectedKey] = useState(null)
-  const [pendingStart, setPendingStart] = useState(null)
   const [cursor, setCursor] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -78,17 +78,26 @@ export function useLayoutEditor() {
     ? pieces.find((piece) => `piece:${piece.id}` === selectedKey) || null
     : null
 
-  // Where a piece would go if clicked now. Null when there is nothing valid to show
+  // Where a piece would go if it were dropped at this point: joined to a nearby open end, or where it is dropped.
+  // An error when it cannot go there at all
+  const placementAt = useCallback(
+    (id, point) => {
+      const piece = libraryById[id]
+      if (!piece || !pieceShape(piece)) return { error: 'This piece is not placeable yet' }
+      if (trackSystem && piece.system !== trackSystem) return { error: `This layout uses ${trackSystem}. Pick a piece from that system` }
+      // Join to a nearby open end, unless placing without connecting
+      const joined = freePlace || pieces.length === 0 ? null : snapPlacement(piece, pieces, libraryById, point)
+      return { piece, placement: joined ?? { ...snapPoint(point), rotation: 0, flip: false } }
+    },
+    [pieces, libraryById, trackSystem, freePlace]
+  )
+
+  // Where the picked piece would go if clicked now. Null when there is nothing valid to show
   const ghost = useMemo(() => {
     if (tool !== 'piece' || !cursor || !pieceId) return null
-    const piece = libraryById[pieceId]
-    if (!piece || !pieceShape(piece)) return null
-    if (trackSystem && piece.system !== trackSystem) return null
-    // Join to a nearby open end, unless placing without connecting. Anywhere else the piece goes where it is dropped
-    const joined = freePlace || pieces.length === 0 ? null : snapPlacement(piece, pieces, libraryById, cursor)
-    const placement = joined ?? { ...snapPoint(cursor), rotation: 0, flip: false }
-    return { piece, placement }
-  }, [tool, cursor, pieceId, pieces, libraryById, trackSystem, freePlace])
+    const result = placementAt(pieceId, cursor)
+    return result.error ? null : result
+  }, [tool, cursor, pieceId, placementAt])
 
   const refreshLayouts = useCallback(async () => {
     try {
@@ -229,11 +238,6 @@ export function useLayoutEditor() {
     }
   }, [layout, openLayout, refreshLayouts])
 
-  const addTrack = useCallback((start, end) => {
-    if (start.x === end.x && start.y === end.y) return
-    setTracks((prev) => [...prev, { id: newId('t'), x1: start.x, y1: start.y, x2: end.x, y2: end.y }])
-  }, [])
-
   const addItem = useCallback(
     (kind, point) => {
       if (!layout) return
@@ -269,28 +273,22 @@ export function useLayoutEditor() {
       }
       if (tool === 'piece') {
         if (!pieceId) return setError('Choose a track piece from the list first')
-        if (!ghost) {
-          return setError(
-            trackSystem && libraryById[pieceId]?.system !== trackSystem
-              ? `This layout uses ${trackSystem}. Pick a piece from that system`
-              : 'Move the cursor next to an open track end to place this piece'
-          )
-        }
+        if (!ghost) return setError('Move the cursor next to an open track end to place this piece, or tick "Place without connecting"')
         setError('')
         setPieces((prev) => [...prev, { id: newId('p'), piece_id: ghost.piece.id, ...ghost.placement }])
         return
       }
-      const point = snapPoint(rawPoint)
-      if (tool === 'track') {
-        // Each track starts where the last one ended. Escape stops the chain
-        if (pendingStart) addTrack(pendingStart, point)
-        setPendingStart(point)
-        return
-      }
-      addItem(tool, point)
+      addItem(tool, snapPoint(rawPoint))
     },
-    [tool, pieceId, ghost, trackSystem, libraryById, pendingStart, addTrack, addItem]
+    [tool, pieceId, ghost, addItem]
   )
+
+  // Choosing a piece from the list is how the next click places one
+  const choosePiece = useCallback((id) => {
+    setPieceId(id)
+    setTool('piece')
+    setError('')
+  }, [])
 
   const moveItem = useCallback((key, rawPoint) => {
     const point = snapPoint(rawPoint)
@@ -318,20 +316,11 @@ export function useLayoutEditor() {
     setSelectedKey(null)
   }, [selectedKey])
 
-  const cancelTrack = useCallback(() => setPendingStart(null), [])
-
   const chooseTool = useCallback((next) => {
     setTool(next)
-    setPendingStart(null)
     setCursor(null)
   }, [])
 
-  const choosePiece = useCallback((id) => {
-    setPieceId(id)
-    setTool('piece')
-    setPendingStart(null)
-    setError('')
-  }, [])
 
   // Import converts an AnyRail export into track pieces and a layout size. Save keeps them
   const importAnyRail = useCallback(
@@ -466,6 +455,27 @@ export function useLayoutEditor() {
     setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, length } : piece)))
   }, [])
 
+  // Curve a flex track to a radius and an angle. Its ends become the chord of that arc, and the handles follow the arc
+  const setCurveFromArc = useCallback(
+    (id, { radius, angle, side }) => {
+      const piece = pieces.find((item) => item.id === id)
+      const maxLength = piece ? libraryById[piece.piece_id]?.length : null
+      let curve
+      try {
+        curve = arcCurve(radius, angle, side)
+      } catch (err) {
+        return setError(err.message)
+      }
+      if (curve.length < 10) return setError(`That curve has ends only ${curve.length} mm apart. A curve needs them at least 10 mm apart`)
+      if (maxLength && curve.length > maxLength) {
+        return setError(`That curve has ends ${curve.length} mm apart, more than this piece's ${maxLength} mm. Use a smaller radius or angle`)
+      }
+      setError('')
+      setPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, length: curve.length, handles: curve.handles } : piece)))
+    },
+    [pieces, libraryById]
+  )
+
   // Smooth a curved flex track: the handles that make the curve fairest, keeping both ends' angles and length
   const smoothCurve = useCallback(
     (id) => {
@@ -517,7 +527,6 @@ export function useLayoutEditor() {
     selectedItem,
     selectedTrack,
     selectedPlaced,
-    pendingStart,
     cursor,
     dirty,
     busy,
@@ -531,7 +540,6 @@ export function useLayoutEditor() {
     moveItem,
     renameSelected,
     deleteSelected,
-    cancelTrack,
     importReport,
     turnoutStates,
     throwPlaced,
@@ -544,6 +552,7 @@ export function useLayoutEditor() {
     rotatePiece,
     setPlacedLength,
     smoothCurve,
+    setCurveFromArc,
     freePlace,
     setFreePlace,
     switchLayout,

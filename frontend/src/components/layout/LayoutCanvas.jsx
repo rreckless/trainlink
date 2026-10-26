@@ -54,7 +54,6 @@ export default function LayoutCanvas({
   highlightedBlocks = [],
   tool,
   selectedKey,
-  pendingStart,
   cursor,
   operating,
   turnoutStates,
@@ -229,26 +228,33 @@ export default function LayoutCanvas({
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-2 text-sm">
-        <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600" aria-label="Zoom out">
-          −
-        </button>
-        <span className="w-14 text-center text-slate-300">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => zoomBy(ZOOM_STEP)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600" aria-label="Zoom in">
-          +
-        </button>
-        <button onClick={fit} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600">
+      <div className="mb-2 flex items-center gap-1 text-xs text-slate-300">
+        <div className="flex items-center overflow-hidden rounded-md border border-slate-700 bg-slate-900">
+          <button onClick={() => zoomBy(1 / ZOOM_STEP)} className="px-2.5 py-1 hover:bg-slate-800" aria-label="Zoom out">
+            −
+          </button>
+          <span className="w-14 border-x border-slate-700 py-1 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => zoomBy(ZOOM_STEP)} className="px-2.5 py-1 hover:bg-slate-800" aria-label="Zoom in">
+            +
+          </button>
+        </div>
+        <button onClick={fit} className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 hover:bg-slate-800">
           Fit
         </button>
         <button
           onClick={() => applyZoom(1, { x: 0, y: 0, offsetX: 0, offsetY: 0 })}
-          className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600"
+          className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 hover:bg-slate-800"
         >
-          100%
+          Actual size
         </button>
       </div>
 
-      <div ref={scroller} onMouseDown={startPan} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+      <div
+        ref={scroller}
+        onMouseDown={startPan}
+        className="overflow-auto"
+        style={{ maxHeight: 'calc(100vh - 16rem)' }}
+      >
         <Stage
           ref={stageRef}
           width={layout.width * zoom}
@@ -368,15 +374,6 @@ export default function LayoutCanvas({
           />
         ))}
 
-        {pendingStart && cursor && (
-          <Line
-            points={[pendingStart.x, pendingStart.y, cursor.x, cursor.y]}
-            stroke="#38bdf8"
-            strokeWidth={3}
-            dash={[6, 6]}
-            listening={false}
-          />
-        )}
       </Layer>
 
       <Layer>

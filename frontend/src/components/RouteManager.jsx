@@ -532,7 +532,6 @@ export default function RouteManager() {
                       highlightedBlocks={draft.steps}
                       tool="operate"
                       selectedKey={null}
-                      pendingStart={null}
                       cursor={null}
                       operating={false}
                       turnoutStates={{}}
