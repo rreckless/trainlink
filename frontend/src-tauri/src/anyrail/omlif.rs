@@ -99,6 +99,8 @@ struct Context {
 
 /// Import an OMLIF JSON layout. Returns the same shape as the XML import, so the editor shows it the same way
 pub fn import(text: &str) -> Result<Value, String> {
+    // A byte-order mark is not JSON, so it is taken off first
+    let text = text.trim_start_matches('\u{feff}');
     let file: File = serde_json::from_str(text).map_err(|error| format!("Not a valid AnyRail JSON layout: {error}"))?;
     let layout = file.layout;
     let factor = units_to_mm(&layout.attributes.units)?;
