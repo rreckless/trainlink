@@ -141,7 +141,6 @@ export function useLayoutEditor() {
         size: { width: found.width, height: found.height },
       })
       setSelectedKey(null)
-      setPendingStart(null)
       useStore.getState().setLayout(found)
     } catch (err) {
       setError(err.message)
@@ -235,7 +234,6 @@ export function useLayoutEditor() {
         setLegs([])
         setSaved({ items: new Map(), tracks: '[]', pieces: '[]', legs: '[]', size: null })
         setSelectedKey(null)
-        setPendingStart(null)
         useStore.getState().setLayout(null)
       }
     } catch (err) {
@@ -346,7 +344,6 @@ export function useLayoutEditor() {
         setLegs(report.no_track_legs ?? [])
         setLayout((prev) => ({ ...prev, width: report.width, height: report.height }))
         setSelectedKey(null)
-        setPendingStart(null)
         setImportReport(report)
         setMessage(`Imported ${report.track_pieces.length} pieces. Save to keep them.`)
       } catch (err) {
