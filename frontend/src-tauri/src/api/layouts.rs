@@ -175,7 +175,8 @@ fn import(call: &Call) -> Out {
     if text.is_empty() || text.len() > MAX_XML_CHARS {
         return Err(ApiError::unprocessable("the file must be 1 to 5,000,000 characters"));
     }
-    if text.trim_start().starts_with('{') {
+    // A byte-order mark, which some editors add, is not part of the JSON
+    if text.trim_start_matches('\u{feff}').trim_start().starts_with('{') {
         let result = anyrail::omlif::import(&text).map_err(ApiError::bad_request)?;
         check_track_pieces(&json!({
             "track_system": result["track_system"],

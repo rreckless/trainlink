@@ -51,7 +51,7 @@ export default function AnyRailImport({ busy, report, onImport, onClose }) {
     const chosenName = NATIVE_FILE_PICKER ? chosen?.name : file?.name
     if (!chosenName) return setFormError('Choose the file exported from AnyRail (XML, or JSON from the newer export)')
     // The JSON export gives its sizes with their units, so only the XML export needs the radius
-    const isJson = chosenName.toLowerCase().endsWith('.json')
+    const isJson = /\.(json|omlif)$/i.test(chosenName)
     if (!isJson && !(radiusMm > 0)) return setFormError('The innermost curve radius must be a positive number of mm')
     let xml
     try {
@@ -100,7 +100,7 @@ export default function AnyRailImport({ busy, report, onImport, onClose }) {
               Choose file…
               <input
                 type="file"
-                accept=".xml,.json,text/xml,application/xml,application/json"
+                accept=".xml,.json,.omlif,text/xml,application/xml,application/json"
                 onChange={(event) => setFile(event.target.files[0] ?? null)}
                 className="sr-only"
               />

@@ -299,3 +299,10 @@ fn an_omlif_three_way_is_calculated_from_the_track_that_enters_and_leaves_it() {
     assert!((piece["rotation"].as_f64().unwrap() - 30.0).abs() < 0.01, "{piece}");
     assert!(result["gaps"].as_array().unwrap().is_empty(), "{result}");
 }
+
+#[test]
+fn an_omlif_file_with_a_byte_order_mark_is_still_read_as_json() {
+    let text = format!("\u{feff}{}", omlif("mm", json!([end(1, 0.0, 0.0, 180.0), end(2, 100.0, 0.0, 0.0)]), json!([part(1, "straight", &[1, 2], Value::Null)])));
+    let result = import_omlif(&text.trim_start_matches('\u{feff}')).unwrap();
+    assert_eq!(result["track_pieces"].as_array().unwrap().len(), 1);
+}
