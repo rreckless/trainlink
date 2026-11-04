@@ -31,6 +31,8 @@ struct Layout {
     attributes: Attributes,
     endpoints: Vec<Endpoint>,
     parts: Vec<Part>,
+    #[serde(default)]
+    connections: Vec<[i64; 2]>,
 }
 
 #[derive(Deserialize)]
@@ -95,6 +97,8 @@ struct Context {
     factor: f64,
     guessed_hand: Vec<String>,
     gaps: Vec<Value>,
+    /// The exact point of each end of a turnout, slip or three-way, as the library geometry puts it
+    exact: HashMap<i64, Point>,
 }
 
 /// Import an OMLIF JSON layout. Returns the same shape as the XML import, so the editor shows it the same way
@@ -117,36 +121,45 @@ pub fn import(text: &str) -> Result<Value, String> {
         };
         ends.insert(end.id, ((x * factor, y * factor), normalize(end.direction)));
     }
-    let mut context = Context { ends, factor, guessed_hand: Vec::new(), gaps: Vec::new() };
+    let mut context = Context { ends, factor, guessed_hand: Vec::new(), gaps: Vec::new(), exact: HashMap::new() };
 
     let points: Vec<Point> = context.ends.values().map(|(point, _)| *point).collect();
     let mut pieces: Vec<Value> = Vec::new();
     let mut unplaced: Vec<Value> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
-    for part in &layout.parts {
-        let ident = format!("omlif-{}", part.attributes.id);
-        let kind = part.attributes.kind.as_str();
-        if part.attributes.hidden {
-            skipped.push(json!({ "ident": ident, "kind": kind, "reason": "hidden" }));
-            continue;
-        }
-        let placed = match kind {
-            // Buffers and stubs are the ends of the track, not pieces of it
-            "buffer" | "stubs" => {
-                skipped.push(json!({ "ident": ident, "kind": kind, "reason": "an end of the track, not a piece" }));
+    // Turnouts, slips and three-ways go first. Their ends are where the library geometry puts them, which is a fraction
+    // of a mm from the file's coordinates, so the track that joins them starts from those exact points, as the XML import
+    // does. Everything else is placed in a second pass
+    for joints_pass in [true, false] {
+        for part in layout.parts.iter().filter(|part| is_joint(part.attributes.kind.as_str()) == joints_pass) {
+            // Joints are fitted from the file's own coordinates. Track that joins them takes their exact points, below
+            if !joints_pass {
+                apply_joints(&mut context, &layout.connections);
+            }
+            let ident = format!("omlif-{}", part.attributes.id);
+            let kind = part.attributes.kind.as_str();
+            if part.attributes.hidden {
+                skipped.push(json!({ "ident": ident, "kind": kind, "reason": "hidden" }));
                 continue;
             }
-            "straight" | "flex" if has_curve(part) => curve(&ident, part, &context),
-            "straight" | "flex" => straight(&ident, part, &context),
-            "curve" => curve(&ident, part, &context),
-            "turnout" | "turnout-left" | "turnout-right" => turnout(&ident, part, &mut context),
-            "slipswitch" => slip(&ident, part, &mut context),
-            "threeway" => three_way(&ident, part, &mut context),
-            _ => Err(format!("{kind} is not imported yet")),
-        };
-        match placed {
-            Ok(piece) => pieces.push(piece),
-            Err(reason) => unplaced.push(json!({ "ident": ident, "kind": kind, "reason": reason })),
+            let placed = match kind {
+                // Buffers and stubs are the ends of the track, not pieces of it
+                "buffer" | "stubs" => {
+                    skipped.push(json!({ "ident": ident, "kind": kind, "reason": "an end of the track, not a piece" }));
+                    continue;
+                }
+                "straight" | "flex" if has_curve(part) => curve(&ident, part, &context),
+                "straight" | "flex" => straight(&ident, part, &context),
+                "curve" => curve(&ident, part, &context),
+                "turnout" | "turnout-left" | "turnout-right" => turnout(&ident, part, &mut context),
+                "slipswitch" => slip(&ident, part, &mut context),
+                "threeway" => three_way(&ident, part, &mut context),
+                _ => Err(format!("{kind} is not imported yet")),
+            };
+            match placed {
+                Ok(piece) => pieces.push(piece),
+                Err(reason) => unplaced.push(json!({ "ident": ident, "kind": kind, "reason": reason })),
+            }
         }
     }
 
@@ -182,6 +195,27 @@ pub fn import(text: &str) -> Result<Value, String> {
         "ambiguous_curves": [],
         "gaps": context.gaps,
     }))
+}
+
+/// An end joined to one that already has its exact point takes that point, so the two meet exactly
+fn apply_joints(context: &mut Context, connections: &[[i64; 2]]) {
+    for [a, b] in connections {
+        for (from, to) in [(a, b), (b, a)] {
+            if let Some(point) = context.exact.get(from).copied() {
+                if !context.exact.contains_key(to) {
+                    context.exact.insert(*to, point);
+                    if let Some(end) = context.ends.get_mut(to) {
+                        end.0 = point;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Turnouts, slips and three-ways: the parts whose ends are fixed by the library geometry
+fn is_joint(kind: &str) -> bool {
+    matches!(kind, "turnout" | "turnout-left" | "turnout-right" | "slipswitch" | "threeway")
 }
 
 fn units_to_mm(units: &str) -> Result<f64, String> {
@@ -355,9 +389,16 @@ fn turnout(ident: &str, part: &Part, context: &mut Context) -> Result<Value, Str
     if distinct.len() > 1 {
         return Err("the turnout could be either hand, and its drawing does not say which".into());
     }
-    let (_, _, _, origin, rotation, piece_id) = hand_fits[0];
+    let (_, entry, diverge, origin, rotation, piece_id) = hand_fits[0];
     if typed.is_none() {
         context.guessed_hand.push(ident.to_string());
+    }
+    // The library's own ends, exactly where this turnout puts them, are what the track that joins it must meet
+    let piece = library.get(piece_id).cloned().ok_or("the library has no turnout")?;
+    let local = turnout_ends(&piece);
+    let straight = 3 - entry - diverge;
+    for (index, leg) in [(entry, 0), (straight, 1), (diverge, 2)] {
+        context.exact.insert(part.endpoint_ids[index], world(local[leg].0, origin, rotation, false));
     }
     Ok(record(ident, piece_id, origin, rotation, false, Vec::new()))
 }
@@ -375,7 +416,7 @@ fn slip(ident: &str, part: &Part, context: &mut Context) -> Result<Value, String
         return Err("the library has no slip geometry".into());
     }
     let joints = ["SLIP_A", "SLIP_B", "SLIP_C", "SLIP_D"].map(|kind| format!("{ident} {kind}"));
-    Ok(four_point_piece(ident, &ends, &local, SLIP_PIECE, &joints, context))
+    Ok(four_point_piece(ident, &ends, &part.endpoint_ids, &local, SLIP_PIECE, &joints, context))
 }
 
 /// A three-way, from its four ends: the toe, the straight exit, and the two branches. The library's geometry is fitted
@@ -385,16 +426,17 @@ fn three_way(ident: &str, part: &Part, context: &mut Context) -> Result<Value, S
     let library_piece = library().get(THREE_WAY_PIECE).cloned().ok_or("the library has no three-way geometry")?;
     let local: Vec<Point> = three_way_ends(&library_piece).to_vec();
     let joints = ["toe", "straight", "right", "left"].map(|name| format!("{ident} {name}"));
-    Ok(four_point_piece(ident, &ends, &local, THREE_WAY_PIECE, &joints, context))
+    Ok(four_point_piece(ident, &ends, &part.endpoint_ids, &local, THREE_WAY_PIECE, &joints, context))
 }
 
 /// A piece with four ends in its own frame, placed where its four ends fit the file's four. Any end more than
 /// GAP_REPORT_MM from its point is reported as a gap, as the XML import reports them
-fn four_point_piece(ident: &str, ends: &[End], local: &[Point], piece_id: &str, joints: &[String; 4], context: &mut Context) -> Value {
+fn four_point_piece(ident: &str, ends: &[End], ids: &[i64], local: &[Point], piece_id: &str, joints: &[String; 4], context: &mut Context) -> Value {
     let world_points = [ends[0].0, ends[1].0, ends[2].0, ends[3].0];
     let fit = fit_four(local, &world_points);
     for (index, point) in world_points.iter().enumerate() {
         let placed = world(local[fit.local_of_world[index]], fit.origin, fit.rotation, fit.flip);
+        context.exact.insert(ids[index], placed);
         let gap = dist(placed, *point);
         if gap > GAP_REPORT_MM {
             context.gaps.push(json!({ "ident": ident, "joint": joints[index], "gap_mm": round2(gap) }));

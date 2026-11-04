@@ -313,3 +313,32 @@ fn a_cut_off_omlif_file_says_it_is_incomplete() {
     let cut = &full[..full.len() / 2];
     assert!(import_omlif(cut).unwrap_err().contains("ends early"));
 }
+
+#[test]
+fn track_that_joins_a_turnout_starts_at_the_turnouts_exact_leg() {
+    // The straight's end is 0.6 mm from the turnout's straight leg, as the file's coordinates can be
+    let mut ends = turnout_ends_json("peco-n-sl-u395f", (0.0, 0.0), 0.0, 1);
+    let leg = (ends[1]["coord"][0].as_f64().unwrap(), ends[1]["coord"][1].as_f64().unwrap());
+    ends.push(end(4, leg.0, leg.1 + 0.6, 0.0));
+    ends.push(end(5, leg.0 + 500.0, leg.1 + 0.6, 0.0));
+    let text = format!(
+        "{}",
+        json!({
+            "layout": {
+                "attributes": { "length": 0, "units": "mm", "version": "1", "width": 0 },
+                "connections": [[2, 4]],
+                "endpoints": ends,
+                "parts": [part(3, "turnout-right", &[1, 2, 3], Value::Null), part(4, "straight", &[4, 5], Value::Null)],
+                "sections": []
+            }
+        })
+    );
+    let result = import_omlif(&text).unwrap();
+    let turnout = result["track_pieces"].as_array().unwrap().iter().find(|piece| piece["piece_id"] == "peco-n-sl-u395f").unwrap().clone();
+    let straight = result["track_pieces"].as_array().unwrap().iter().find(|piece| piece["piece_id"] == "peco-n-sl-300f").unwrap().clone();
+    let piece = library().get("peco-n-sl-u395f").cloned().unwrap();
+    let local_straight = turnout_ends(&piece)[1].0;
+    let exact = world(local_straight, (turnout["x"].as_f64().unwrap(), turnout["y"].as_f64().unwrap()), turnout["rotation"].as_f64().unwrap(), false);
+    let start = (straight["x"].as_f64().unwrap(), straight["y"].as_f64().unwrap());
+    assert!(((start.0 - exact.0).powi(2) + (start.1 - exact.1).powi(2)).sqrt() < 0.01, "straight starts at {start:?}, turnout leg is at {exact:?}");
+}

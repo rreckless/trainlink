@@ -11,7 +11,9 @@
 import { distance, distanceToSegment } from './model.js'
 import { curvedShape } from './curves.js'
 
-export const JOIN_TOLERANCE = 0.5
+// Ends this close, in mm, are joined. The AnyRail import allows the same gap, since turnouts are placed from library
+// geometry that differs from the file's by a fraction of a mm
+export const JOIN_TOLERANCE = 1
 export const SNAP_DISTANCE = 40
 const CURVE_STEP_DEGREES = 2
 
