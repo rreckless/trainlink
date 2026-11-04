@@ -6,6 +6,7 @@
 //! its anchors. Connector segments between a turnout and its anchors have no real length, so they are not placed.
 
 pub mod geometry;
+pub mod omlif;
 pub(crate) mod segments;
 
 use segments::{joint_lines, place_segments, place_slips, place_three_ways, segment_lines, SegmentInputs};
@@ -38,11 +39,11 @@ fn turnout_piece(hand: &str) -> Option<&'static str> {
     }
 }
 
-fn round4(value: f64) -> f64 {
+pub(crate) fn round4(value: f64) -> f64 {
     (value * 10_000.0).round() / 10_000.0
 }
 
-fn round2(value: f64) -> f64 {
+pub(crate) fn round2(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
 

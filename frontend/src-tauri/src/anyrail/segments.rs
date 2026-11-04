@@ -157,7 +157,7 @@ pub struct Segments {
 }
 
 /// A curve as flex track of its chord length, curved by two handles that follow it
-fn curve_as_flex(ident: &str, origin: Point, rotation: f64, chord: f64, samples: &[Point], start: f64, end: f64) -> Value {
+pub(super) fn curve_as_flex(ident: &str, origin: Point, rotation: f64, chord: f64, samples: &[Point], start: f64, end: f64) -> Value {
     let handles = fit_handles(samples, chord, start, end);
     let handle_values: Vec<Value> = handles.iter().map(|(x, y)| json!({ "x": round4(*x), "y": round4(*y) })).collect();
     record(ident, STRAIGHT_PIECE, origin, rotation, false, vec![("length", json!(round4(chord))), ("handles", Value::Array(handle_values))])

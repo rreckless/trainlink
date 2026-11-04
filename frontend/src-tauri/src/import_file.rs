@@ -25,7 +25,7 @@ pub fn read_xml(path: &Path) -> Result<String, String> {
 /// Shows the file dialog, then reads the chosen XML file. None if the user cancels
 #[tauri::command]
 pub async fn pick_anyrail_file(app: AppHandle) -> Result<Option<ChosenFile>, String> {
-    let Some(picked) = app.dialog().file().add_filter("AnyRail layout", &["xml"]).blocking_pick_file() else {
+    let Some(picked) = app.dialog().file().add_filter("AnyRail layout", &["xml", "json"]).blocking_pick_file() else {
         return Ok(None);
     };
     let path = picked.into_path().map_err(|error| format!("Could not use the chosen file: {error}"))?;
