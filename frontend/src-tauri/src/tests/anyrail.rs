@@ -306,3 +306,10 @@ fn an_omlif_file_with_a_byte_order_mark_is_still_read_as_json() {
     let result = import_omlif(&text).unwrap();
     assert_eq!(result["track_pieces"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn a_cut_off_omlif_file_says_it_is_incomplete() {
+    let full = omlif("mm", json!([end(1, 0.0, 0.0, 180.0), end(2, 100.0, 0.0, 0.0)]), json!([part(1, "straight", &[1, 2], Value::Null)]));
+    let cut = &full[..full.len() / 2];
+    assert!(import_omlif(cut).unwrap_err().contains("ends early"));
+}

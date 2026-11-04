@@ -101,7 +101,13 @@ struct Context {
 pub fn import(text: &str) -> Result<Value, String> {
     // A byte-order mark is not JSON, so it is taken off first
     let text = text.trim_start_matches('\u{feff}');
-    let file: File = serde_json::from_str(text).map_err(|error| format!("Not a valid AnyRail JSON layout: {error}"))?;
+    let file: File = serde_json::from_str(text).map_err(|error| {
+        if error.is_eof() {
+            "The file ends early, so it is incomplete. Copy it again, and make sure it has finished syncing".to_string()
+        } else {
+            format!("Not a valid AnyRail JSON layout: {error}")
+        }
+    })?;
     let layout = file.layout;
     let factor = units_to_mm(&layout.attributes.units)?;
     let mut ends = HashMap::new();
