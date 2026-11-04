@@ -167,22 +167,33 @@ fn create(app: &Arc<AppState>, call: &Call) -> Out {
     Ok(Reply::json(201, json!(created)))
 }
 
+/// The AnyRail file's text: the XML export, or the newer OMLIF JSON export. JSON needs no inner radius, because its
+/// coordinates carry their units
 fn import(call: &Call) -> Out {
     let body = call.json_body()?;
-    let xml = fields::required_str(&body, "xml")?;
-    let radius = fields::required_float(&body, "inner_radius_mm")?;
-    if xml.is_empty() || xml.len() > MAX_XML_CHARS {
-        return Err(ApiError::unprocessable("xml must be 1 to 5,000,000 characters"));
+    let text = fields::required_str(&body, "xml")?;
+    if text.is_empty() || text.len() > MAX_XML_CHARS {
+        return Err(ApiError::unprocessable("the file must be 1 to 5,000,000 characters"));
     }
+    // A byte-order mark, which some editors add, is not part of the JSON
+    if text.trim_start_matches('\u{feff}').trim_start().starts_with('{') {
+        let result = anyrail::omlif::import(&text).map_err(ApiError::bad_request)?;
+        check_track_pieces(&json!({
+            "track_system": result["track_system"],
+            "track_pieces": result["track_pieces"],
+        }))?;
+        return Ok(Reply::json(200, result));
+    }
+    let radius = fields::required_float(&body, "inner_radius_mm")?;
     if !(radius > 0.0 && radius <= 10_000.0) {
         return Err(ApiError::unprocessable("inner_radius_mm must be above 0 and at most 10,000"));
     }
-    let mut result = anyrail::import(&xml, radius).map_err(ApiError::bad_request)?;
+    let mut result = anyrail::import(&text, radius).map_err(ApiError::bad_request)?;
     check_track_pieces(&json!({
         "track_system": result["track_system"],
         "track_pieces": result["track_pieces"],
     }))?;
-    result["no_track_legs"] = json!(anyrail::legs_without_track(&xml).map_err(ApiError::bad_request)?);
+    result["no_track_legs"] = json!(anyrail::legs_without_track(&text).map_err(ApiError::bad_request)?);
     Ok(Reply::json(200, result))
 }
 
